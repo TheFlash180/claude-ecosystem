@@ -1,0 +1,45 @@
+/* Ecosystem design tokens - shared baseline.
+   Individual apps may extend, but core tokens stay consistent
+   so the ecosystem feels like one product family. */
+
+:root {
+  /* Palette: graphite pit-wall with rosso corsa signal.
+     Red is reserved for live/active/alert moments only. */
+  --bg: #16181d;
+  --surface: #1f2229;
+  --surface-raised: #282c35;
+  --border: #343945;
+  --text: #e8e6e1;
+  --text-dim: #9a9890;
+  --accent: #d40000;        /* rosso corsa - use sparingly */
+  --accent-soft: #d4000022;
+  --ok: #3fa66b;
+  --warn: #d99a2b;
+
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "claude-ecosystem",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Rickus's personal automation ecosystem - PWAs built with Claude",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/dashboard",
+    "build": "node tooling/build-all.mjs",
+    "new-app": "node tooling/new-app.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
