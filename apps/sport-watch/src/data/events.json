@@ -1,0 +1,156 @@
+{
+  "_readme": "SA Sport Watch event data. Edit this file and push - the pipeline redeploys automatically. Dates are ISO 8601 UTC. Optional fields: result, note, isConditional, isSpecial, dateTBC. Set away/awayFlag to null for single-party events.",
+  "events": [
+    {
+      "id": 20, "sport": "football",
+      "competition": "FIFA World Cup 2026 · Group A",
+      "home": "Mexico", "away": "South Africa",
+      "homeFlag": "🇲🇽", "awayFlag": "🇿🇦",
+      "date": "2026-06-11T18:00:00Z",
+      "venue": "Estadio Azteca, Mexico City",
+      "result": "L 0–2"
+    },
+    {
+      "id": 21, "sport": "football",
+      "competition": "FIFA World Cup 2026 · Group A",
+      "home": "Czechia", "away": "South Africa",
+      "homeFlag": "🇨🇿", "awayFlag": "🇿🇦",
+      "date": "2026-06-18T16:00:00Z",
+      "venue": "Mercedes-Benz Stadium, Atlanta",
+      "result": "D 1–1 (Mokoena 83' pen)"
+    },
+    {
+      "id": 0, "sport": "rugby",
+      "competition": "Friendly",
+      "home": "Springboks", "away": "Barbarians",
+      "homeFlag": "🇿🇦", "awayFlag": "🌍",
+      "date": "2026-06-20T13:00:00Z",
+      "venue": "Nelson Mandela Bay Stadium, Gqeberha",
+      "result": "W 80–31 ✓"
+    },
+    {
+      "id": 22, "sport": "football",
+      "competition": "FIFA World Cup 2026 · Group A",
+      "home": "South Africa", "away": "South Korea",
+      "homeFlag": "🇿🇦", "awayFlag": "🇰🇷",
+      "date": "2026-06-25T02:00:00Z",
+      "venue": "Estadio Monterrey, Mexico",
+      "result": "W 1–0 (Maseko 63') ✓"
+    },
+    {
+      "id": 13, "sport": "football",
+      "competition": "FIFA World Cup 2026 · Round of 32",
+      "home": "South Africa", "away": "Canada",
+      "homeFlag": "🇿🇦", "awayFlag": "🇨🇦",
+      "date": "2026-06-28T19:00:00Z",
+      "venue": "SoFi Stadium, Los Angeles",
+      "result": "L 0–1 (Eustáquio 90+2')"
+    },
+    {
+      "id": 1, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Springboks", "away": "England",
+      "homeFlag": "🇿🇦", "awayFlag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "date": "2026-07-04T15:40:00Z",
+      "venue": "Ellis Park, Johannesburg"
+    },
+    {
+      "id": 2, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Springboks", "away": "Scotland",
+      "homeFlag": "🇿🇦", "awayFlag": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+      "date": "2026-07-11T15:40:00Z",
+      "venue": "Loftus Versfeld, Pretoria"
+    },
+    {
+      "id": 3, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Springboks", "away": "Wales",
+      "homeFlag": "🇿🇦", "awayFlag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+      "date": "2026-07-18T15:40:00Z",
+      "venue": "Kings Park, Durban"
+    },
+    {
+      "id": 18, "sport": "mma",
+      "competition": "UFC Fight Night · Du Plessis vs. Usman",
+      "home": "Dricus Du Plessis", "away": "Kamaru Usman",
+      "homeFlag": "🇿🇦", "awayFlag": "🇳🇬",
+      "date": "2026-07-19T00:00:00Z",
+      "venue": "Paycom Center, Oklahoma City",
+      "note": "Main card 8pm ET (02:00 SAST Sun) — road back to the title"
+    },
+    {
+      "id": 4, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Argentina", "away": "Springboks",
+      "homeFlag": "🇦🇷", "awayFlag": "🇿🇦",
+      "date": "2026-08-08T19:00:00Z",
+      "venue": "Estadio José Amalfitani, Buenos Aires"
+    },
+    {
+      "id": 5, "sport": "rugby",
+      "competition": "Rugby's Greatest Rivalry · Test 1",
+      "home": "Springboks", "away": "All Blacks",
+      "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
+      "date": "2026-08-22T15:40:00Z",
+      "venue": "Ellis Park, Johannesburg"
+    },
+    {
+      "id": 6, "sport": "rugby",
+      "competition": "Rugby's Greatest Rivalry · Test 2",
+      "home": "Springboks", "away": "All Blacks",
+      "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
+      "date": "2026-08-29T15:40:00Z",
+      "venue": "Cape Town Stadium, Cape Town"
+    },
+    {
+      "id": 7, "sport": "rugby",
+      "competition": "Rugby's Greatest Rivalry · Test 3",
+      "home": "Springboks", "away": "All Blacks",
+      "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
+      "date": "2026-09-05T15:40:00Z",
+      "venue": "FNB Stadium, Johannesburg"
+    },
+    {
+      "id": 8, "sport": "rugby",
+      "competition": "Rugby's Greatest Rivalry · Test 4",
+      "home": "Springboks", "away": "All Blacks",
+      "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
+      "date": "2026-09-12T23:00:00Z",
+      "venue": "M&T Bank Stadium, Baltimore"
+    },
+    {
+      "id": 9, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Italy", "away": "Springboks",
+      "homeFlag": "🇮🇹", "awayFlag": "🇿🇦",
+      "date": "2026-11-07T11:40:00Z",
+      "venue": "TBC, Italy"
+    },
+    {
+      "id": 10, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "France", "away": "Springboks",
+      "homeFlag": "🇫🇷", "awayFlag": "🇿🇦",
+      "date": "2026-11-14T20:10:00Z",
+      "venue": "TBC, France"
+    },
+    {
+      "id": 11, "sport": "rugby",
+      "competition": "Nations Championship",
+      "home": "Ireland", "away": "Springboks",
+      "homeFlag": "🇮🇪", "awayFlag": "🇿🇦",
+      "date": "2026-11-21T16:40:00Z",
+      "venue": "TBC, Dublin"
+    },
+    {
+      "id": 12, "sport": "rugby",
+      "competition": "Nations Championship · Finals Weekend",
+      "home": "Finals Weekend", "away": null,
+      "homeFlag": "🏆", "awayFlag": null,
+      "date": "2026-11-28T14:00:00Z",
+      "venue": "Twickenham, London",
+      "isSpecial": true
+    }
+  ]
+}
