@@ -151,6 +151,120 @@
       "date": "2026-11-28T14:00:00Z",
       "venue": "Twickenham, London",
       "isSpecial": true
+    },
+    {
+      "id": 111, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 11",
+      "home": "British Grand Prix", "away": null,
+      "homeFlag": "🇬🇧", "awayFlag": null,
+      "date": "2026-07-05T14:00:00Z",
+      "venue": "Silverstone Circuit"
+    },
+    {
+      "id": 112, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 12",
+      "home": "Belgian Grand Prix", "away": null,
+      "homeFlag": "🇧🇪", "awayFlag": null,
+      "date": "2026-07-19T13:00:00Z",
+      "venue": "Circuit de Spa-Francorchamps"
+    },
+    {
+      "id": 113, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 13",
+      "home": "Hungarian Grand Prix", "away": null,
+      "homeFlag": "🇭🇺", "awayFlag": null,
+      "date": "2026-07-26T13:00:00Z",
+      "venue": "Hungaroring, Budapest"
+    },
+    {
+      "id": 114, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 14",
+      "home": "Dutch Grand Prix", "away": null,
+      "homeFlag": "🇳🇱", "awayFlag": null,
+      "date": "2026-08-23T13:00:00Z",
+      "venue": "Circuit Zandvoort"
+    },
+    {
+      "id": 115, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 15",
+      "home": "Italian Grand Prix", "away": null,
+      "homeFlag": "🇮🇹", "awayFlag": null,
+      "date": "2026-09-06T13:00:00Z",
+      "venue": "Autodromo Nazionale Monza"
+    },
+    {
+      "id": 116, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 16",
+      "home": "Spanish Grand Prix", "away": null,
+      "homeFlag": "🇪🇸", "awayFlag": null,
+      "date": "2026-09-13T13:00:00Z",
+      "venue": "Madring, Madrid"
+    },
+    {
+      "id": 117, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 17",
+      "home": "Azerbaijan Grand Prix", "away": null,
+      "homeFlag": "🇦🇿", "awayFlag": null,
+      "date": "2026-09-27T11:00:00Z",
+      "venue": "Baku City Circuit"
+    },
+    {
+      "id": 118, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 18",
+      "home": "Singapore Grand Prix", "away": null,
+      "homeFlag": "🇸🇬", "awayFlag": null,
+      "date": "2026-10-11T12:00:00Z",
+      "venue": "Marina Bay Street Circuit"
+    },
+    {
+      "id": 119, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 19",
+      "home": "United States Grand Prix", "away": null,
+      "homeFlag": "🇺🇸", "awayFlag": null,
+      "date": "2026-10-25T19:00:00Z",
+      "venue": "Circuit of the Americas, Austin"
+    },
+    {
+      "id": 120, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 20",
+      "home": "Mexico City Grand Prix", "away": null,
+      "homeFlag": "🇲🇽", "awayFlag": null,
+      "date": "2026-11-01T20:00:00Z",
+      "venue": "Autódromo Hermanos Rodríguez"
+    },
+    {
+      "id": 121, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 21",
+      "home": "São Paulo Grand Prix", "away": null,
+      "homeFlag": "🇧🇷", "awayFlag": null,
+      "date": "2026-11-08T17:00:00Z",
+      "venue": "Autódromo José Carlos Pace, Interlagos"
+    },
+    {
+      "id": 122, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 22",
+      "home": "Las Vegas Grand Prix", "away": null,
+      "homeFlag": "🇺🇸", "awayFlag": null,
+      "date": "2026-11-22T04:00:00Z",
+      "venue": "Las Vegas Strip Circuit",
+      "note": "Saturday night race local time — 06:00 Sunday SAST"
+    },
+    {
+      "id": 123, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 23",
+      "home": "Qatar Grand Prix", "away": null,
+      "homeFlag": "🇶🇦", "awayFlag": null,
+      "date": "2026-11-29T16:00:00Z",
+      "venue": "Lusail International Circuit"
+    },
+    {
+      "id": 124, "sport": "f1",
+      "competition": "Formula 1 2026 · Round 24 · Season Finale",
+      "home": "Abu Dhabi Grand Prix", "away": null,
+      "homeFlag": "🇦🇪", "awayFlag": null,
+      "date": "2026-12-06T13:00:00Z",
+      "venue": "Yas Marina Circuit",
+      "isSpecial": true
     }
   ]
 }

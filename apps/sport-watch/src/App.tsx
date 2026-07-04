@@ -5,7 +5,7 @@ import eventsData from "./data/events.json";
 // TYPES
 // =====================
 
-type SportKey = "rugby" | "football" | "mma";
+type SportKey = "rugby" | "football" | "mma" | "f1";
 
 interface SportEvent {
   id: number;
@@ -32,6 +32,7 @@ const SPORT: Record<SportKey, { label: string; icon: string; color: string; bg: 
   rugby:    { label: "Rugby",    icon: "🏉", color: "#3AA864", bg: "#061B0E" },
   football: { label: "Football", icon: "⚽", color: "#D4A035", bg: "#1C1206" },
   mma:      { label: "MMA",      icon: "🥊", color: "#D44040", bg: "#1C0606" },
+  f1:       { label: "F1",       icon: "🏎️", color: "#E0762F", bg: "#1C0F06" },
 };
 
 const S = {
@@ -497,6 +498,7 @@ export default function App() {
     { key: "rugby",    label: "🏉 Rugby" },
     { key: "football", label: "⚽ Football" },
     { key: "mma",      label: "🥊 MMA" },
+    { key: "f1",       label: "🏎️ F1" },
   ];
 
   return (
@@ -540,7 +542,7 @@ export default function App() {
               🇿🇦 SA Sport Watch
             </div>
             <div style={{ fontSize: 11, color: S.muted, marginTop: 1 }}>
-              2026 · All major SA events
+              2026 · Rugby · Football · MMA · F1
             </div>
           </div>
 
