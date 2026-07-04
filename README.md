@@ -55,10 +55,14 @@ Repo -> Settings -> Secrets and variables -> Actions -> New repository secret:
 ### 5. Push (or re-run the workflow)
 
 Actions tab -> the deploy runs -> site appears at
-`https://<username>.github.io/claude-ecosystem/`
-with the dashboard at `.../claude-ecosystem/dashboard/`.
+`https://<username>.github.io/claude-ecosystem/`.
 
-On your phone: open the dashboard URL in Chrome -> menu -> **Add to Home screen** -> it installs as an app. The header badge should read **Supabase connected**.
+The dashboard IS the site root: it's the hub, installed once as a PWA, with a
+tile per app. Sub-apps live at `.../claude-ecosystem/<app>/` inside the hub's
+scope, so opening them stays inside the one installed app.
+
+On your phone: open the root URL in Chrome -> menu -> **Add to Home screen** ->
+it installs as an app. The header badge should read **Supabase connected**.
 
 ## Daily workflow
 

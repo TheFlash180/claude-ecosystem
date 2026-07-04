@@ -2,8 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// In CI, VITE_BASE is set to /<repo>/<app>/ so assets resolve on
-// GitHub Pages. Locally it defaults to / for vite dev.
+// The dashboard is the hub: in CI it builds at the site ROOT
+// (VITE_BASE=/<repo>/), so the installed PWA's scope covers every sub-app
+// and the whole ecosystem lives inside one installed app.
 const base = process.env.VITE_BASE ?? '/';
 
 export default defineConfig({
@@ -14,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'Ecosystem Dashboard',
-        short_name: 'Dashboard',
-        description: 'Unified front door for the personal automation ecosystem',
+        name: 'Ecosystem',
+        short_name: 'Ecosystem',
+        description: 'One home for all my apps',
         theme_color: '#16181d',
         background_color: '#16181d',
         display: 'standalone',
@@ -29,8 +30,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache app shell for offline; network-first for API calls.
         navigateFallback: `${base}index.html`,
+        // Never serve the hub shell for sub-app routes (/<base>/<app>/...) —
+        // each sub-app has its own service worker and offline handling.
+        navigateFallbackDenylist: [new RegExp(`^${base}[^/]+/`)],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/,

@@ -3,14 +3,30 @@ import { AppShell, supabaseConfigured, getSupabase } from '@ecosystem/shared';
 
 type CloudStatus = 'checking' | 'connected' | 'not-configured' | 'error';
 
-/**
- * Phase 1 placeholder shell. Proves the pipeline works end to end:
- * builds in CI, deploys to Pages, installs as a PWA, reaches Supabase.
- * The real dashboard (F1, sport fixtures, FinTrack, chess, baby
- * countdown) lands in Phase 3.
- */
+interface AppEntry {
+  slug: string;
+  name: string;
+}
+
+// Injected by tooling/build-all.mjs: every app deployed alongside the hub.
+function installedApps(): AppEntry[] {
+  try {
+    return JSON.parse((import.meta.env.VITE_APPS as string | undefined) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+// Apps that live outside this repo but belong to the family.
+const EXTERNAL: { name: string; url: string; note: string }[] = [
+  { name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/', note: 'gifts & claims' },
+];
+
+const PLANNED = ['FinTrack', 'F1 Briefing', 'Chess Coach', 'Baby Countdown'];
+
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
+  const apps = installedApps();
 
   useEffect(() => {
     if (!supabaseConfigured()) {
@@ -24,27 +40,28 @@ export default function App() {
       .then(({ error }) => setCloud(error ? 'error' : 'connected'));
   }, []);
 
-  const tiles = [
-    { name: 'FinTrack', status: 'Migration pending (Phase 2)' },
-    { name: 'SA Sport Watch', status: 'Migration pending' },
-    { name: 'F1 Briefing', status: 'Jolpica feed - Phase 3' },
-    { name: 'Chess Coach', status: 'Planned' },
-    { name: 'Baby Countdown', status: 'Phase 3' },
-  ];
-
   return (
-    <AppShell title="Ecosystem" subtitle="Pipeline check - Phase 1" headerRight={<CloudBadge status={cloud} />}>
+    <AppShell title="Ecosystem" subtitle="All apps, one home" headerRight={<CloudBadge status={cloud} />}>
       <div style={styles.grid}>
-        {tiles.map((t) => (
-          <div key={t.name} style={styles.tile}>
-            <div style={styles.tileName}>{t.name}</div>
-            <div style={styles.tileStatus}>{t.status}</div>
+        {apps.map((a) => (
+          <a key={a.slug} href={`./${a.slug}/`} style={{ ...styles.tile, ...styles.liveTile }}>
+            <div style={styles.tileName}>{a.name}</div>
+            <div style={{ ...styles.tileStatus, color: 'var(--ok)' }}>● open</div>
+          </a>
+        ))}
+        {EXTERNAL.map((a) => (
+          <a key={a.name} href={a.url} style={{ ...styles.tile, ...styles.liveTile }}>
+            <div style={styles.tileName}>{a.name}</div>
+            <div style={{ ...styles.tileStatus, color: 'var(--ok)' }}>● {a.note}</div>
+          </a>
+        ))}
+        {PLANNED.map((name) => (
+          <div key={name} style={{ ...styles.tile, opacity: 0.45 }}>
+            <div style={styles.tileName}>{name}</div>
+            <div style={styles.tileStatus}>coming soon</div>
           </div>
         ))}
       </div>
-      <p style={styles.note}>
-        If you can read this on your phone from a GitHub Pages URL, Phase 1 is complete.
-      </p>
     </AppShell>
   );
 }
@@ -73,8 +90,13 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius)',
     padding: 16,
+    display: 'block',
+  },
+  liveTile: {
+    textDecoration: 'none',
+    color: 'inherit',
+    cursor: 'pointer',
   },
   tileName: { fontWeight: 600, marginBottom: 4 },
   tileStatus: { fontSize: '0.78rem', color: 'var(--text-dim)' },
-  note: { marginTop: 24, color: 'var(--text-dim)', fontSize: '0.85rem' },
 };
