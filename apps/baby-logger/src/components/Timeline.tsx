@@ -21,7 +21,7 @@ function formatTime(iso: string): string {
 }
 
 function getInitial(userId: string, profiles: UserProfile[]): string {
-  const p = profiles.find((x) => x.user_id === userId);
+  const p = profiles.find((x) => x.id === userId);
   return p ? p.display_name.charAt(0).toUpperCase() : '?';
 }
 

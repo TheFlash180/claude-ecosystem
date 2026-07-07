@@ -64,7 +64,7 @@ export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Prop
         <h3 style={styles.sectionTitle}>Family</h3>
         <div>
           {profiles.map((p) => (
-            <div key={p.user_id} style={styles.memberRow}>
+            <div key={p.id} style={styles.memberRow}>
               <span style={{
                 width: 28,
                 height: 28,

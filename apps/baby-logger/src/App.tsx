@@ -105,7 +105,7 @@ export default function App() {
     const { data: existingProfile } = await sb
       .from('profiles')
       .select('*')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .single();
 
     let prof: UserProfile;
@@ -115,7 +115,7 @@ export default function App() {
       const displayName = KNOWN_USERS[email] ?? email.split('@')[0];
       const { data: newProfile, error } = await sb
         .from('profiles')
-        .insert({ user_id: userId, display_name: displayName })
+        .insert({ id: userId, display_name: displayName })
         .select()
         .single();
       if (error || !newProfile) {

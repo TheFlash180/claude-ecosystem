@@ -1,7 +1,6 @@
 export interface UserProfile {
-  user_id: string;
+  id: string;
   display_name: string;
-  created_at: string;
 }
 
 export interface Baby {
