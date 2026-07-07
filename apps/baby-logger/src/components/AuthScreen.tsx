@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function AuthScreen() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -13,10 +12,7 @@ export default function AuthScreen() {
     setError('');
     setLoading(true);
 
-    const sb = supabase();
-    const { error: authError } = mode === 'signup'
-      ? await sb.auth.signUp({ email, password })
-      : await sb.auth.signInWithPassword({ email, password });
+    const { error: authError } = await supabase().auth.signInWithPassword({ email, password });
 
     setLoading(false);
     if (authError) setError(authError.message);
@@ -25,11 +21,9 @@ export default function AuthScreen() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <div style={styles.logo}>&#127769;</div>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>&#127769;</div>
         <h1 style={styles.title}>Baby Logger</h1>
-        <p style={styles.subtitle}>
-          {mode === 'signin' ? 'Welcome back' : 'Create your account'}
-        </p>
+        <p style={styles.subtitle}>Sign in to continue</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
@@ -49,20 +43,13 @@ export default function AuthScreen() {
             required
             minLength={6}
             style={styles.input}
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            autoComplete="current-password"
           />
           {error && <div style={styles.error}>{error}</div>}
           <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? '...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
+            {loading ? '...' : 'Sign In'}
           </button>
         </form>
-
-        <button
-          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }}
-          style={styles.toggle}
-        >
-          {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-        </button>
       </div>
     </div>
   );
@@ -84,10 +71,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     maxWidth: 380,
     textAlign: 'center',
-  },
-  logo: {
-    fontSize: 48,
-    marginBottom: 8,
   },
   title: {
     fontFamily: 'var(--font-display)',
@@ -131,14 +114,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--font-display)',
     cursor: 'pointer',
     marginTop: 4,
-  },
-  toggle: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--accent)',
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    marginTop: 16,
-    fontFamily: 'var(--font-body)',
   },
 };

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Baby, HouseholdMember } from '../types';
-import HouseholdSettings from './HouseholdSettings';
+import type { Baby } from '../types';
+import Settings from './Settings';
 
 interface Props {
   baby: Baby;
-  member: HouseholdMember;
+  displayName: string;
   onBabyUpdate: (baby: Baby) => void;
   onSignOut: () => void;
 }
@@ -22,7 +22,7 @@ function getCountdown(dueDate: string) {
   return { days, hours, minutes, seconds, overdue: false };
 }
 
-export default function PreBirthView({ baby, member, onBabyUpdate, onSignOut }: Props) {
+export default function PreBirthView({ baby, displayName, onBabyUpdate, onSignOut }: Props) {
   const [countdown, setCountdown] = useState(getCountdown(baby.due_date));
   const [showSettings, setShowSettings] = useState(false);
   const [showBirthForm, setShowBirthForm] = useState(false);
@@ -54,8 +54,7 @@ export default function PreBirthView({ baby, member, onBabyUpdate, onSignOut }: 
 
   if (showSettings) {
     return (
-      <HouseholdSettings
-        member={member}
+      <Settings
         baby={baby}
         onBabyUpdate={onBabyUpdate}
         onBack={() => setShowSettings(false)}

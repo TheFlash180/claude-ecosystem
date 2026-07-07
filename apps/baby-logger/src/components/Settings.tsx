@@ -1,34 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Baby, HouseholdMember, Household } from '../types';
+import type { Baby, UserProfile } from '../types';
 
 interface Props {
-  member: HouseholdMember;
   baby: Baby;
   onBabyUpdate: (baby: Baby) => void;
   onBack: () => void;
   onSignOut: () => void;
 }
 
-export default function HouseholdSettings({ member, baby, onBabyUpdate, onBack, onSignOut }: Props) {
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [members, setMembers] = useState<HouseholdMember[]>([]);
+export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Props) {
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [babyName, setBabyName] = useState(baby.name ?? '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const sb = supabase();
-    sb.from('households')
+    supabase()
+      .from('profiles')
       .select('*')
-      .eq('id', member.household_id)
-      .single()
-      .then(({ data }) => { if (data) setHousehold(data); });
-
-    sb.from('household_members')
-      .select('*')
-      .eq('household_id', member.household_id)
-      .then(({ data }) => { if (data) setMembers(data); });
-  }, [member.household_id]);
+      .then(({ data }) => { if (data) setProfiles(data); });
+  }, []);
 
   async function handleSaveName() {
     if (babyName.trim() === (baby.name ?? '')) return;
@@ -71,26 +62,9 @@ export default function HouseholdSettings({ member, baby, onBabyUpdate, onBack, 
 
       <section style={styles.section}>
         <h3 style={styles.sectionTitle}>Family</h3>
-        {household && (
-          <div style={styles.codeBox}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Invite code</div>
-            <div style={{
-              fontFamily: 'monospace',
-              fontSize: '1.3rem',
-              fontWeight: 700,
-              color: 'var(--accent)',
-              letterSpacing: 2,
-            }}>
-              {household.invite_code}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-              Share this with your partner to join
-            </div>
-          </div>
-        )}
-        <div style={{ marginTop: 12 }}>
-          {members.map((m) => (
-            <div key={m.id} style={styles.memberRow}>
+        <div>
+          {profiles.map((p) => (
+            <div key={p.user_id} style={styles.memberRow}>
               <span style={{
                 width: 28,
                 height: 28,
@@ -104,12 +78,9 @@ export default function HouseholdSettings({ member, baby, onBabyUpdate, onBack, 
                 fontWeight: 700,
                 flexShrink: 0,
               }}>
-                {m.display_name.charAt(0).toUpperCase()}
+                {p.display_name.charAt(0).toUpperCase()}
               </span>
-              <span>{m.display_name}</span>
-              <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: 'auto' }}>
-                {m.role}
-              </span>
+              <span>{p.display_name}</span>
             </div>
           ))}
         </div>
@@ -185,13 +156,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.82rem',
     color: 'var(--muted)',
     marginTop: 6,
-  },
-  codeBox: {
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: 16,
-    textAlign: 'center',
   },
   memberRow: {
     display: 'flex',
