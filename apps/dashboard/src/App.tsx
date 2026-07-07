@@ -22,7 +22,7 @@ const EXTERNAL: { name: string; url: string; note: string }[] = [
   { name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/', note: 'gifts & claims' },
 ];
 
-const PLANNED = ['FinTrack', 'F1 Briefing', 'Chess Coach', 'Baby Countdown'];
+const PLANNED = ['FinTrack', 'F1 Briefing', 'Chess Coach'];
 
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
