@@ -6,15 +6,17 @@
 -- All authenticated users share full access to all data.
 -- ============================================================
 
--- 1. PROFILES (display names for logged-by tracking)
-create table if not exists profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  display_name text not null,
-  created_at timestamptz default now()
-);
-alter table profiles enable row level security;
-create policy "Authenticated users full access" on profiles
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+-- 1. PROFILES (shared with FinTrack — uses `id` as PK, not `user_id`)
+-- The profiles table already exists from FinTrack setup.
+-- Baby Logger reuses it: columns id (uuid PK → auth.users), display_name.
+-- If creating fresh:
+-- create table if not exists profiles (
+--   id uuid primary key references auth.users(id) on delete cascade,
+--   display_name text not null
+-- );
+-- alter table profiles enable row level security;
+-- create policy "Authenticated users full access" on profiles
+--   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- 2. BABIES
 create table if not exists babies (
