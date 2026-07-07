@@ -1,20 +1,11 @@
 import React from 'react';
-import type { TimelineEvent, HouseholdMember } from '../types';
+import type { TimelineEvent, UserProfile } from '../types';
 
 interface Props {
   events: TimelineEvent[];
-  members: HouseholdMember[];
+  profiles: UserProfile[];
   hasMore: boolean;
   onLoadMore: () => void;
-}
-
-function getEventTime(event: TimelineEvent): string {
-  switch (event.type) {
-    case 'feed': return event.data.started_at;
-    case 'sleep': return event.data.started_at;
-    case 'nappy': return event.data.logged_at;
-    case 'weight': return event.data.created_at;
-  }
 }
 
 function formatTime(iso: string): string {
@@ -29,12 +20,12 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-function getMemberInitial(userId: string, members: HouseholdMember[]): string {
-  const m = members.find((x) => x.user_id === userId);
-  return m ? m.display_name.charAt(0).toUpperCase() : '?';
+function getInitial(userId: string, profiles: UserProfile[]): string {
+  const p = profiles.find((x) => x.user_id === userId);
+  return p ? p.display_name.charAt(0).toUpperCase() : '?';
 }
 
-function renderEvent(event: TimelineEvent, members: HouseholdMember[]) {
+function renderEvent(event: TimelineEvent) {
   switch (event.type) {
     case 'feed': {
       const d = event.data;
@@ -48,7 +39,7 @@ function renderEvent(event: TimelineEvent, members: HouseholdMember[]) {
       if (d.duration_minutes) detail += ` · ${d.duration_minutes}min`;
       if (d.amount_ml) detail += ` · ${d.amount_ml}ml`;
       return {
-        emoji: '🍼',
+        emoji: '\u{1F37C}',
         label: 'Feed',
         detail,
         color: 'var(--accent-secondary)',
@@ -68,7 +59,7 @@ function renderEvent(event: TimelineEvent, members: HouseholdMember[]) {
         detail = 'Sleeping now...';
       }
       return {
-        emoji: '😴',
+        emoji: '\u{1F634}',
         label: 'Sleep',
         detail,
         color: 'var(--sleep)',
@@ -80,7 +71,7 @@ function renderEvent(event: TimelineEvent, members: HouseholdMember[]) {
       const d = event.data;
       const typeLabel: Record<string, string> = { wet: 'Wet', dirty: 'Dirty', both: 'Wet & Dirty' };
       return {
-        emoji: '🧷',
+        emoji: '\u{1F9F7}',
         label: 'Nappy',
         detail: typeLabel[d.nappy_type] ?? d.nappy_type,
         color: 'var(--nappy)',
@@ -103,7 +94,7 @@ function renderEvent(event: TimelineEvent, members: HouseholdMember[]) {
   }
 }
 
-export default function Timeline({ events, members, hasMore, onLoadMore }: Props) {
+export default function Timeline({ events, profiles, hasMore, onLoadMore }: Props) {
   if (events.length === 0) {
     return (
       <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 0' }}>
@@ -115,7 +106,7 @@ export default function Timeline({ events, members, hasMore, onLoadMore }: Props
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {events.map((event, i) => {
-        const r = renderEvent(event, members);
+        const r = renderEvent(event);
         return (
           <div key={`${event.type}-${event.data.id}-${i}`} style={{
             display: 'flex',
@@ -145,7 +136,7 @@ export default function Timeline({ events, members, hasMore, onLoadMore }: Props
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                {getMemberInitial(r.userId, members)}
+                {getInitial(r.userId, profiles)}
               </span>
             </div>
           </div>

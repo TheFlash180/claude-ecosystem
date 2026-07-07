@@ -1,22 +1,11 @@
-export interface Household {
-  id: string;
-  name: string;
-  invite_code: string;
-  created_at: string;
-}
-
-export interface HouseholdMember {
-  id: string;
-  household_id: string;
+export interface UserProfile {
   user_id: string;
   display_name: string;
-  role: 'parent' | 'caregiver';
   created_at: string;
 }
 
 export interface Baby {
   id: string;
-  household_id: string;
   name: string | null;
   due_date: string;
   birth_date: string | null;

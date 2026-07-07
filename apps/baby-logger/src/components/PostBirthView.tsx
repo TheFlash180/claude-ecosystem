@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Baby, HouseholdMember, FeedEvent, SleepEvent, NappyEvent, WeightEvent, TimelineEvent } from '../types';
+import type { Baby, UserProfile, FeedEvent, SleepEvent, NappyEvent, WeightEvent, TimelineEvent } from '../types';
 import QuickLog from './QuickLog';
 import Timeline from './Timeline';
 import SummaryCards from './SummaryCards';
@@ -9,11 +9,11 @@ import SleepToggle from './SleepToggle';
 import NappyForm from './NappyForm';
 import WeightForm from './WeightForm';
 import GrowthChart from './GrowthChart';
-import HouseholdSettings from './HouseholdSettings';
+import Settings from './Settings';
 
 interface Props {
   baby: Baby;
-  member: HouseholdMember;
+  displayName: string;
   userId: string;
   onBabyUpdate: (baby: Baby) => void;
   onSignOut: () => void;
@@ -23,12 +23,12 @@ type Modal = 'feed' | 'sleep' | 'nappy' | 'weight' | 'growth' | 'settings' | nul
 
 const PAGE_SIZE = 50;
 
-export default function PostBirthView({ baby, member, userId, onBabyUpdate, onSignOut }: Props) {
+export default function PostBirthView({ baby, displayName, userId, onBabyUpdate, onSignOut }: Props) {
   const [feeds, setFeeds] = useState<FeedEvent[]>([]);
   const [sleeps, setSleeps] = useState<SleepEvent[]>([]);
   const [nappies, setNappies] = useState<NappyEvent[]>([]);
   const [weights, setWeights] = useState<WeightEvent[]>([]);
-  const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [modal, setModal] = useState<Modal>(null);
   const [timelinePage, setTimelinePage] = useState(1);
 
@@ -36,19 +36,19 @@ export default function PostBirthView({ baby, member, userId, onBabyUpdate, onSi
 
   const loadData = useCallback(async () => {
     const sb = supabase();
-    const [f, s, n, w, m] = await Promise.all([
+    const [f, s, n, w, p] = await Promise.all([
       sb.from('feed_events').select('*').eq('baby_id', baby.id).order('started_at', { ascending: false }).limit(PAGE_SIZE * timelinePage),
       sb.from('sleep_events').select('*').eq('baby_id', baby.id).order('started_at', { ascending: false }).limit(PAGE_SIZE * timelinePage),
       sb.from('nappy_events').select('*').eq('baby_id', baby.id).order('logged_at', { ascending: false }).limit(PAGE_SIZE * timelinePage),
       sb.from('weight_events').select('*').eq('baby_id', baby.id).order('measured_at', { ascending: false }).limit(PAGE_SIZE * timelinePage),
-      sb.from('household_members').select('*').eq('household_id', member.household_id),
+      sb.from('profiles').select('*'),
     ]);
     if (f.data) setFeeds(f.data);
     if (s.data) setSleeps(s.data);
     if (n.data) setNappies(n.data);
     if (w.data) setWeights(w.data);
-    if (m.data) setMembers(m.data);
-  }, [baby.id, member.household_id, timelinePage]);
+    if (p.data) setProfiles(p.data);
+  }, [baby.id, timelinePage]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -87,8 +87,7 @@ export default function PostBirthView({ baby, member, userId, onBabyUpdate, onSi
 
   if (modal === 'settings') {
     return (
-      <HouseholdSettings
-        member={member}
+      <Settings
         baby={baby}
         onBabyUpdate={onBabyUpdate}
         onBack={() => setModal(null)}
@@ -117,7 +116,7 @@ export default function PostBirthView({ baby, member, userId, onBabyUpdate, onSi
         <SummaryCards feeds={feeds} sleeps={sleeps} nappies={nappies} />
         <Timeline
           events={timeline}
-          members={members}
+          profiles={profiles}
           hasMore={hasMore}
           onLoadMore={() => setTimelinePage((p) => p + 1)}
         />

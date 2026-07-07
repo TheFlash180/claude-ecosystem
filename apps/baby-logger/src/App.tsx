@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
-import type { Baby, HouseholdMember } from './types';
+import type { Baby, UserProfile } from './types';
 import AuthScreen from './components/AuthScreen';
-import Onboarding from './components/Onboarding';
 import PreBirthView from './components/PreBirthView';
 import PostBirthView from './components/PostBirthView';
 import type { Session } from '@supabase/supabase-js';
 
-type AppState = 'loading' | 'auth' | 'onboarding' | 'pre-birth' | 'post-birth';
+type AppState = 'loading' | 'auth' | 'pre-birth' | 'post-birth';
+
+const KNOWN_USERS: Record<string, string> = {
+  'rickust18@gmail.com': 'Rickus',
+  'anjonemaritz01@gmail.com': 'Anjoné',
+};
 
 const globalStyles = `
   :root {
@@ -50,7 +54,7 @@ const globalStyles = `
 export default function App() {
   const [state, setState] = useState<AppState>('loading');
   const [session, setSession] = useState<Session | null>(null);
-  const [member, setMember] = useState<HouseholdMember | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [baby, setBaby] = useState<Baby | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
 
@@ -76,15 +80,15 @@ export default function App() {
     const sb = supabase();
     sb.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session) loadHousehold(data.session.user.id);
+      if (data.session) void setup(data.session);
       else setState('auth');
     });
 
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (s) loadHousehold(s.user.id);
+      if (s) void setup(s);
       else {
-        setMember(null);
+        setProfile(null);
         setBaby(null);
         setState('auth');
       }
@@ -93,38 +97,56 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function loadHousehold(userId: string) {
+  async function setup(s: Session) {
     const sb = supabase();
-    const { data: memberData } = await sb
-      .from('household_members')
+    const userId = s.user.id;
+    const email = s.user.email ?? '';
+
+    const { data: existingProfile } = await sb
+      .from('profiles')
       .select('*')
       .eq('user_id', userId)
       .single();
 
-    if (!memberData) {
-      setState('onboarding');
-      return;
+    let prof: UserProfile;
+    if (existingProfile) {
+      prof = existingProfile;
+    } else {
+      const displayName = KNOWN_USERS[email] ?? email.split('@')[0];
+      const { data: newProfile, error } = await sb
+        .from('profiles')
+        .insert({ user_id: userId, display_name: displayName })
+        .select()
+        .single();
+      if (error || !newProfile) {
+        setState('auth');
+        return;
+      }
+      prof = newProfile;
     }
-
-    setMember(memberData);
+    setProfile(prof);
 
     const { data: babyData } = await sb
       .from('babies')
       .select('*')
-      .eq('household_id', memberData.household_id)
       .limit(1)
       .single();
 
+    let b: Baby;
     if (babyData) {
-      setBaby(babyData);
-      setState(babyData.birth_date ? 'post-birth' : 'pre-birth');
+      b = babyData;
     } else {
-      setState('onboarding');
+      const { data: newBaby, error } = await sb
+        .from('babies')
+        .insert({ due_date: '2026-12-17' })
+        .select()
+        .single();
+      if (error || !newBaby) {
+        setState('auth');
+        return;
+      }
+      b = newBaby;
     }
-  }
-
-  function handleOnboardingComplete(m: HouseholdMember, b: Baby) {
-    setMember(m);
     setBaby(b);
     setState(b.birth_date ? 'post-birth' : 'pre-birth');
   }
@@ -163,21 +185,18 @@ export default function App() {
         </div>
       )}
       {state === 'auth' && <AuthScreen />}
-      {state === 'onboarding' && session && (
-        <Onboarding userId={session.user.id} onComplete={handleOnboardingComplete} />
-      )}
-      {state === 'pre-birth' && baby && member && session && (
+      {state === 'pre-birth' && baby && profile && session && (
         <PreBirthView
           baby={baby}
-          member={member}
+          displayName={profile.display_name}
           onBabyUpdate={handleBabyUpdate}
           onSignOut={handleSignOut}
         />
       )}
-      {state === 'post-birth' && baby && member && session && (
+      {state === 'post-birth' && baby && profile && session && (
         <PostBirthView
           baby={baby}
-          member={member}
+          displayName={profile.display_name}
           userId={session.user.id}
           onBabyUpdate={handleBabyUpdate}
           onSignOut={handleSignOut}
