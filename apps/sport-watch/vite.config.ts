@@ -29,7 +29,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache app shell for offline; network-first for API calls.
+        importScripts: [`${base}push-sw.js`],
         navigateFallback: `${base}index.html`,
         runtimeCaching: [
           {

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, CSSProperties } from "react";
+import React, { useState, useEffect, useRef, CSSProperties } from "react";
 import eventsData from "./data/events.json";
+import { supabase } from "./lib/supabase";
 
 // =====================
 // TYPES
@@ -156,7 +157,7 @@ async function fireNotification(title: string, body: string): Promise<boolean> {
 }
 
 // Fire a one-time alert for any belled event starting within the next hour.
-// (No push server, so this runs while the app is open or in the background.)
+// (In-app fallback — real pushes handled server-side via Supabase Edge Function.)
 async function checkReminders(notified: Set<number>) {
   const alerted = loadIdSet(ALERTED_KEY);
   let changed = false;
@@ -174,6 +175,98 @@ async function checkReminders(notified: Set<number>) {
     }
   }
   if (changed) saveIdSet(ALERTED_KEY, alerted);
+}
+
+// =====================
+// WEB PUSH + SUPABASE
+// =====================
+
+const VAPID_PUBLIC = "BGYmKYowZiS3ohHCksH6TKHimd-EaDcLX5ehZMAuURlVrBixtIxEpoStOqzsXGU0ExxM_EDB_NoP22yxMWPf0Ho";
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function getPushSubscription(): Promise<PushSubscription | null> {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (!reg?.pushManager) return null;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC).buffer as ArrayBuffer,
+      });
+    }
+    return sub;
+  } catch {
+    return null;
+  }
+}
+
+async function upsertPushSub(sub: PushSubscription): Promise<string | null> {
+  const key = sub.toJSON();
+  const { data, error } = await supabase
+    .from("sport_push_subs")
+    .upsert(
+      { endpoint: sub.endpoint, p256dh: key.keys?.p256dh, auth: key.keys?.auth },
+      { onConflict: "endpoint" },
+    )
+    .select("id")
+    .single();
+  if (error || !data) return null;
+  return data.id as string;
+}
+
+async function syncReminder(subId: string, ev: SportEvent, remove: boolean) {
+  if (remove) {
+    await supabase
+      .from("sport_push_reminders")
+      .delete()
+      .eq("sub_id", subId)
+      .eq("event_id", ev.id);
+  } else {
+    if (!ev.date) return;
+    const label = ev.away
+      ? `${ev.home} vs ${ev.away}`
+      : ev.home;
+    await supabase
+      .from("sport_push_reminders")
+      .upsert(
+        { sub_id: subId, event_id: ev.id, event_date: ev.date.toISOString(), event_label: label, notified: false },
+        { onConflict: "sub_id,event_id", ignoreDuplicates: false },
+      );
+  }
+}
+
+async function syncAllReminders(subId: string, notifiedSet: Set<number>) {
+  const futureEvents = EVENTS.filter(e => e.date && e.date.getTime() > Date.now());
+  const belledFuture = futureEvents.filter(e => notifiedSet.has(e.id));
+
+  for (const ev of belledFuture) {
+    await syncReminder(subId, ev, false);
+  }
+
+  const { data: existing } = await supabase
+    .from("sport_push_reminders")
+    .select("event_id")
+    .eq("sub_id", subId);
+  if (existing) {
+    for (const row of existing) {
+      if (!notifiedSet.has(row.event_id)) {
+        await supabase
+          .from("sport_push_reminders")
+          .delete()
+          .eq("sub_id", subId)
+          .eq("event_id", row.event_id);
+      }
+    }
+  }
 }
 
 // =====================
@@ -445,6 +538,7 @@ export default function App() {
   const [notified, setNotified] = useState<Set<number>>(loadNotified);
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const pushSubId = useRef<string | null>(null);
 
   // Re-render every second for countdown
   useEffect(() => {
@@ -459,6 +553,19 @@ export default function App() {
     return () => clearInterval(t);
   }, [notified]);
 
+  // On mount: subscribe to push and sync existing bells to Supabase.
+  useEffect(() => {
+    (async () => {
+      const sub = await getPushSubscription();
+      if (!sub) return;
+      const id = await upsertPushSub(sub);
+      if (!id) return;
+      pushSubId.current = id;
+      await syncAllReminders(id, notified);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -466,6 +573,7 @@ export default function App() {
 
   const toggleNotify = async (id: number) => {
     const wasOn = notified.has(id);
+    const ev = EVENTS.find(e => e.id === id);
 
     if (!wasOn) {
       let granted = false;
@@ -477,10 +585,23 @@ export default function App() {
           granted = Notification.permission === "granted";
         }
       } catch { /* notifications unsupported */ }
+
+      if (granted && !pushSubId.current) {
+        const sub = await getPushSubscription();
+        if (sub) pushSubId.current = await upsertPushSub(sub);
+      }
+
+      if (pushSubId.current && ev) {
+        void syncReminder(pushSubId.current, ev, false);
+      }
+
       showToast(granted
-        ? "🔔 Reminder set — alert ~1h before kick-off"
-        : "🔔 Saved — allow notifications for alerts");
+        ? "🔔 Reminder set — you'll get a push ~1h before kick-off"
+        : "🔔 Saved — allow notifications for push alerts");
     } else {
+      if (pushSubId.current && ev) {
+        void syncReminder(pushSubId.current, ev, true);
+      }
       showToast("🔕 Reminder removed");
     }
 
