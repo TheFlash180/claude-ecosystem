@@ -5,7 +5,7 @@ import eventsData from "./data/events.json";
 // TYPES
 // =====================
 
-type SportKey = "rugby" | "football" | "mma" | "f1";
+type SportKey = "rugby" | "mma" | "f1";
 
 interface SportEvent {
   id: number;
@@ -28,11 +28,10 @@ interface SportEvent {
 // CONFIG
 // =====================
 
-const SPORT: Record<SportKey, { label: string; icon: string; color: string; bg: string }> = {
-  rugby:    { label: "Rugby",    icon: "🏉", color: "#3AA864", bg: "#061B0E" },
-  football: { label: "Football", icon: "⚽", color: "#D4A035", bg: "#1C1206" },
-  mma:      { label: "MMA",      icon: "🥊", color: "#D44040", bg: "#1C0606" },
-  f1:       { label: "F1",       icon: "🏎️", color: "#E0762F", bg: "#1C0F06" },
+const SPORT: Record<SportKey, { label: string; icon: string; color: string; bg: string; liveDuration: number }> = {
+  rugby: { label: "Rugby",  icon: "🏉", color: "#3AA864", bg: "#061B0E", liveDuration: 7200000 },
+  mma:   { label: "MMA",    icon: "🥊", color: "#D44040", bg: "#1C0606", liveDuration: 18000000 },
+  f1:    { label: "F1",     icon: "🏎️", color: "#E0762F", bg: "#1C0F06", liveDuration: 7200000 },
 };
 
 const S = {
@@ -50,11 +49,21 @@ const S = {
 // DATA
 // =====================
 
-const EVENTS: SportEvent[] = eventsData.events.map((e: any) => ({
-  ...e,
-  sport: e.sport as SportKey,
-  date: e.date ? new Date(e.date) : null,
-}));
+interface RawEvent {
+  id: number; sport: string; competition: string;
+  home: string; away: string | null;
+  homeFlag: string; awayFlag: string | null;
+  date: string | null; venue?: string; result?: string;
+  note?: string; isConditional?: boolean; isSpecial?: boolean; dateTBC?: boolean;
+}
+
+const EVENTS: SportEvent[] = (eventsData.events as RawEvent[])
+  .filter(e => e.sport in SPORT)
+  .map(e => ({
+    ...e,
+    sport: e.sport as SportKey,
+    date: e.date ? new Date(e.date) : null,
+  }));
 
 const SORTED = [...EVENTS].sort((a, b) => {
   if (!a.date && !b.date) return 0;
@@ -68,10 +77,11 @@ const SORTED = [...EVENTS].sort((a, b) => {
 // =====================
 
 const isPast = (d: Date | null) => !!d && d.getTime() < Date.now();
-const isLive = (d: Date | null) => {
+const isLive = (d: Date | null, sport?: SportKey) => {
   if (!d) return false;
   const n = Date.now();
-  return n >= d.getTime() && n < d.getTime() + 10800000;
+  const duration = sport ? SPORT[sport].liveDuration : 7200000;
+  return n >= d.getTime() && n < d.getTime() + duration;
 };
 
 function getCountdown(d: Date | null) {
@@ -318,8 +328,8 @@ function EventCard({ event, notified, onToggle }: {
   onToggle: (id: number) => void;
 }) {
   const sp = SPORT[event.sport];
-  const past = isPast(event.date) && !isLive(event.date);
-  const live = isLive(event.date);
+  const past = isPast(event.date) && !isLive(event.date, event.sport);
+  const live = isLive(event.date, event.sport);
 
   return (
     <div style={{
@@ -327,10 +337,10 @@ function EventCard({ event, notified, onToggle }: {
       borderRadius: 10,
       padding: "11px 12px",
       marginBottom: 7,
-      borderLeft: `3px solid ${live ? sp.color : past ? S.dim : sp.color + "65"}`,
+      borderLeft: `3px solid ${live ? sp.color : past ? S.dim : event.isSpecial ? "#D4A035" : sp.color + "65"}`,
       display: "flex", alignItems: "center", gap: 11,
       opacity: past ? 0.35 : 1,
-      outline: live ? `1px solid ${sp.color}22` : "none",
+      outline: live ? `1px solid ${sp.color}22` : event.isSpecial && !past ? `1px solid #D4A03530` : "none",
       outlineOffset: -1,
     }}>
       <div style={{ fontSize: 18, flexShrink: 0 }}>{sp.icon}</div>
@@ -487,18 +497,17 @@ export default function App() {
   };
 
   const visible  = SORTED.filter(e => filter === "all" || e.sport === filter);
-  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date) && !e.dateTBC);
-  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date) || e.dateTBC);
+  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, e.sport) && !e.dateTBC);
+  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, e.sport) || e.dateTBC);
   const nextUp   = upcoming.find(e => e.date && !e.dateTBC);
   const cd       = nextUp ? getCountdown(nextUp.date) : null;
   const bellCount = notified.size;
 
   const filters: { key: "all" | SportKey; label: string }[] = [
-    { key: "all",      label: "All" },
-    { key: "rugby",    label: "🏉 Rugby" },
-    { key: "football", label: "⚽ Football" },
-    { key: "mma",      label: "🥊 MMA" },
-    { key: "f1",       label: "🏎️ F1" },
+    { key: "all",   label: "All" },
+    { key: "rugby", label: "🏉 Rugby" },
+    { key: "mma",   label: "🥊 MMA" },
+    { key: "f1",    label: "🏎️ F1" },
   ];
 
   return (
@@ -542,7 +551,7 @@ export default function App() {
               🇿🇦 SA Sport Watch
             </div>
             <div style={{ fontSize: 11, color: S.muted, marginTop: 1 }}>
-              2026 · Rugby · Football · MMA · F1
+              2026 · Rugby · MMA · F1
             </div>
           </div>
 
@@ -585,22 +594,22 @@ export default function App() {
         {/* Hero countdown */}
         <HeroCard event={nextUp} countdown={cd} />
 
-        {/* Past events */}
-        {past.length > 0 && (
+        {/* Upcoming events */}
+        {upcoming.length > 0 && (
           <>
-            <SectionLabel text="Recent" />
-            {past.map(e => (
+            <SectionLabel text="Upcoming" />
+            {upcoming.map(e => (
               <EventCard key={e.id} event={e}
                 notified={notified.has(e.id)} onToggle={toggleNotify} />
             ))}
           </>
         )}
 
-        {/* Upcoming events */}
-        {upcoming.length > 0 && (
+        {/* Past events */}
+        {past.length > 0 && (
           <>
-            <SectionLabel text="Upcoming" />
-            {upcoming.map(e => (
+            <SectionLabel text="Recent" />
+            {past.map(e => (
               <EventCard key={e.id} event={e}
                 notified={notified.has(e.id)} onToggle={toggleNotify} />
             ))}
@@ -622,7 +631,7 @@ export default function App() {
           background: S.surface, borderRadius: 10,
           fontSize: 10, color: S.muted, lineHeight: 1.7,
         }}>
-          📌 Times in SAST. Bafana's World Cup ended in the R32 — Canada 1–0 (Eustáquio 90+2'). DDP vs Usman (18 Jul) is the road back after losing the MW title to Chimaev. To update fixtures: edit src/data/events.json and push.
+          📌 Times in SAST. DDP vs Usman (18 Jul) is the road back after losing the MW title to Chimaev. To update fixtures: edit src/data/events.json and push.
         </div>
       </div>
     </div>
