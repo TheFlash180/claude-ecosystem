@@ -1,5 +1,5 @@
 {
-  "_readme": "SA Sport Watch event data. Edit this file and push - the pipeline redeploys automatically. Dates are ISO 8601 UTC. Optional fields: result, note, isConditional, isSpecial, dateTBC. Set away/awayFlag to null for single-party events.",
+  "_readme": "OFFLINE FALLBACK ONLY. Events now live in the sport_events table (edit them on the app's #/admin page; F1 syncs daily from Jolpica). This file renders only when Supabase is unreachable - no need to keep it current.",
   "events": [
     {
       "id": 20, "sport": "football",
