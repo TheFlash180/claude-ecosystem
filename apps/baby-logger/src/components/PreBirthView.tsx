@@ -10,30 +10,167 @@ interface Props {
   onSignOut: () => void;
 }
 
-function getCountdown(dueDate: string) {
-  const due = new Date(dueDate + 'T00:00:00');
-  const now = new Date();
-  const diff = due.getTime() - now.getTime();
-  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, overdue: true };
-  const days = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  const minutes = Math.floor((diff % 3600000) / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-  return { days, hours, minutes, seconds, overdue: false };
+// ── pregnancy week data ──────────────────────────────────────────────
+// Size comparison, approx length (cm) & weight (g), one-line milestone
+
+interface WeekInfo {
+  size: string;
+  emoji: string;
+  lengthCm: number;
+  weightG: number;
+  milestone: string;
 }
 
+const WEEK_DATA: Record<number, WeekInfo> = {
+  4:  { size: 'Poppy seed',     emoji: '🌱', lengthCm: 0.1,  weightG: 0,     milestone: 'The embryo has implanted — tiny but mighty.' },
+  5:  { size: 'Sesame seed',    emoji: '🫘', lengthCm: 0.2,  weightG: 0,     milestone: 'Heart tube is forming and will start beating soon.' },
+  6:  { size: 'Lentil',         emoji: '🟤', lengthCm: 0.6,  weightG: 0,     milestone: 'Neural tube closing — brain and spinal cord taking shape.' },
+  7:  { size: 'Blueberry',      emoji: '🫐', lengthCm: 1.3,  weightG: 0,     milestone: 'Arms and legs are budding; face features starting.' },
+  8:  { size: 'Raspberry',      emoji: '🍇', lengthCm: 1.6,  weightG: 1,     milestone: 'Fingers and toes beginning to form.' },
+  9:  { size: 'Cherry',         emoji: '🍒', lengthCm: 2.3,  weightG: 2,     milestone: 'All essential organs are in place.' },
+  10: { size: 'Strawberry',     emoji: '🍓', lengthCm: 3.1,  weightG: 4,     milestone: 'Officially a fetus! Bones are starting to harden.' },
+  11: { size: 'Lime',           emoji: '🟢', lengthCm: 4.1,  weightG: 7,     milestone: 'Baby can open and close fists.' },
+  12: { size: 'Plum',           emoji: '🟣', lengthCm: 5.4,  weightG: 14,    milestone: 'Reflexes developing — baby can squint and swallow.' },
+  13: { size: 'Peach',          emoji: '🍑', lengthCm: 7.4,  weightG: 23,    milestone: 'Vocal cords forming; fingerprints appearing.' },
+  14: { size: 'Lemon',          emoji: '🍋', lengthCm: 8.7,  weightG: 43,    milestone: 'Baby can make facial expressions now.' },
+  15: { size: 'Apple',          emoji: '🍎', lengthCm: 10.1, weightG: 70,    milestone: 'Legs are now longer than arms; moving a lot.' },
+  16: { size: 'Avocado',        emoji: '🥑', lengthCm: 11.6, weightG: 100,   milestone: 'Baby can hear sounds from outside!' },
+  17: { size: 'Pear',           emoji: '🍐', lengthCm: 13.0, weightG: 140,   milestone: 'Skeleton hardening from cartilage to bone.' },
+  18: { size: 'Sweet potato',   emoji: '🍠', lengthCm: 14.2, weightG: 190,   milestone: 'You might start feeling kicks soon.' },
+  19: { size: 'Mango',          emoji: '🥭', lengthCm: 15.3, weightG: 240,   milestone: 'Vernix caseosa coating protects baby\'s skin.' },
+  20: { size: 'Banana',         emoji: '🍌', lengthCm: 16.4, weightG: 300,   milestone: 'Halfway there! Baby can taste amniotic fluid.' },
+  21: { size: 'Carrot',         emoji: '🥕', lengthCm: 26.7, weightG: 360,   milestone: 'Eyebrows and eyelids are fully formed.' },
+  22: { size: 'Papaya',         emoji: '🧡', lengthCm: 27.8, weightG: 430,   milestone: 'Grip is strong enough to grab the umbilical cord.' },
+  23: { size: 'Grapefruit',     emoji: '🍊', lengthCm: 28.9, weightG: 501,   milestone: 'Lungs are developing surfactant for breathing.' },
+  24: { size: 'Ear of corn',    emoji: '🌽', lengthCm: 30.0, weightG: 600,   milestone: 'Baby has a regular sleep-wake cycle now.' },
+  25: { size: 'Cauliflower',    emoji: '🤍', lengthCm: 34.6, weightG: 660,   milestone: 'Nostrils open; practicing breathing movements.' },
+  26: { size: 'Lettuce head',   emoji: '🥬', lengthCm: 35.6, weightG: 760,   milestone: 'Eyes opening for the first time.' },
+  27: { size: 'Cabbage',        emoji: '🥗', lengthCm: 36.6, weightG: 875,   milestone: 'Brain is very active — dreaming may begin.' },
+  28: { size: 'Aubergine',      emoji: '🍆', lengthCm: 37.6, weightG: 1005,  milestone: 'Third trimester! Baby can blink and has eyelashes.' },
+  29: { size: 'Butternut',      emoji: '🎃', lengthCm: 38.6, weightG: 1153,  milestone: 'Muscles and lungs maturing rapidly.' },
+  30: { size: 'Coconut',        emoji: '🥥', lengthCm: 39.9, weightG: 1319,  milestone: 'Baby is running out of room — movements feel different.' },
+  31: { size: 'Pineapple',      emoji: '🍍', lengthCm: 41.1, weightG: 1502,  milestone: 'All five senses are working now.' },
+  32: { size: 'Squash',         emoji: '🟡', lengthCm: 42.4, weightG: 1702,  milestone: 'Toenails and fingernails have grown in.' },
+  33: { size: 'Celery bunch',   emoji: '🥒', lengthCm: 43.7, weightG: 1918,  milestone: 'Bones hardening, but skull stays flexible for birth.' },
+  34: { size: 'Cantaloupe',     emoji: '🍈', lengthCm: 45.0, weightG: 2146,  milestone: 'Lungs are nearly mature.' },
+  35: { size: 'Honeydew',       emoji: '💚', lengthCm: 46.2, weightG: 2383,  milestone: 'Baby is plumping up — gaining 200g+ per week.' },
+  36: { size: 'Romaine lettuce', emoji: '🥬', lengthCm: 47.4, weightG: 2622, milestone: 'Baby is likely head-down getting ready.' },
+  37: { size: 'Swiss chard',    emoji: '🌿', lengthCm: 48.6, weightG: 2859,  milestone: 'Full term! Baby could arrive any day.' },
+  38: { size: 'Leek',           emoji: '🧅', lengthCm: 49.8, weightG: 3083,  milestone: 'Organs fully mature and ready for the world.' },
+  39: { size: 'Watermelon',     emoji: '🍉', lengthCm: 50.7, weightG: 3288,  milestone: 'Baby is shedding vernix and lanugo.' },
+  40: { size: 'Pumpkin',        emoji: '🎃', lengthCm: 51.2, weightG: 3462,  milestone: 'Due date! Your baby is ready to meet you.' },
+};
+
+function getWeekInfo(week: number): WeekInfo {
+  const clamped = Math.max(4, Math.min(40, week));
+  if (WEEK_DATA[clamped]) return WEEK_DATA[clamped];
+  const keys = Object.keys(WEEK_DATA).map(Number).sort((a, b) => a - b);
+  const nearest = keys.reduce((prev, curr) => Math.abs(curr - clamped) < Math.abs(prev - clamped) ? curr : prev);
+  return WEEK_DATA[nearest];
+}
+
+function getPregnancyInfo(dueDate: string) {
+  const due = new Date(dueDate + 'T00:00:00');
+  const now = new Date();
+  const msUntilDue = due.getTime() - now.getTime();
+  const daysUntilDue = Math.ceil(msUntilDue / 86400000);
+  const totalDays = 280;
+  const daysPregnant = totalDays - daysUntilDue;
+  const weeksPregnant = Math.floor(daysPregnant / 7);
+  const daysIntoWeek = daysPregnant % 7;
+  const trimester = weeksPregnant < 13 ? 1 : weeksPregnant < 27 ? 2 : 3;
+  const progress = Math.max(0, Math.min(1, daysPregnant / totalDays));
+
+  return { daysUntilDue, daysPregnant, weeksPregnant, daysIntoWeek, trimester, progress };
+}
+
+// ── checklist (localStorage) ─────────────────────────────────────────
+
+const CHECKLIST_KEY = 'baby-logger:checklist';
+
+interface ChecklistItem { id: string; label: string; checked: boolean }
+
+const DEFAULT_CHECKLIST: ChecklistItem[] = [
+  { id: 'c1', label: 'Choose a paediatrician', checked: false },
+  { id: 'c2', label: 'Set up nursery / sleeping area', checked: false },
+  { id: 'c3', label: 'Buy car seat', checked: false },
+  { id: 'c4', label: 'Pack hospital bag', checked: false },
+  { id: 'c5', label: 'Stock up on nappies & wipes', checked: false },
+  { id: 'c6', label: 'Wash baby clothes', checked: false },
+  { id: 'c7', label: 'Install car seat', checked: false },
+  { id: 'c8', label: 'Pre-register at hospital', checked: false },
+  { id: 'c9', label: 'Prep meals for after birth', checked: false },
+  { id: 'c10', label: 'Decide on a birth plan', checked: false },
+];
+
+function loadChecklist(): ChecklistItem[] {
+  try {
+    const raw = localStorage.getItem(CHECKLIST_KEY);
+    return raw ? JSON.parse(raw) : DEFAULT_CHECKLIST;
+  } catch {
+    return DEFAULT_CHECKLIST;
+  }
+}
+
+function saveChecklist(items: ChecklistItem[]) {
+  try { localStorage.setItem(CHECKLIST_KEY, JSON.stringify(items)); } catch { /* */ }
+}
+
+// ── main component ───────────────────────────────────────────────────
+
 export default function PreBirthView({ baby, displayName, onBabyUpdate, onSignOut }: Props) {
-  const [countdown, setCountdown] = useState(getCountdown(baby.due_date));
+  const [, tick] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showBirthForm, setShowBirthForm] = useState(false);
+  const [confirmStep, setConfirmStep] = useState(false);
   const [birthDate, setBirthDate] = useState('');
   const [babyName, setBabyName] = useState(baby.name ?? '');
   const [saving, setSaving] = useState(false);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(loadChecklist);
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItemLabel, setNewItemLabel] = useState('');
 
   useEffect(() => {
-    const t = setInterval(() => setCountdown(getCountdown(baby.due_date)), 1000);
+    const t = setInterval(() => tick(n => n + 1), 1000);
     return () => clearInterval(t);
-  }, [baby.due_date]);
+  }, []);
+
+  const preg = getPregnancyInfo(baby.due_date);
+  const weekInfo = getWeekInfo(preg.weeksPregnant);
+  const babyDisplayName = baby.name || 'Baby';
+
+  const countdown = (() => {
+    const d = preg.daysUntilDue;
+    if (d <= 0) return null;
+    const days = Math.floor(d);
+    const weeks = Math.floor(days / 7);
+    const remainingDays = days % 7;
+    return { weeks, days: remainingDays, total: days };
+  })();
+
+  const toggleCheck = (id: string) => {
+    const next = checklist.map(c => c.id === id ? { ...c, checked: !c.checked } : c);
+    setChecklist(next);
+    saveChecklist(next);
+  };
+
+  const removeItem = (id: string) => {
+    const next = checklist.filter(c => c.id !== id);
+    setChecklist(next);
+    saveChecklist(next);
+  };
+
+  const addItem = () => {
+    if (!newItemLabel.trim()) return;
+    const next = [...checklist, { id: `custom-${Date.now()}`, label: newItemLabel.trim(), checked: false }];
+    setChecklist(next);
+    saveChecklist(next);
+    setNewItemLabel('');
+    setAddingItem(false);
+  };
+
+  const checkedCount = checklist.filter(c => c.checked).length;
 
   async function handleBabyArrived() {
     if (!birthDate) return;
@@ -67,86 +204,222 @@ export default function PreBirthView({ baby, displayName, onBabyUpdate, onSignOu
     <div style={styles.container}>
       <header style={styles.header}>
         <span style={styles.headerTitle}>Baby Logger</span>
-        <button onClick={() => setShowSettings(true)} style={styles.settingsBtn}>
-          Settings
-        </button>
+        <button onClick={() => setShowSettings(true)} style={styles.settingsBtn}>Settings</button>
       </header>
 
-      <div style={styles.hero}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>&#127769;</div>
+      {/* Greeting */}
+      <div style={styles.greeting}>
+        Hi {displayName} — {preg.daysUntilDue > 0
+          ? <>waiting for <span style={{ color: 'var(--accent)' }}>{babyDisplayName}</span></>
+          : <><span style={{ color: 'var(--accent-secondary)' }}>{babyDisplayName}</span> could arrive any moment!</>
+        }
+      </div>
 
-        {countdown.overdue ? (
-          <div style={styles.countdownLabel}>Any day now!</div>
-        ) : (
-          <>
-            <div style={styles.countdownGrid}>
-              <CountdownUnit value={countdown.days} label="days" />
-              <CountdownUnit value={countdown.hours} label="hours" />
-              <CountdownUnit value={countdown.minutes} label="min" />
-              <CountdownUnit value={countdown.seconds} label="sec" />
+      {/* ── Pregnancy progress card ── */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <span style={styles.cardIcon}>🤰</span>
+          <span style={styles.cardTitle}>Pregnancy Progress</span>
+        </div>
+        <div style={styles.weekBadge}>
+          <span style={styles.weekNumber}>Week {preg.weeksPregnant}</span>
+          <span style={styles.weekDay}>+ {preg.daysIntoWeek} day{preg.daysIntoWeek !== 1 ? 's' : ''}</span>
+        </div>
+        <div style={styles.progressBarTrack}>
+          <div style={{ ...styles.progressBarFill, width: `${Math.round(preg.progress * 100)}%` }} />
+        </div>
+        <div style={styles.progressLabels}>
+          <span>Trimester {preg.trimester}</span>
+          <span>{Math.round(preg.progress * 100)}%</span>
+        </div>
+      </div>
+
+      {/* ── Baby size card ── */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <span style={styles.cardIcon}>{weekInfo.emoji}</span>
+          <span style={styles.cardTitle}>{babyDisplayName} is the size of a {weekInfo.size.toLowerCase()}</span>
+        </div>
+        <div style={styles.sizeGrid}>
+          {weekInfo.lengthCm > 0 && (
+            <div style={styles.sizeItem}>
+              <span style={styles.sizeValue}>{weekInfo.lengthCm}</span>
+              <span style={styles.sizeUnit}>cm</span>
             </div>
-            <div style={styles.countdownLabel}>until due date</div>
-          </>
+          )}
+          {weekInfo.weightG > 0 && (
+            <div style={styles.sizeItem}>
+              <span style={styles.sizeValue}>{weekInfo.weightG >= 1000 ? (weekInfo.weightG / 1000).toFixed(1) : weekInfo.weightG}</span>
+              <span style={styles.sizeUnit}>{weekInfo.weightG >= 1000 ? 'kg' : 'g'}</span>
+            </div>
+          )}
+        </div>
+        <div style={styles.milestone}>{weekInfo.milestone}</div>
+      </div>
+
+      {/* ── Countdown card ── */}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <span style={styles.cardIcon}>📅</span>
+          <span style={styles.cardTitle}>
+            {countdown ? 'Countdown to Due Date' : 'Any day now!'}
+          </span>
+        </div>
+        {countdown ? (
+          <div style={styles.countdownRow}>
+            <div style={styles.countdownBlock}>
+              <span style={styles.countdownNum}>{countdown.total}</span>
+              <span style={styles.countdownLabel}>days</span>
+            </div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.8rem', alignSelf: 'center' }}>=</div>
+            <div style={styles.countdownBlock}>
+              <span style={styles.countdownNum}>{countdown.weeks}</span>
+              <span style={styles.countdownLabel}>weeks</span>
+            </div>
+            <div style={styles.countdownBlock}>
+              <span style={styles.countdownNum}>{countdown.days}</span>
+              <span style={styles.countdownLabel}>days</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <span style={{ fontSize: 40 }}>🎉</span>
+            <div style={{ color: 'var(--accent-secondary)', fontSize: '1rem', fontWeight: 600, marginTop: 8 }}>
+              Past due date — {babyDisplayName} is on their own schedule!
+            </div>
+          </div>
         )}
+        <div style={styles.dueDate}>
+          Due: {new Date(baby.due_date + 'T00:00:00').toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </div>
+      </div>
 
-        <p style={styles.readyText}>
-          Baby Logger is ready. Once your little one arrives, tap below to start tracking.
-        </p>
+      {/* ── Preparation checklist ── */}
+      <div style={styles.card}>
+        <button
+          onClick={() => setChecklistOpen(!checklistOpen)}
+          style={styles.checklistToggle}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={styles.cardIcon}>✅</span>
+            <span style={styles.cardTitle}>Preparation Checklist</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={styles.checklistCount}>{checkedCount}/{checklist.length}</span>
+            <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{checklistOpen ? '▲' : '▼'}</span>
+          </div>
+        </button>
 
+        {checklistOpen && (
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.checklistProgress}>
+              <div style={{ ...styles.checklistProgressFill, width: `${checklist.length > 0 ? (checkedCount / checklist.length) * 100 : 0}%` }} />
+            </div>
+            {checklist.map(item => (
+              <div key={item.id} style={styles.checklistItem}>
+                <button
+                  onClick={() => toggleCheck(item.id)}
+                  style={{
+                    ...styles.checkbox,
+                    background: item.checked ? 'var(--accent)' : 'transparent',
+                    borderColor: item.checked ? 'var(--accent)' : 'var(--border)',
+                  }}
+                >
+                  {item.checked && <span style={{ color: '#121018', fontSize: 11, fontWeight: 800 }}>✓</span>}
+                </button>
+                <span style={{
+                  flex: 1,
+                  fontSize: '0.88rem',
+                  color: item.checked ? 'var(--muted)' : 'var(--text)',
+                  textDecoration: item.checked ? 'line-through' : 'none',
+                }}>
+                  {item.label}
+                </span>
+                {item.id.startsWith('custom-') && (
+                  <button onClick={() => removeItem(item.id)} style={styles.removeBtn}>×</button>
+                )}
+              </div>
+            ))}
+            {addingItem ? (
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <input
+                  value={newItemLabel}
+                  onChange={e => setNewItemLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addItem(); }}
+                  placeholder="New item..."
+                  style={{ ...styles.input, flex: 1, padding: '8px 10px', fontSize: '0.85rem' }}
+                  autoFocus
+                />
+                <button onClick={addItem} style={{ ...styles.miniBtn, background: 'var(--accent)', color: '#121018' }}>Add</button>
+                <button onClick={() => setAddingItem(false)} style={styles.miniBtn}>Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setAddingItem(true)} style={styles.addItemBtn}>+ Add item</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Baby arrived ── */}
+      <div style={styles.arrivedSection}>
         {!showBirthForm ? (
           <button onClick={() => setShowBirthForm(true)} style={styles.arrivedBtn}>
-            Baby has arrived!
+            {babyDisplayName} has arrived!
           </button>
-        ) : (
+        ) : !confirmStep ? (
           <div style={styles.birthForm}>
+            <div style={styles.birthFormTitle}>Record the arrival</div>
             <input
               type="text"
               placeholder="Baby's name (optional)"
               value={babyName}
-              onChange={(e) => setBabyName(e.target.value)}
+              onChange={e => setBabyName(e.target.value)}
               style={styles.input}
             />
             <input
               type="date"
               value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
+              onChange={e => setBirthDate(e.target.value)}
               style={styles.input}
               required
             />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleBabyArrived} disabled={saving || !birthDate} style={styles.confirmBtn}>
-                {saving ? 'Saving...' : 'Confirm'}
+              <button
+                onClick={() => {
+                  if (!birthDate) return;
+                  setConfirmStep(true);
+                }}
+                disabled={!birthDate}
+                style={styles.confirmBtn}
+              >
+                Continue
               </button>
-              <button onClick={() => setShowBirthForm(false)} style={styles.cancelBtn}>
+              <button onClick={() => { setShowBirthForm(false); setConfirmStep(false); }} style={styles.cancelBtn}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={styles.birthForm}>
+            <div style={styles.birthFormTitle}>Are you sure?</div>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '0 0 12px', lineHeight: 1.5 }}>
+              This will switch to the post-birth tracker. Only confirm if {babyDisplayName} has actually been born.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleBabyArrived} disabled={saving} style={styles.confirmBtn}>
+                {saving ? 'Saving...' : 'Yes, baby is here!'}
+              </button>
+              <button onClick={() => { setShowBirthForm(false); setConfirmStep(false); }} style={styles.cancelBtn}>
+                Not yet
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {baby.name && (
-        <div style={styles.nameTag}>
-          Waiting for <span style={{ color: 'var(--accent)' }}>{baby.name}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CountdownUnit({ value, label }: { value: number; label: string }) {
-  return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: '2.2rem',
-        fontWeight: 700,
-        color: 'var(--accent)',
-        lineHeight: 1,
-      }}>
-        {value}
+      <div style={styles.footer}>
+        Times are local. Due date is an estimate — babies arrive when they're ready.
       </div>
-      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>{label}</div>
     </div>
   );
 }
@@ -155,13 +428,13 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: 480,
     margin: '0 auto',
-    padding: '0 16px',
+    padding: '0 16px 32px',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px 0',
+    padding: 'calc(16px + env(safe-area-inset-top)) 0 16px',
     borderBottom: '1px solid var(--border)',
     position: 'sticky',
     top: 0,
@@ -184,29 +457,214 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontFamily: 'var(--font-body)',
   },
-  hero: {
-    textAlign: 'center',
-    padding: '48px 0 32px',
-  },
-  countdownGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 8,
-    maxWidth: 320,
-    margin: '0 auto 12px',
-  },
-  countdownLabel: {
+  greeting: {
     fontFamily: 'var(--font-display)',
-    color: 'var(--muted)',
-    fontSize: '0.95rem',
+    fontSize: '1rem',
+    color: 'var(--text)',
+    padding: '20px 0 4px',
     fontWeight: 500,
   },
-  readyText: {
+
+  // Cards
+  card: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    padding: '16px',
+    marginTop: 14,
+  },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  cardIcon: { fontSize: '1.1rem' },
+  cardTitle: {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 600,
+    fontSize: '0.92rem',
+    color: 'var(--text)',
+  },
+
+  // Progress
+  weekBadge: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 10,
+  },
+  weekNumber: {
+    fontFamily: 'var(--font-display)',
+    fontSize: '1.8rem',
+    fontWeight: 700,
+    color: 'var(--accent)',
+    lineHeight: 1,
+  },
+  weekDay: {
+    fontSize: '0.85rem',
     color: 'var(--muted)',
-    fontSize: '0.9rem',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    background: 'var(--border)',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    background: 'linear-gradient(90deg, var(--accent), var(--accent-secondary))',
+    transition: 'width 0.5s ease',
+  },
+  progressLabels: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    fontSize: '0.78rem',
+    color: 'var(--muted)',
+  },
+
+  // Size
+  sizeGrid: {
+    display: 'flex',
+    gap: 24,
+    marginBottom: 10,
+  },
+  sizeItem: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 3,
+  },
+  sizeValue: {
+    fontFamily: 'var(--font-display)',
+    fontSize: '1.6rem',
+    fontWeight: 700,
+    color: 'var(--text)',
+    lineHeight: 1,
+  },
+  sizeUnit: {
+    fontSize: '0.8rem',
+    color: 'var(--muted)',
+  },
+  milestone: {
+    fontSize: '0.85rem',
+    color: 'var(--muted)',
     lineHeight: 1.5,
-    margin: '24px auto',
-    maxWidth: 300,
+    fontStyle: 'italic',
+  },
+
+  // Countdown
+  countdownRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    justifyContent: 'center',
+    padding: '4px 0 8px',
+  },
+  countdownBlock: {
+    textAlign: 'center' as const,
+  },
+  countdownNum: {
+    fontFamily: 'var(--font-display)',
+    fontSize: '2rem',
+    fontWeight: 700,
+    color: 'var(--accent)',
+    lineHeight: 1,
+    display: 'block',
+  },
+  countdownLabel: {
+    fontSize: '0.72rem',
+    color: 'var(--muted)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    marginTop: 2,
+    display: 'block',
+  },
+  dueDate: {
+    textAlign: 'center' as const,
+    fontSize: '0.82rem',
+    color: 'var(--muted)',
+    marginTop: 4,
+  },
+
+  // Checklist
+  checklistToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    color: 'inherit',
+    fontFamily: 'inherit',
+  },
+  checklistCount: {
+    background: 'var(--bg)',
+    borderRadius: 12,
+    padding: '2px 8px',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    color: 'var(--accent)',
+  },
+  checklistProgress: {
+    height: 4,
+    borderRadius: 2,
+    background: 'var(--border)',
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  checklistProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+    background: 'var(--ok)',
+    transition: 'width 0.3s ease',
+  },
+  checklistItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 0',
+    borderBottom: '1px solid var(--border)',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: '2px solid var(--border)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    flexShrink: 0,
+    padding: 0,
+    transition: 'all 0.15s',
+  },
+  removeBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--muted)',
+    fontSize: '1.1rem',
+    cursor: 'pointer',
+    padding: '0 4px',
+    lineHeight: 1,
+  },
+  addItemBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--accent)',
+    fontSize: '0.82rem',
+    cursor: 'pointer',
+    padding: '10px 0 0',
+    fontFamily: 'var(--font-body)',
+  },
+
+  // Birth form
+  arrivedSection: {
+    marginTop: 24,
+    textAlign: 'center' as const,
   },
   arrivedBtn: {
     background: 'transparent',
@@ -218,14 +676,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--font-display)',
     fontWeight: 600,
     cursor: 'pointer',
-    marginTop: 8,
   },
   birthForm: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    padding: 20,
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     gap: 10,
-    maxWidth: 280,
-    margin: '12px auto 0',
+    maxWidth: 320,
+    margin: '0 auto',
+    textAlign: 'left' as const,
+  },
+  birthFormTitle: {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 700,
+    fontSize: '1rem',
+    color: 'var(--accent-secondary)',
+    marginBottom: 2,
   },
   input: {
     background: 'var(--bg)',
@@ -258,11 +727,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--font-body)',
     fontSize: '0.9rem',
   },
-  nameTag: {
-    textAlign: 'center',
+  miniBtn: {
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
     color: 'var(--muted)',
-    fontSize: '0.9rem',
-    fontFamily: 'var(--font-display)',
-    paddingBottom: 32,
+    padding: '8px 12px',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-body)',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+  },
+
+  footer: {
+    textAlign: 'center' as const,
+    color: 'var(--muted)',
+    fontSize: '0.72rem',
+    padding: '20px 16px',
+    lineHeight: 1.5,
   },
 };
