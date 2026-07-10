@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Each app's build already typechecks (tsc --noEmit); this runs the
+      # unit tests of every workspace that has a test script.
+      - name: Run tests
+        run: npm test
+
       - name: Build all apps
         run: npm run build
         env:

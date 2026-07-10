@@ -5,11 +5,38 @@ Monorepo for the personal automation ecosystem. Every app in `apps/` builds as a
 ## Structure
 
 ```
-apps/            One folder per app (dashboard, fintrack, ...)
+apps/            One folder per app (dashboard, sport-watch, baby-logger, ...)
 packages/shared  Shared code: Supabase client, theme tokens, AppShell
 tooling/         build-all.mjs (CI build) and new-app.mjs (scaffold)
 .github/         Deploy workflow + Supabase keep-alive cron
 ```
+
+## The app family and the shared Supabase project
+
+Two apps deliberately live in their own repos —
+[fintrack-pro](https://github.com/TheFlash180/fintrack-pro) and
+[baby-registry-pwa](https://github.com/TheFlash180/baby-registry-pwa) — but
+they are part of the same family: the dashboard hub links to them as external
+tiles, and **all apps (in-repo and external) share ONE Supabase project**.
+
+That shared project is a real coupling to be aware of:
+
+- **fintrack-pro owns the auth boundary.** Its `fintrack_allowlist` table and
+  the trigger on `auth.users` are what stop strangers from signing up. Every
+  app here that uses "any authenticated user" RLS policies (baby-logger's
+  tables, for example) is only safe because that trigger exists. Don't drop or
+  weaken it without checking every app.
+- **fintrack-pro also owns the shared `profiles` table** (`id` uuid PK →
+  `auth.users`); baby-logger reuses it.
+- **baby-registry-pwa owns** `categories`/`items`/`retailers`/`claims`/
+  `registry_settings` and their security-definer RPCs.
+- **sport-watch owns** `sport_push_subs`/`sport_push_reminders`, the
+  `send-sport-reminders` edge function, and a pg_cron job (see
+  [apps/sport-watch/supabase/](apps/sport-watch/supabase/)).
+- The `ping` table only exists for the keep-alive cron.
+
+Schema changes in any repo land in the same database — check the other repos'
+`supabase/` folders before renaming or dropping anything shared.
 
 ## One-time setup (about 20 minutes)
 

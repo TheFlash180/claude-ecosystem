@@ -19,10 +19,11 @@ function installedApps(): AppEntry[] {
 
 // Apps that live outside this repo but belong to the family.
 const EXTERNAL: { name: string; url: string; note: string }[] = [
+  { name: 'FinTrack Pro', url: 'https://theflash180.github.io/fintrack-pro/', note: 'household finance' },
   { name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/', note: 'gifts & claims' },
 ];
 
-const PLANNED = ['FinTrack', 'F1 Briefing', 'Chess Coach'];
+const PLANNED = ['F1 Briefing', 'Chess Coach'];
 
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
