@@ -1,23 +1,41 @@
 // SA Sport Watch push sender (copy of record — deployed as the
 // send-sport-reminders edge function). Called by pg_cron every 15 minutes;
 // sends a Web Push for every un-notified reminder due within the next hour.
-//
-// Deploy: supabase functions deploy send-sport-reminders --no-verify-jwt
-// Secret: supabase secrets set VAPID_PRIVATE_KEY=<key>  (NEVER commit it)
+// The VAPID private key is NOT embedded: it comes from the VAPID_PRIVATE_KEY
+// secret if set, otherwise from Supabase Vault via get_vapid_private_key()
+// (service-role only — see ../push-schema.sql).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 const VAPID_PUBLIC = "BGYmKYowZiS3ohHCksH6TKHimd-EaDcLX5ehZMAuURlVrBixtIxEpoStOqzsXGU0ExxM_EDB_NoP22yxMWPf0Ho";
-const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY");
-if (!VAPID_PRIVATE) throw new Error("VAPID_PRIVATE_KEY secret is not set");
 
-webpush.setVapidDetails("mailto:rickust18@gmail.com", VAPID_PUBLIC, VAPID_PRIVATE);
+let vapidReady = false;
+
+async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
+  if (vapidReady) return true;
+  let key = Deno.env.get("VAPID_PRIVATE_KEY");
+  if (!key) {
+    const { data, error } = await sb.rpc("get_vapid_private_key");
+    if (error || !data) return false;
+    key = data as string;
+  }
+  webpush.setVapidDetails("mailto:rickust18@gmail.com", VAPID_PUBLIC, key);
+  vapidReady = true;
+  return true;
+}
 
 Deno.serve(async () => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const sb = createClient(supabaseUrl, serviceKey);
+
+  if (!(await ensureVapid(sb))) {
+    return new Response(
+      JSON.stringify({ error: "VAPID private key unavailable (env secret and vault both missing)" }),
+      { status: 500 },
+    );
+  }
 
   const now = new Date();
   const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);

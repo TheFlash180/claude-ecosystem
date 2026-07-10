@@ -33,6 +33,18 @@ create policy "anon_select_subs" on sport_push_subs for select to anon using (tr
 create policy "anon_delete_subs" on sport_push_subs for delete to anon using (true);
 create policy "anon_all_reminders" on sport_push_reminders for all to anon using (true) with check (true);
 
+-- The VAPID private key lives in Supabase Vault (encrypted at rest); the
+-- edge function reads it through this service-role-only definer function.
+-- Rotate it with: select vault.update_secret((select id from vault.secrets
+-- where name = 'vapid_private_key'), '<new-key>');
+-- (The secret itself was created with vault.create_secret — never commit it.)
+create or replace function get_vapid_private_key()
+returns text language sql stable security definer set search_path = '' as
+$$ select decrypted_secret from vault.decrypted_secrets where name = 'vapid_private_key' $$;
+
+revoke all on function get_vapid_private_key() from public, anon, authenticated;
+grant execute on function get_vapid_private_key() to service_role;
+
 -- pg_cron: call the edge function every 15 minutes (extensions pg_cron and
 -- pg_net must be enabled). Reminders fire ~1h before kick-off.
 select cron.schedule(
