@@ -21,6 +21,7 @@ const AdminPage = lazy(() => import("./components/AdminPage"));
 
 const STORAGE_KEY = "sa-sport-watch:notified";
 const ALERTED_KEY = "sa-sport-watch:alerted";
+const PAST_LIMIT = 5; // played events shown before "Show all"
 
 const loadNotified = () => loadIdSet(STORAGE_KEY);
 const saveNotified = (s: Set<string>) => saveIdSet(STORAGE_KEY, s);
@@ -99,6 +100,7 @@ export default function App() {
   const [notified, setNotified] = useState<Set<string>>(loadNotified);
   const [leads, setLeads] = useState<Record<string, number>>(loadLeads);
   const [showReminders, setShowReminders] = useState(false);
+  const [showAllPast, setShowAllPast] = useState(false);
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const pushReady = useRef(false);
@@ -175,7 +177,7 @@ export default function App() {
         void setReminder(ev, leadFor(id));
       }
       showToast(granted
-        ? "🔔 Reminder set — you'll get a push before kick-off"
+        ? "🔔 Reminder set — you'll get a push before it starts"
         : "🔔 Saved — allow notifications for push alerts");
     } else {
       void removeReminder(id);
@@ -204,6 +206,7 @@ export default function App() {
 
   const visible  = events.filter(e => filter === "all" || e.sport === filter);
   const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, SPORT[e.sport].liveDuration) && !e.dateTBC);
+  const recentPast = [...past].reverse(); // newest first
   const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, SPORT[e.sport].liveDuration) || e.dateTBC);
   const nextUp   = upcoming.find(e => e.date && !e.dateTBC);
   const cd       = nextUp ? getCountdown(nextUp.date) : null;
@@ -292,19 +295,33 @@ export default function App() {
             </div>
           </div>
 
-          {bellCount > 0 && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+            {bellCount > 0 && (
+              <button
+                onClick={() => setShowReminders(true)}
+                aria-label={`Show ${bellCount} reminder${bellCount > 1 ? "s" : ""}`}
+                style={{
+                  background: "#061B0E", border: "1px solid #3AA86445",
+                  borderRadius: 20, padding: "4px 12px", cursor: "pointer",
+                  fontFamily: S.body, fontSize: 12, color: "#3AA864",
+                  fontWeight: 600,
+                }}>
+                🔔 {bellCount}
+              </button>
+            )}
+            {/* Installed PWAs have no address bar — this is the way in. */}
             <button
-              onClick={() => setShowReminders(true)}
-              aria-label={`Show ${bellCount} reminder${bellCount > 1 ? "s" : ""}`}
+              onClick={() => { window.location.hash = "#/admin"; }}
+              aria-label="Owner page"
+              title="Owner page"
               style={{
-                background: "#061B0E", border: "1px solid #3AA86445",
-                borderRadius: 20, padding: "4px 12px", cursor: "pointer",
-                fontFamily: S.body, fontSize: 12, color: "#3AA864",
-                fontWeight: 600, flexShrink: 0,
+                background: "transparent", border: `1px solid ${S.border}`,
+                borderRadius: 20, padding: "4px 9px", cursor: "pointer",
+                fontSize: 13, lineHeight: 1, color: S.muted,
               }}>
-              🔔 {bellCount}
+              ⚙️
             </button>
-          )}
+          </div>
         </div>
 
         {/* Filter pills */}
@@ -353,16 +370,30 @@ export default function App() {
               </>
             )}
 
-            {/* Past events */}
-            {past.length > 0 && (
+            {/* Past events — newest first, capped at 5 unless expanded */}
+            {recentPast.length > 0 && (
               <>
-                <SectionLabel text="Played" />
-                {[...past].reverse().map(e => (
+                <SectionLabel text={showAllPast ? "Played" : "Recently played"} />
+                {(showAllPast ? recentPast : recentPast.slice(0, PAST_LIMIT)).map(e => (
                   <EventCard key={e.id} event={e}
                     notified={notified.has(e.id)}
                     onToggle={id => void toggleNotify(id)}
                     onCalendar={handleCalendar} />
                 ))}
+                {recentPast.length > PAST_LIMIT && (
+                  <button
+                    onClick={() => setShowAllPast(v => !v)}
+                    style={{
+                      width: "100%", padding: "8px 0", marginTop: 2,
+                      background: "transparent", border: `1px dashed ${S.border}`,
+                      borderRadius: 8, cursor: "pointer",
+                      fontFamily: S.body, fontSize: 11, color: S.muted,
+                    }}>
+                    {showAllPast
+                      ? "Show fewer"
+                      : `Show all ${recentPast.length} played`}
+                  </button>
+                )}
               </>
             )}
           </>
