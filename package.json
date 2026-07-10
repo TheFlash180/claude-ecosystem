@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run dev -w apps/dashboard",
     "build": "node tooling/build-all.mjs",
+    "test": "npm run test --workspaces --if-present",
     "new-app": "node tooling/new-app.mjs"
   },
   "engines": {

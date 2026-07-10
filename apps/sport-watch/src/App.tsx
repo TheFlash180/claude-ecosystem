@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, CSSProperties } from "react";
 import eventsData from "./data/events.json";
 import { supabase } from "./lib/supabase";
+import { fmtDate, fmtTime, getCountdown, isPast, isLive as isLiveAt } from "./lib/time";
 
 // =====================
 // TYPES
@@ -77,41 +78,10 @@ const SORTED = [...EVENTS].sort((a, b) => {
 // HELPERS
 // =====================
 
-const isPast = (d: Date | null) => !!d && d.getTime() < Date.now();
-const isLive = (d: Date | null, sport?: SportKey) => {
-  if (!d) return false;
-  const n = Date.now();
-  const duration = sport ? SPORT[sport].liveDuration : 7200000;
-  return n >= d.getTime() && n < d.getTime() + duration;
-};
-
-function getCountdown(d: Date | null) {
-  if (!d) return null;
-  const diff = d.getTime() - Date.now();
-  if (diff <= 0) return null;
-  return {
-    d: Math.floor(diff / 86400000),
-    h: Math.floor((diff % 86400000) / 3600000),
-    m: Math.floor((diff % 3600000) / 60000),
-    s: Math.floor((diff % 60000) / 1000),
-  };
-}
-
-function fmtDate(d: Date) {
-  // Same timezone as fmtTime, or a 02:00 SAST kick-off shows the wrong day
-  // for viewers outside SAST.
-  return d.toLocaleDateString("en-ZA", {
-    weekday: "short", day: "numeric", month: "short",
-    timeZone: "Africa/Johannesburg",
-  });
-}
-
-function fmtTime(d: Date) {
-  return d.toLocaleTimeString("en-ZA", {
-    hour: "2-digit", minute: "2-digit",
-    timeZone: "Africa/Johannesburg",
-  }) + " SAST";
-}
+// Date/time logic lives in lib/time.ts (unit-tested); this wrapper just
+// resolves the sport-specific live duration from config.
+const isLive = (d: Date | null, sport?: SportKey) =>
+  isLiveAt(d, sport ? SPORT[sport].liveDuration : undefined);
 
 // localStorage persistence for bell reminders (safe in an installed PWA)
 const STORAGE_KEY = "sa-sport-watch:notified";
@@ -312,7 +282,7 @@ function HeroCard({ event, countdown }: {
 
   const sp = SPORT[event.sport];
   const cd = countdown;
-  const live = isLive(event.date);
+  const live = isLive(event.date, event.sport);
 
   return (
     <div style={{
