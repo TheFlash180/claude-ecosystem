@@ -1,112 +1,29 @@
-import React, { useState, useEffect, useRef, CSSProperties } from "react";
-import eventsData from "./data/events.json";
-import { supabase } from "./lib/supabase";
-import { fmtDate, fmtTime, getCountdown, isPast, isLive as isLiveAt } from "./lib/time";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
+import { S, SPORT, type SportEvent, type SportKey } from "./lib/config";
+import { fetchEvents, sortEvents } from "./lib/events";
+import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
 import { pruneToExisting } from "./lib/reminders";
+import { loadIdSet, saveIdSet, loadLeads, saveLead } from "./lib/storage";
+import {
+  DEFAULT_LEAD_MINUTES,
+  registerPush,
+  removeReminder,
+  setReminder,
+  syncAllReminders,
+} from "./lib/push";
+import { CALENDAR_FEED_URL, downloadEventIcs } from "./lib/ics";
+import { HeroCard } from "./components/HeroCard";
+import { EventCard } from "./components/EventCard";
+import { RemindersModal } from "./components/RemindersModal";
 
-// =====================
-// TYPES
-// =====================
+// Owners only — keep admin code out of the normal bundle.
+const AdminPage = lazy(() => import("./components/AdminPage"));
 
-type SportKey = "rugby" | "mma" | "f1";
-
-interface SportEvent {
-  id: number;
-  sport: SportKey;
-  competition: string;
-  home: string;
-  away: string | null;
-  homeFlag: string;
-  awayFlag: string | null;
-  date: Date | null;
-  venue?: string;
-  result?: string;
-  note?: string;
-  isConditional?: boolean;
-  isSpecial?: boolean;
-  dateTBC?: boolean;
-}
-
-// =====================
-// CONFIG
-// =====================
-
-const SPORT: Record<SportKey, { label: string; icon: string; color: string; bg: string; liveDuration: number }> = {
-  rugby: { label: "Rugby",  icon: "🏉", color: "#3AA864", bg: "#061B0E", liveDuration: 7200000 },
-  mma:   { label: "MMA",    icon: "🥊", color: "#D44040", bg: "#1C0606", liveDuration: 18000000 },
-  f1:    { label: "F1",     icon: "🏎️", color: "#E0762F", bg: "#1C0F06", liveDuration: 7200000 },
-};
-
-const S = {
-  bg:      "#080C09",
-  surface: "#111814",
-  border:  "#1A221A",
-  text:    "#F0EDE6",
-  muted:   "#4A524A",
-  dim:     "#272F27",
-  display: "'Oswald', sans-serif",
-  body:    "'Inter', sans-serif",
-};
-
-// =====================
-// DATA
-// =====================
-
-interface RawEvent {
-  id: number; sport: string; competition: string;
-  home: string; away: string | null;
-  homeFlag: string; awayFlag: string | null;
-  date: string | null; venue?: string; result?: string;
-  note?: string; isConditional?: boolean; isSpecial?: boolean; dateTBC?: boolean;
-}
-
-const EVENTS: SportEvent[] = (eventsData.events as RawEvent[])
-  .filter(e => e.sport in SPORT)
-  .map(e => ({
-    ...e,
-    sport: e.sport as SportKey,
-    date: e.date ? new Date(e.date) : null,
-  }));
-
-const SORTED = [...EVENTS].sort((a, b) => {
-  if (!a.date && !b.date) return 0;
-  if (!a.date) return 1;
-  if (!b.date) return -1;
-  return a.date.getTime() - b.date.getTime();
-});
-
-// =====================
-// HELPERS
-// =====================
-
-// Date/time logic lives in lib/time.ts (unit-tested); this wrapper just
-// resolves the sport-specific live duration from config.
-const isLive = (d: Date | null, sport?: SportKey) =>
-  isLiveAt(d, sport ? SPORT[sport].liveDuration : undefined);
-
-// localStorage persistence for bell reminders (safe in an installed PWA)
 const STORAGE_KEY = "sa-sport-watch:notified";
 const ALERTED_KEY = "sa-sport-watch:alerted";
 
-function loadIdSet(key: string): Set<number> {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function saveIdSet(key: string, s: Set<number>) {
-  try {
-    localStorage.setItem(key, JSON.stringify([...s]));
-  } catch {
-    /* storage unavailable - degrade to in-memory */
-  }
-}
-
 const loadNotified = () => loadIdSet(STORAGE_KEY);
-const saveNotified = (s: Set<number>) => saveIdSet(STORAGE_KEY, s);
+const saveNotified = (s: Set<string>) => saveIdSet(STORAGE_KEY, s);
 
 // Android Chrome PWAs must show notifications through the service worker —
 // `new Notification()` throws there. Try SW first, then the constructor.
@@ -127,12 +44,13 @@ async function fireNotification(title: string, body: string): Promise<boolean> {
   }
 }
 
-// Fire a one-time alert for any belled event starting within the next hour.
-// (In-app fallback — real pushes handled server-side via Supabase Edge Function.)
-async function checkReminders(notified: Set<number>) {
+// Fire a one-time in-app alert for any belled event starting within the next
+// hour. (Fallback for the foreground app — real pushes with per-reminder lead
+// times are handled server-side by the send-sport-reminders edge function.)
+async function checkReminders(events: SportEvent[], notified: Set<string>) {
   const alerted = loadIdSet(ALERTED_KEY);
   let changed = false;
-  for (const ev of EVENTS) {
+  for (const ev of events) {
     if (!notified.has(ev.id) || !ev.date || alerted.has(ev.id)) continue;
     const diff = ev.date.getTime() - Date.now();
     if (diff > 0 && diff <= 3600000) {
@@ -148,101 +66,15 @@ async function checkReminders(notified: Set<number>) {
   if (changed) saveIdSet(ALERTED_KEY, alerted);
 }
 
-// =====================
-// WEB PUSH + SUPABASE
-// =====================
-
-const VAPID_PUBLIC = "BGYmKYowZiS3ohHCksH6TKHimd-EaDcLX5ehZMAuURlVrBixtIxEpoStOqzsXGU0ExxM_EDB_NoP22yxMWPf0Ho";
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
+function useHashRoute(): string {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return hash;
 }
-
-async function getPushSubscription(): Promise<PushSubscription | null> {
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (!reg?.pushManager) return null;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC).buffer as ArrayBuffer,
-      });
-    }
-    return sub;
-  } catch {
-    return null;
-  }
-}
-
-async function upsertPushSub(sub: PushSubscription): Promise<string | null> {
-  const key = sub.toJSON();
-  const { data, error } = await supabase
-    .from("sport_push_subs")
-    .upsert(
-      { endpoint: sub.endpoint, p256dh: key.keys?.p256dh, auth: key.keys?.auth },
-      { onConflict: "endpoint" },
-    )
-    .select("id")
-    .single();
-  if (error || !data) return null;
-  return data.id as string;
-}
-
-async function syncReminder(subId: string, ev: SportEvent, remove: boolean) {
-  if (remove) {
-    await supabase
-      .from("sport_push_reminders")
-      .delete()
-      .eq("sub_id", subId)
-      .eq("event_id", ev.id);
-  } else {
-    if (!ev.date) return;
-    const label = ev.away
-      ? `${ev.home} vs ${ev.away}`
-      : ev.home;
-    await supabase
-      .from("sport_push_reminders")
-      .upsert(
-        { sub_id: subId, event_id: ev.id, event_date: ev.date.toISOString(), event_label: label, notified: false },
-        { onConflict: "sub_id,event_id", ignoreDuplicates: false },
-      );
-  }
-}
-
-async function syncAllReminders(subId: string, notifiedSet: Set<number>) {
-  const futureEvents = EVENTS.filter(e => e.date && e.date.getTime() > Date.now());
-  const belledFuture = futureEvents.filter(e => notifiedSet.has(e.id));
-
-  for (const ev of belledFuture) {
-    await syncReminder(subId, ev, false);
-  }
-
-  const { data: existing } = await supabase
-    .from("sport_push_reminders")
-    .select("event_id")
-    .eq("sub_id", subId);
-  if (existing) {
-    for (const row of existing) {
-      if (!notifiedSet.has(row.event_id)) {
-        await supabase
-          .from("sport_push_reminders")
-          .delete()
-          .eq("sub_id", subId)
-          .eq("event_id", row.event_id);
-      }
-    }
-  }
-}
-
-// =====================
-// SUBCOMPONENTS
-// =====================
 
 function SectionLabel({ text }: { text: string }) {
   return (
@@ -250,7 +82,7 @@ function SectionLabel({ text }: { text: string }) {
       <div style={{ flex: 1, height: 1, background: S.border }} />
       <span style={{
         fontFamily: S.body, fontSize: 9, fontWeight: 600,
-        letterSpacing: "0.16em", textTransform: "uppercase", color: S.muted,
+        letterSpacing: "0.18em", textTransform: "uppercase", color: S.muted,
       }}>
         {text}
       </span>
@@ -259,401 +91,71 @@ function SectionLabel({ text }: { text: string }) {
   );
 }
 
-function HeroCard({ event, countdown }: {
-  event: SportEvent | undefined;
-  countdown: ReturnType<typeof getCountdown>;
-}) {
-  if (!event || !event.date) {
-    return (
-      <div style={{
-        borderRadius: 14, background: S.surface,
-        border: `1px solid ${S.border}`,
-        padding: "20px", marginBottom: 14, textAlign: "center",
-      }}>
-        <div style={{ fontSize: 28, marginBottom: 6 }}>🕐</div>
-        <div style={{ fontFamily: S.display, fontSize: 16, color: S.text }}>
-          Date To Be Announced
-        </div>
-        <div style={{ fontFamily: S.body, fontSize: 11, color: S.muted, marginTop: 4 }}>
-          Switch to All to see upcoming fixtures
-        </div>
-      </div>
-    );
-  }
-
-  const sp = SPORT[event.sport];
-  const cd = countdown;
-  const live = isLive(event.date, event.sport);
-
-  return (
-    <div style={{
-      borderRadius: 14,
-      background: `linear-gradient(140deg, ${sp.bg} 0%, #090D0A 65%)`,
-      border: `1px solid ${sp.color}20`,
-      padding: "18px 20px", marginBottom: 14,
-      position: "relative", overflow: "hidden",
-    }}>
-      {/* ambient glow */}
-      <div style={{
-        position: "absolute", top: -28, right: -28, width: 100, height: 100,
-        borderRadius: "50%",
-        background: `radial-gradient(circle, ${sp.color}28 0%, transparent 70%)`,
-        pointerEvents: "none",
-      }} />
-
-      <div style={{
-        fontFamily: S.body, fontSize: 9, fontWeight: 600,
-        letterSpacing: "0.15em", textTransform: "uppercase",
-        color: sp.color, marginBottom: 8,
-      }}>
-        {sp.icon} {live ? "Live Now" : "Next Up"} · {event.competition}
-      </div>
-
-      <div style={{
-        fontFamily: S.display, fontSize: 21, fontWeight: 700,
-        color: S.text, lineHeight: 1.2, marginBottom: 6,
-      }}>
-        {event.homeFlag} {event.home}
-        {event.away ? ` vs ${event.awayFlag} ${event.away}` : ""}
-      </div>
-
-      <div style={{
-        fontFamily: S.body, fontSize: 11, color: S.muted, marginBottom: 16,
-      }}>
-        {fmtDate(event.date)} · {fmtTime(event.date)} · {event.venue}
-      </div>
-
-      {live && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: sp.color, animation: "sw-pulse 1.4s ease-in-out infinite",
-          }} />
-          <span style={{
-            fontFamily: S.display, fontSize: 22, fontWeight: 700,
-            color: sp.color, letterSpacing: "0.06em",
-          }}>
-            LIVE NOW
-          </span>
-        </div>
-      )}
-
-      {!live && cd && (
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {[
-            { v: cd.d, l: "days" },
-            { v: cd.h, l: "hrs" },
-            { v: cd.m, l: "min" },
-            { v: cd.s, l: "sec" },
-          ].map(({ v, l }, i) => (
-            <span key={l} style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-              <span style={{
-                fontFamily: S.display, fontSize: 30,
-                fontWeight: 700, color: S.text, lineHeight: 1,
-              }}>
-                {String(v).padStart(2, "0")}
-              </span>
-              <span style={{
-                fontFamily: S.body, fontSize: 9, color: S.muted,
-                letterSpacing: "0.1em", textTransform: "uppercase",
-              }}>
-                {l}
-              </span>
-              {i < 3 && (
-                <span style={{
-                  fontFamily: S.display, fontSize: 22,
-                  color: "#1E261E", margin: "0 3px",
-                }}>:</span>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BellIcon({ on, color }: { on: boolean; color: string }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24"
-      fill={on ? color : "none"}
-      stroke={on ? color : S.muted}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-    </svg>
-  );
-}
-
-function EventCard({ event, notified, onToggle }: {
-  event: SportEvent;
-  notified: boolean;
-  onToggle: (id: number) => void;
-}) {
-  const sp = SPORT[event.sport];
-  const past = isPast(event.date) && !isLive(event.date, event.sport);
-  const live = isLive(event.date, event.sport);
-
-  return (
-    <div style={{
-      background: live ? sp.bg : S.surface,
-      borderRadius: 10,
-      padding: "11px 12px",
-      marginBottom: 7,
-      borderLeft: `3px solid ${live ? sp.color : past ? S.dim : event.isSpecial ? "#D4A035" : sp.color + "65"}`,
-      display: "flex", alignItems: "center", gap: 11,
-      opacity: past ? 0.35 : 1,
-      outline: live ? `1px solid ${sp.color}22` : event.isSpecial && !past ? `1px solid #D4A03530` : "none",
-      outlineOffset: -1,
-    }}>
-      <div style={{ fontSize: 18, flexShrink: 0 }}>{sp.icon}</div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Competition label */}
-        <div style={{
-          fontFamily: S.body, fontSize: 9, fontWeight: 600,
-          letterSpacing: "0.11em", textTransform: "uppercase",
-          color: past ? S.dim : sp.color,
-          marginBottom: 2, display: "flex", alignItems: "center", gap: 6,
-        }}>
-          {event.competition}
-          {live && (
-            <span style={{
-              background: sp.color, color: "#000",
-              padding: "1px 5px", borderRadius: 3,
-              fontSize: 7, fontWeight: 800, letterSpacing: "0.1em",
-            }}>LIVE</span>
-          )}
-          {event.result && (
-            <span style={{ color: S.text }}> · {event.result}</span>
-          )}
-        </div>
-
-        {/* Teams */}
-        <div style={{
-          fontFamily: S.display, fontSize: 15, fontWeight: 600,
-          color: past ? "#303830" : S.text,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          lineHeight: 1.2,
-        }}>
-          {event.homeFlag} {event.home}
-          {event.away != null ? ` vs ${event.awayFlag} ${event.away}` : ""}
-        </div>
-
-        {/* Date / venue */}
-        <div style={{
-          fontFamily: S.body, fontSize: 10,
-          color: past ? "#282E28" : S.muted,
-          marginTop: 2, display: "flex", gap: 4, flexWrap: "wrap",
-        }}>
-          {event.dateTBC || !event.date ? (
-            <span>Date TBA</span>
-          ) : (
-            <>
-              <span>{fmtDate(event.date)}</span>
-              <span>·</span>
-              <span>{fmtTime(event.date)}</span>
-            </>
-          )}
-          {event.venue && (
-            <>
-              <span>·</span>
-              <span style={{
-                maxWidth: 170, overflow: "hidden",
-                textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {event.venue}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Conditional note */}
-        {(event.isConditional || event.note) && !event.result && (
-          <div style={{
-            fontFamily: S.body, fontSize: 9, color: "#8A6830",
-            marginTop: 3, fontStyle: "italic",
-          }}>
-            ⚡ {event.note}
-          </div>
-        )}
-      </div>
-
-      {/* Bell button */}
-      {!past && (
-        <button
-          onClick={() => onToggle(event.id)}
-          title={notified ? "Remove reminder" : "Remind me"}
-          style={{
-            border: `1px solid ${notified ? sp.color : S.border}`,
-            background: notified ? `${sp.color}18` : "transparent",
-            borderRadius: 7, padding: 7, cursor: "pointer", flexShrink: 0,
-            display: "flex", alignItems: "center",
-            transition: "all 0.12s",
-          }}
-        >
-          <BellIcon on={notified} color={sp.color} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// Popup listing every fixture with a reminder set; each row can remove its
-// bell (which also clears the push reminder in Supabase via toggleNotify).
-function RemindersModal({
-  events,
-  onRemove,
-  onClose,
-}: {
-  events: SportEvent[];
-  onRemove: (id: number) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.7)", display: "flex",
-        alignItems: "center", justifyContent: "center", padding: 20,
-      }}>
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: S.surface, border: `1px solid ${S.border}`,
-          borderRadius: 16, width: "100%", maxWidth: 420,
-          maxHeight: "70vh", overflowY: "auto", padding: "16px 16px 12px",
-        }}>
-        <div style={{
-          display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: 10,
-        }}>
-          <div style={{
-            fontFamily: S.display, fontSize: 16, fontWeight: 700,
-            color: S.text, letterSpacing: "-0.01em",
-          }}>
-            🔔 Your reminders
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: "transparent", border: "none", cursor: "pointer",
-              color: S.muted, fontSize: 18, lineHeight: 1, padding: 4,
-            }}>
-            ✕
-          </button>
-        </div>
-
-        {events.length === 0 ? (
-          <div style={{ color: S.muted, fontSize: 13, padding: "12px 0 16px" }}>
-            No reminders set — tap the bell on any fixture to add one.
-          </div>
-        ) : (
-          events.map(ev => {
-            const sp = SPORT[ev.sport];
-            return (
-              <div key={ev.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 0", borderTop: `1px solid ${S.border}`,
-              }}>
-                <span style={{ fontSize: 16, flexShrink: 0 }}>{sp.icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    color: S.text, fontSize: 13, fontWeight: 600,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {ev.home}{ev.away ? ` vs ${ev.away}` : ""}
-                  </div>
-                  <div style={{ color: S.muted, fontSize: 11, marginTop: 1 }}>
-                    {ev.date ? `${fmtDate(ev.date)} · ${fmtTime(ev.date)}` : "Date TBC"}
-                  </div>
-                </div>
-                <button
-                  onClick={() => onRemove(ev.id)}
-                  aria-label={`Remove reminder for ${ev.home}${ev.away ? ` vs ${ev.away}` : ""}`}
-                  style={{
-                    background: "transparent", border: `1px solid ${S.border}`,
-                    borderRadius: 16, cursor: "pointer", flexShrink: 0,
-                    color: sp.color, fontFamily: S.body, fontSize: 11,
-                    fontWeight: 600, padding: "5px 10px",
-                  }}>
-                  🔕 Remove
-                </button>
-              </div>
-            );
-          })
-        )}
-
-        <div style={{
-          color: S.dim, fontSize: 10.5, paddingTop: 10,
-          borderTop: `1px solid ${S.border}`,
-        }}>
-          You&apos;ll get a push ~1 hour before each event.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =====================
-// APP
-// =====================
-
-const EVENT_IDS = new Set(EVENTS.map(e => e.id));
-
 export default function App() {
+  const route = useHashRoute();
   const [filter, setFilter] = useState<"all" | SportKey>("all");
-  // Prune bells for events that no longer exist in events.json, or the
-  // header count includes reminders you can't see anywhere. The mount sync
-  // below then deletes their leftover rows in Supabase too.
-  const [notified, setNotified] = useState<Set<number>>(() => {
-    const stored = loadNotified();
-    const pruned = pruneToExisting(stored, EVENT_IDS);
-    if (pruned.size !== stored.size) saveNotified(pruned);
-    return pruned;
-  });
+  const [events, setEvents] = useState<SportEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notified, setNotified] = useState<Set<string>>(loadNotified);
+  const [leads, setLeads] = useState<Record<string, number>>(loadLeads);
   const [showReminders, setShowReminders] = useState(false);
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const pushSubId = useRef<string | null>(null);
+  const pushReady = useRef(false);
 
-  // Re-render every second for countdown
+  const leadFor = useCallback(
+    (id: string) => leads[id] ?? DEFAULT_LEAD_MINUTES,
+    [leads],
+  );
+
+  const loadEvents = useCallback(async () => {
+    const { events: evs } = await fetchEvents();
+    setEvents(sortEvents(evs));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
+
+  // Once real events are in: prune bells whose event no longer exists (the
+  // header count must never include ghosts), then bring the server's push
+  // reminders in line with this device.
+  useEffect(() => {
+    if (events.length === 0) return;
+    const valid = new Set(events.map(e => e.id));
+    setNotified(prev => {
+      const pruned = pruneToExisting(prev, valid);
+      if (pruned.size !== prev.size) saveNotified(pruned);
+      (async () => {
+        if (!pushReady.current) pushReady.current = await registerPush();
+        if (pushReady.current) await syncAllReminders(events, pruned, leadFor);
+      })();
+      return pruned;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
+
+  // Re-render every second for the countdown.
   useEffect(() => {
     const t = setInterval(() => tick(n => n + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Pre-kick-off alerts for belled events, checked now and every minute.
+  // In-app pre-kick-off alerts, checked now and every minute.
   useEffect(() => {
-    void checkReminders(notified);
-    const t = setInterval(() => void checkReminders(notified), 60000);
+    if (events.length === 0) return;
+    void checkReminders(events, notified);
+    const t = setInterval(() => void checkReminders(events, notified), 60000);
     return () => clearInterval(t);
-  }, [notified]);
-
-  // On mount: subscribe to push and sync existing bells to Supabase.
-  useEffect(() => {
-    (async () => {
-      const sub = await getPushSubscription();
-      if (!sub) return;
-      const id = await upsertPushSub(sub);
-      if (!id) return;
-      pushSubId.current = id;
-      await syncAllReminders(id, notified);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [events, notified]);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
 
-  const toggleNotify = async (id: number) => {
+  const toggleNotify = async (id: string) => {
     const wasOn = notified.has(id);
-    const ev = EVENTS.find(e => e.id === id);
+    const ev = events.find(e => e.id === id);
 
     if (!wasOn) {
       let granted = false;
@@ -666,43 +168,50 @@ export default function App() {
         }
       } catch { /* notifications unsupported */ }
 
-      if (granted && !pushSubId.current) {
-        const sub = await getPushSubscription();
-        if (sub) pushSubId.current = await upsertPushSub(sub);
+      if (granted && !pushReady.current) {
+        pushReady.current = await registerPush();
       }
-
-      if (pushSubId.current && ev) {
-        void syncReminder(pushSubId.current, ev, false);
+      if (pushReady.current && ev) {
+        void setReminder(ev, leadFor(id));
       }
-
       showToast(granted
-        ? "🔔 Reminder set — you'll get a push ~1h before kick-off"
+        ? "🔔 Reminder set — you'll get a push before kick-off"
         : "🔔 Saved — allow notifications for push alerts");
     } else {
-      if (pushSubId.current && ev) {
-        void syncReminder(pushSubId.current, ev, true);
-      }
+      void removeReminder(id);
       showToast("🔕 Reminder removed");
     }
 
     setNotified(prev => {
       const next = new Set(prev);
-      if (wasOn) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (wasOn) next.delete(id);
+      else next.add(id);
       saveNotified(next);
       return next;
     });
   };
 
-  const visible  = SORTED.filter(e => filter === "all" || e.sport === filter);
-  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, e.sport) && !e.dateTBC);
-  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, e.sport) || e.dateTBC);
+  const changeLead = (ev: SportEvent, minutes: number) => {
+    saveLead(ev.id, minutes);
+    setLeads(prev => ({ ...prev, [ev.id]: minutes }));
+    void setReminder(ev, minutes);
+    showToast(`🔔 Push moves to ${minutes >= 1440 ? "1 day" : minutes >= 60 ? `${minutes / 60}h` : `${minutes} min`} before`);
+  };
+
+  const handleCalendar = (ev: SportEvent) => {
+    if (downloadEventIcs(ev)) showToast("📅 Added — open the file to save it to your calendar");
+  };
+
+  const visible  = events.filter(e => filter === "all" || e.sport === filter);
+  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, SPORT[e.sport].liveDuration) && !e.dateTBC);
+  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, SPORT[e.sport].liveDuration) || e.dateTBC);
   const nextUp   = upcoming.find(e => e.date && !e.dateTBC);
   const cd       = nextUp ? getCountdown(nextUp.date) : null;
   const bellCount = notified.size;
+  const belledEvents = useMemo(
+    () => events.filter(e => notified.has(e.id)),
+    [events, notified],
+  );
 
   const filters: { key: "all" | SportKey; label: string }[] = [
     { key: "all",   label: "All" },
@@ -711,35 +220,53 @@ export default function App() {
     { key: "f1",    label: "🏎️ F1" },
   ];
 
+  const chrome = (
+    <style>{`
+      * { box-sizing: border-box; }
+      body { margin: 0; background: ${S.bg}; }
+      button:focus-visible { outline: 2px solid #3AA864; outline-offset: 2px; }
+      ::-webkit-scrollbar { height: 0; }
+      @keyframes sw-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    `}</style>
+  );
+
+  const toastEl = toast && (
+    <div style={{
+      position: "fixed", top: 16, left: "50%",
+      transform: "translateX(-50%)", zIndex: 999,
+      background: "#141E15", border: "1px solid #3AA864",
+      color: S.text, padding: "10px 20px", borderRadius: 24,
+      fontSize: 13, fontWeight: 500,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
+      whiteSpace: "nowrap", pointerEvents: "none",
+    } as CSSProperties}>
+      {toast}
+    </div>
+  );
+
+  if (route.startsWith("#/admin")) {
+    return (
+      <div style={{ background: S.bg, minHeight: "100vh", fontFamily: S.body }}>
+        {chrome}
+        {toastEl}
+        <Suspense fallback={<div style={{ color: S.muted, padding: 40, textAlign: "center" }}>Opening owner page…</div>}>
+          <AdminPage events={events} onChanged={() => void loadEvents()} onToast={showToast} />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: S.bg, minHeight: "100vh", fontFamily: S.body, maxWidth: 480, margin: "0 auto" }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; background: ${S.bg}; }
-        button:focus-visible { outline: 2px solid #3AA864; outline-offset: 2px; }
-        ::-webkit-scrollbar { height: 0; }
-        @keyframes sw-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-      `}</style>
-
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 16, left: "50%",
-          transform: "translateX(-50%)", zIndex: 999,
-          background: "#141E15", border: "1px solid #3AA864",
-          color: S.text, padding: "10px 20px", borderRadius: 24,
-          fontSize: 13, fontWeight: 500,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
-          whiteSpace: "nowrap", pointerEvents: "none",
-        } as CSSProperties}>
-          {toast}
-        </div>
-      )}
+      {chrome}
+      {toastEl}
 
       {/* Reminders popup */}
       {showReminders && (
         <RemindersModal
-          events={SORTED.filter(e => notified.has(e.id))}
+          events={belledEvents}
+          leadFor={leadFor}
+          onLeadChange={changeLead}
           onRemove={id => void toggleNotify(id)}
           onClose={() => setShowReminders(false)}
         />
@@ -804,48 +331,57 @@ export default function App() {
 
       {/* Body */}
       <div style={{ padding: "14px 14px 48px" }}>
-
-        {/* Hero countdown */}
-        <HeroCard event={nextUp} countdown={cd} />
-
-        {/* Upcoming events */}
-        {upcoming.length > 0 && (
-          <>
-            <SectionLabel text="Upcoming" />
-            {upcoming.map(e => (
-              <EventCard key={e.id} event={e}
-                notified={notified.has(e.id)} onToggle={toggleNotify} />
-            ))}
-          </>
-        )}
-
-        {/* Past events */}
-        {past.length > 0 && (
-          <>
-            <SectionLabel text="Recent" />
-            {past.map(e => (
-              <EventCard key={e.id} event={e}
-                notified={notified.has(e.id)} onToggle={toggleNotify} />
-            ))}
-          </>
-        )}
-
-        {visible.length === 0 && (
-          <div style={{
-            textAlign: "center", padding: "48px 20px",
-            color: S.muted, fontSize: 14,
-          }}>
-            No events found.
+        {loading ? (
+          <div style={{ color: S.muted, fontSize: 12, textAlign: "center", padding: 40 }}>
+            Loading fixtures…
           </div>
+        ) : (
+          <>
+            {/* Hero countdown */}
+            <HeroCard event={nextUp} countdown={cd} />
+
+            {/* Upcoming events */}
+            {upcoming.length > 0 && (
+              <>
+                <SectionLabel text="Upcoming" />
+                {upcoming.map(e => (
+                  <EventCard key={e.id} event={e}
+                    notified={notified.has(e.id)}
+                    onToggle={id => void toggleNotify(id)}
+                    onCalendar={handleCalendar} />
+                ))}
+              </>
+            )}
+
+            {/* Past events */}
+            {past.length > 0 && (
+              <>
+                <SectionLabel text="Played" />
+                {[...past].reverse().map(e => (
+                  <EventCard key={e.id} event={e}
+                    notified={notified.has(e.id)}
+                    onToggle={id => void toggleNotify(id)}
+                    onCalendar={handleCalendar} />
+                ))}
+              </>
+            )}
+          </>
         )}
 
-        {/* Footer note */}
+        {/* Footer */}
         <div style={{
-          marginTop: 20, padding: "12px 14px",
-          background: S.surface, borderRadius: 10,
-          fontSize: 10, color: S.muted, lineHeight: 1.7,
+          marginTop: 24, paddingTop: 14, borderTop: `1px solid ${S.border}`,
+          fontFamily: S.body, fontSize: 10, color: S.dim, lineHeight: 1.7,
         }}>
-          📌 Times in SAST. DDP vs Usman (18 Jul) is the road back after losing the MW title to Chimaev. To update fixtures: edit src/data/events.json and push.
+          📌 Times in SAST. F1 fixtures & results refresh daily from the
+          official calendar; everything else is editable on the{" "}
+          <a href="#/admin" style={{ color: S.muted }}>owner page</a>.
+          <br />
+          📅{" "}
+          <a href={CALENDAR_FEED_URL} style={{ color: S.muted }}>
+            Subscribe to the calendar feed
+          </a>{" "}
+          to see every fixture in your own calendar app.
         </div>
       </div>
     </div>
