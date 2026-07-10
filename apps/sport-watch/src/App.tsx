@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, CSSProperties } from "react";
 import eventsData from "./data/events.json";
 import { supabase } from "./lib/supabase";
 import { fmtDate, fmtTime, getCountdown, isPast, isLive as isLiveAt } from "./lib/time";
+import { pruneToExisting } from "./lib/reminders";
 
 // =====================
 // TYPES
@@ -499,13 +500,122 @@ function EventCard({ event, notified, onToggle }: {
   );
 }
 
+// Popup listing every fixture with a reminder set; each row can remove its
+// bell (which also clears the push reminder in Supabase via toggleNotify).
+function RemindersModal({
+  events,
+  onRemove,
+  onClose,
+}: {
+  events: SportEvent[];
+  onRemove: (id: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.7)", display: "flex",
+        alignItems: "center", justifyContent: "center", padding: 20,
+      }}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: S.surface, border: `1px solid ${S.border}`,
+          borderRadius: 16, width: "100%", maxWidth: 420,
+          maxHeight: "70vh", overflowY: "auto", padding: "16px 16px 12px",
+        }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", marginBottom: 10,
+        }}>
+          <div style={{
+            fontFamily: S.display, fontSize: 16, fontWeight: 700,
+            color: S.text, letterSpacing: "-0.01em",
+          }}>
+            🔔 Your reminders
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: S.muted, fontSize: 18, lineHeight: 1, padding: 4,
+            }}>
+            ✕
+          </button>
+        </div>
+
+        {events.length === 0 ? (
+          <div style={{ color: S.muted, fontSize: 13, padding: "12px 0 16px" }}>
+            No reminders set — tap the bell on any fixture to add one.
+          </div>
+        ) : (
+          events.map(ev => {
+            const sp = SPORT[ev.sport];
+            return (
+              <div key={ev.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 0", borderTop: `1px solid ${S.border}`,
+              }}>
+                <span style={{ fontSize: 16, flexShrink: 0 }}>{sp.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    color: S.text, fontSize: 13, fontWeight: 600,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {ev.home}{ev.away ? ` vs ${ev.away}` : ""}
+                  </div>
+                  <div style={{ color: S.muted, fontSize: 11, marginTop: 1 }}>
+                    {ev.date ? `${fmtDate(ev.date)} · ${fmtTime(ev.date)}` : "Date TBC"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRemove(ev.id)}
+                  aria-label={`Remove reminder for ${ev.home}${ev.away ? ` vs ${ev.away}` : ""}`}
+                  style={{
+                    background: "transparent", border: `1px solid ${S.border}`,
+                    borderRadius: 16, cursor: "pointer", flexShrink: 0,
+                    color: sp.color, fontFamily: S.body, fontSize: 11,
+                    fontWeight: 600, padding: "5px 10px",
+                  }}>
+                  🔕 Remove
+                </button>
+              </div>
+            );
+          })
+        )}
+
+        <div style={{
+          color: S.dim, fontSize: 10.5, paddingTop: 10,
+          borderTop: `1px solid ${S.border}`,
+        }}>
+          You&apos;ll get a push ~1 hour before each event.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // =====================
 // APP
 // =====================
 
+const EVENT_IDS = new Set(EVENTS.map(e => e.id));
+
 export default function App() {
   const [filter, setFilter] = useState<"all" | SportKey>("all");
-  const [notified, setNotified] = useState<Set<number>>(loadNotified);
+  // Prune bells for events that no longer exist in events.json, or the
+  // header count includes reminders you can't see anywhere. The mount sync
+  // below then deletes their leftover rows in Supabase too.
+  const [notified, setNotified] = useState<Set<number>>(() => {
+    const stored = loadNotified();
+    const pruned = pruneToExisting(stored, EVENT_IDS);
+    if (pruned.size !== stored.size) saveNotified(pruned);
+    return pruned;
+  });
+  const [showReminders, setShowReminders] = useState(false);
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const pushSubId = useRef<string | null>(null);
@@ -626,6 +736,15 @@ export default function App() {
         </div>
       )}
 
+      {/* Reminders popup */}
+      {showReminders && (
+        <RemindersModal
+          events={SORTED.filter(e => notified.has(e.id))}
+          onRemove={id => void toggleNotify(id)}
+          onClose={() => setShowReminders(false)}
+        />
+      )}
+
       {/* Sticky header */}
       <div style={{
         padding: "calc(18px + env(safe-area-inset-top)) 16px 12px",
@@ -647,13 +766,17 @@ export default function App() {
           </div>
 
           {bellCount > 0 && (
-            <div style={{
-              background: "#061B0E", border: "1px solid #3AA86445",
-              borderRadius: 20, padding: "4px 12px",
-              fontSize: 12, color: "#3AA864", fontWeight: 600, flexShrink: 0,
-            }}>
+            <button
+              onClick={() => setShowReminders(true)}
+              aria-label={`Show ${bellCount} reminder${bellCount > 1 ? "s" : ""}`}
+              style={{
+                background: "#061B0E", border: "1px solid #3AA86445",
+                borderRadius: 20, padding: "4px 12px", cursor: "pointer",
+                fontFamily: S.body, fontSize: 12, color: "#3AA864",
+                fontWeight: 600, flexShrink: 0,
+              }}>
               🔔 {bellCount}
-            </div>
+            </button>
           )}
         </div>
 
