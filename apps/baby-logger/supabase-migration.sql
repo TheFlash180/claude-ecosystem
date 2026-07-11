@@ -25,6 +25,9 @@ create table if not exists babies (
   due_date date not null,
   birth_date date,
   birth_weight_g int,
+  -- LMP-equivalent date the week counter counts from (scan dating can sit a
+  -- few days off 280-days-before-due-date arithmetic); null = use due_date
+  week_anchor date,
   created_at timestamptz default now()
 );
 alter table babies enable row level security;

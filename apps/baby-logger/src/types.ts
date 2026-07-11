@@ -9,6 +9,11 @@ export interface Baby {
   due_date: string;
   birth_date: string | null;
   birth_weight_g: number | null;
+  /** LMP-equivalent date the week counter counts from. Clinics date
+   *  pregnancies by scan, which can sit a few days off naive
+   *  280-days-before-due-date arithmetic — this anchors the counter to
+   *  what the clinic says. Null = derive from due_date. */
+  week_anchor: string | null;
   created_at: string;
 }
 
