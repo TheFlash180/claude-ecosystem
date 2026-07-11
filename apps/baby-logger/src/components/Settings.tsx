@@ -9,10 +9,50 @@ interface Props {
   onSignOut: () => void;
 }
 
+// Whole days between a local-midnight date string and today.
+function daysSince(dateStr: string): number {
+  const then = new Date(dateStr + 'T00:00:00');
+  return Math.floor((Date.now() - then.getTime()) / 86400000);
+}
+
+function localIsoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Props) {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [babyName, setBabyName] = useState(baby.name ?? '');
   const [saving, setSaving] = useState(false);
+
+  // Week counter: current gestational age (anchor if set, else due-date maths)
+  const currentDays = baby.week_anchor
+    ? daysSince(baby.week_anchor)
+    : 280 - Math.ceil((new Date(baby.due_date + 'T00:00:00').getTime() - Date.now()) / 86400000);
+  const [weeksInput, setWeeksInput] = useState(String(Math.floor(currentDays / 7)));
+  const [daysInput, setDaysInput] = useState(String(((currentDays % 7) + 7) % 7));
+  const [savingWeeks, setSavingWeeks] = useState(false);
+
+  async function handleSaveWeeks(anchor: string | null) {
+    setSavingWeeks(true);
+    const { data } = await supabase()
+      .from('babies')
+      .update({ week_anchor: anchor })
+      .eq('id', baby.id)
+      .select()
+      .single();
+    setSavingWeeks(false);
+    if (data) onBabyUpdate(data);
+  }
+
+  function saveWeekCounter() {
+    const w = Math.max(0, Math.min(43, Number(weeksInput) || 0));
+    const d = Math.max(0, Math.min(6, Number(daysInput) || 0));
+    void handleSaveWeeks(localIsoDaysAgo(w * 7 + d));
+  }
 
   useEffect(() => {
     supabase()
@@ -59,6 +99,45 @@ export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Prop
         <div style={styles.info}>Due: {baby.due_date}</div>
         {baby.birth_date && <div style={styles.info}>Born: {baby.birth_date}</div>}
       </section>
+
+      {!baby.birth_date && (
+        <section style={styles.section}>
+          <h3 style={styles.sectionTitle}>Week counter</h3>
+          <div style={styles.info}>
+            Clinics date pregnancies by scan, which can differ a few days from
+            due-date arithmetic. Tell the app exactly where you are today and
+            it counts from there.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+            <input
+              type="number" min={0} max={43} value={weeksInput}
+              onChange={(e) => setWeeksInput(e.target.value)}
+              style={{ ...styles.input, width: 70 }}
+              aria-label="Weeks pregnant today"
+            />
+            <span style={styles.info}>weeks</span>
+            <input
+              type="number" min={0} max={6} value={daysInput}
+              onChange={(e) => setDaysInput(e.target.value)}
+              style={{ ...styles.input, width: 60 }}
+              aria-label="Extra days pregnant today"
+            />
+            <span style={styles.info}>days today</span>
+            <button onClick={saveWeekCounter} disabled={savingWeeks} style={styles.smallBtn}>
+              {savingWeeks ? '...' : 'Save'}
+            </button>
+          </div>
+          {baby.week_anchor && (
+            <button
+              onClick={() => void handleSaveWeeks(null)}
+              disabled={savingWeeks}
+              style={{ ...styles.info, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 8, textDecoration: 'underline' }}
+            >
+              Reset to due-date calculation
+            </button>
+          )}
+        </section>
+      )}
 
       <section style={styles.section}>
         <h3 style={styles.sectionTitle}>Family</h3>
