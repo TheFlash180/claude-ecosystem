@@ -215,6 +215,42 @@ grant execute on function push_remove_reminder(text,text) to anon;
 grant execute on function push_list_reminders(text) to anon;
 grant execute on function get_vapid_private_key() to service_role;
 
+-- ---------------------------------------------------------------- audit
+-- Every result change and every delete on sport_events is recorded with the
+-- acting role — added after F1 results once vanished with no way to tell
+-- what wrote the nulls.
+create table sport_events_audit (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  op text not null,
+  event_id text not null,
+  event_home text,
+  actor text not null default current_user,
+  old_result text,
+  new_result text
+);
+alter table sport_events_audit enable row level security;
+-- no policies: dashboard/service-role only
+
+create or replace function _sport_events_audit()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    insert into sport_events_audit (op, event_id, event_home, old_result)
+    values ('DELETE', old.id, old.home, old.result);
+    return old;
+  end if;
+  if new.result is distinct from old.result then
+    insert into sport_events_audit (op, event_id, event_home, old_result, new_result)
+    values ('UPDATE', old.id, old.home, old.result, new.result);
+  end if;
+  return new;
+end $$;
+
+create trigger sport_events_audit_trg
+  after update or delete on sport_events
+  for each row execute function _sport_events_audit();
+
 -- ---------------------------------------------------------------- cron
 -- (extensions pg_cron and pg_net must be enabled)
 select cron.schedule(
@@ -231,7 +267,7 @@ select cron.schedule(
 
 select cron.schedule(
   'sport-f1-sync',
-  '15 4 * * *',
+  '37 5 * * *',
   $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-f1',
