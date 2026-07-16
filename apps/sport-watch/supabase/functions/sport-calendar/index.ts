@@ -2,11 +2,9 @@
 // as sport-calendar). Add the function URL to Google Calendar / Apple
 // Calendar ("subscribe by URL") and every fixture — including F1 sessions
 // auto-synced from Jolpica — appears and stays fresh.
+// Icons and event durations come from the (dynamic) sport_categories table.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const DURATIONS: Record<string, number> = { rugby: 2, f1: 2, mma: 5 }; // hours
-const ICONS: Record<string, string> = { rugby: "\u{1F3C9}", mma: "\u{1F94A}", f1: "\u{1F3CE}️" };
 
 function icsDate(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -24,14 +22,23 @@ Deno.serve(async () => {
 
   // Everything from 30 days back (recent results stay visible) onward.
   const from = new Date(Date.now() - 30 * 86400000).toISOString();
-  const { data: events, error } = await sb
-    .from("sport_events")
-    .select("id, sport, competition, home, away, event_date, venue, channel, note, result")
-    .gte("event_date", from)
-    .order("event_date");
+  const [evRes, catRes] = await Promise.all([
+    sb.from("sport_events")
+      .select("id, sport, competition, home, away, event_date, venue, channel, note, result")
+      .gte("event_date", from)
+      .order("event_date"),
+    sb.from("sport_categories").select("key, icon, live_minutes"),
+  ]);
 
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (evRes.error) {
+    return new Response(JSON.stringify({ error: evRes.error.message }), { status: 500 });
+  }
+
+  const icons: Record<string, string> = {};
+  const durations: Record<string, number> = {};
+  for (const c of catRes.data ?? []) {
+    icons[c.key] = c.icon;
+    durations[c.key] = c.live_minutes * 60000;
   }
 
   const lines: string[] = [
@@ -44,11 +51,11 @@ Deno.serve(async () => {
   ];
 
   const stamp = icsDate(new Date());
-  for (const ev of events ?? []) {
+  for (const ev of evRes.data ?? []) {
     if (!ev.event_date) continue;
     const start = new Date(ev.event_date);
-    const end = new Date(start.getTime() + (DURATIONS[ev.sport] ?? 2) * 3600000);
-    const icon = ICONS[ev.sport] ?? "";
+    const end = new Date(start.getTime() + (durations[ev.sport] ?? 7200000));
+    const icon = icons[ev.sport] ?? "\u{1F3C5}";
     const summary = `${icon} ${ev.home}${ev.away ? ` vs ${ev.away}` : ""}`;
     const desc = [ev.competition, ev.channel ? `\u{1F4FA} ${ev.channel}` : null, ev.note, ev.result ? `Result: ${ev.result}` : null]
       .filter(Boolean).join("\n");

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
-import { S, SPORT, type SportEvent, type SportKey } from "./lib/config";
+import { catOf, DEFAULT_CATEGORIES, matchTitle, S, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from "./lib/config";
 import { fetchEvents, sortEvents } from "./lib/events";
 import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
 import { pruneToExisting } from "./lib/reminders";
@@ -57,7 +57,7 @@ async function checkReminders(events: SportEvent[], notified: Set<string>) {
     if (diff > 0 && diff <= 3600000) {
       const mins = Math.max(1, Math.round(diff / 60000));
       await fireNotification(
-        `🇿🇦 ${ev.home}${ev.away ? ` vs ${ev.away}` : ""}`,
+        `🇿🇦 ${matchTitle({ ...ev, homeFlag: "", awayFlag: "" })}`,
         `Starts in ${mins} min · ${fmtTime(ev.date)}${ev.venue ? ` · ${ev.venue}` : ""}`,
       );
       alerted.add(ev.id);
@@ -79,10 +79,10 @@ function useHashRoute(): string {
 
 function SectionLabel({ text }: { text: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 10px" }}>
       <div style={{ flex: 1, height: 1, background: S.border }} />
       <span style={{
-        fontFamily: S.body, fontSize: 9, fontWeight: 600,
+        fontFamily: S.body, fontSize: 10, fontWeight: 700,
         letterSpacing: "0.18em", textTransform: "uppercase", color: S.muted,
       }}>
         {text}
@@ -96,6 +96,8 @@ export default function App() {
   const route = useHashRoute();
   const [filter, setFilter] = useState<"all" | SportKey>("all");
   const [events, setEvents] = useState<SportEvent[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [cats, setCats] = useState<CatMap>(() => toCatMap(DEFAULT_CATEGORIES));
   const [loading, setLoading] = useState(true);
   const [notified, setNotified] = useState<Set<string>>(loadNotified);
   const [leads, setLeads] = useState<Record<string, number>>(loadLeads);
@@ -111,8 +113,10 @@ export default function App() {
   );
 
   const loadEvents = useCallback(async () => {
-    const { events: evs } = await fetchEvents();
-    setEvents(sortEvents(evs));
+    const data = await fetchEvents();
+    setEvents(sortEvents(data.events));
+    setCategories(data.categories);
+    setCats(data.cats);
     setLoading(false);
   }, []);
 
@@ -142,7 +146,7 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // In-app pre-kick-off alerts, checked now and every minute.
+  // In-app pre-start alerts, checked now and every minute.
   useEffect(() => {
     if (events.length === 0) return;
     void checkReminders(events, notified);
@@ -201,13 +205,14 @@ export default function App() {
   };
 
   const handleCalendar = (ev: SportEvent) => {
-    if (downloadEventIcs(ev)) showToast("📅 Added — open the file to save it to your calendar");
+    if (downloadEventIcs(ev, cats)) showToast("📅 Added — open the file to save it to your calendar");
   };
 
+  const liveMsOf = (e: SportEvent) => catOf(cats, e.sport).liveMinutes * 60000;
   const visible  = events.filter(e => filter === "all" || e.sport === filter);
-  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, SPORT[e.sport].liveDuration) && !e.dateTBC);
+  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, liveMsOf(e)) && !e.dateTBC);
   const recentPast = [...past].reverse(); // newest first
-  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, SPORT[e.sport].liveDuration) || e.dateTBC);
+  const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, liveMsOf(e)) || e.dateTBC);
   const nextUp   = upcoming.find(e => e.date && !e.dateTBC);
   const cd       = nextUp ? getCountdown(nextUp.date) : null;
   const bellCount = notified.size;
@@ -216,12 +221,10 @@ export default function App() {
     [events, notified],
   );
 
-  const filters: { key: "all" | SportKey; label: string }[] = [
-    { key: "all",   label: "All" },
-    { key: "rugby", label: "🏉 Rugby" },
-    { key: "mma",   label: "🥊 MMA" },
-    { key: "f1",    label: "🏎️ F1" },
-  ];
+  // Filter pills come from the (dynamic) category list; only categories that
+  // actually have events get a pill.
+  const usedKeys = useMemo(() => new Set(events.map(e => e.sport)), [events]);
+  const filterCats = categories.filter(c => usedKeys.has(c.key));
 
   const chrome = (
     <style>{`
@@ -235,11 +238,11 @@ export default function App() {
 
   const toastEl = toast && (
     <div style={{
-      position: "fixed", top: 16, left: "50%",
+      position: "fixed", top: "calc(14px + env(safe-area-inset-top))", left: "50%",
       transform: "translateX(-50%)", zIndex: 999,
       background: "#141E15", border: "1px solid #3AA864",
-      color: S.text, padding: "10px 20px", borderRadius: 24,
-      fontSize: 13, fontWeight: 500,
+      color: S.text, padding: "11px 20px", borderRadius: 24,
+      fontSize: 13.5, fontWeight: 500,
       boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
       whiteSpace: "nowrap", pointerEvents: "none",
     } as CSSProperties}>
@@ -252,8 +255,9 @@ export default function App() {
       <div style={{ background: S.bg, minHeight: "100vh", fontFamily: S.body }}>
         {chrome}
         {toastEl}
-        <Suspense fallback={<div style={{ color: S.muted, padding: 40, textAlign: "center" }}>Opening owner page…</div>}>
-          <AdminPage events={events} onChanged={() => void loadEvents()} onToast={showToast} />
+        <Suspense fallback={<div style={{ color: S.sub, padding: 40, textAlign: "center" }}>Opening owner page…</div>}>
+          <AdminPage events={events} categories={categories} cats={cats}
+            onChanged={() => void loadEvents()} onToast={showToast} />
         </Suspense>
       </div>
     );
@@ -268,6 +272,7 @@ export default function App() {
       {showReminders && (
         <RemindersModal
           events={belledEvents}
+          cats={cats}
           leadFor={leadFor}
           onLeadChange={changeLead}
           onRemove={id => void toggleNotify(id)}
@@ -280,7 +285,9 @@ export default function App() {
         padding: "calc(18px + env(safe-area-inset-top)) 16px 12px",
         borderBottom: `1px solid ${S.border}`,
         position: "sticky", top: 0, zIndex: 10,
-        background: S.bg,
+        background: `${S.bg}F2`,
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -290,20 +297,20 @@ export default function App() {
             }}>
               🇿🇦 SA Sport Watch
             </div>
-            <div style={{ fontSize: 11, color: S.muted, marginTop: 1 }}>
-              2026 · Rugby · MMA · F1
+            <div style={{ fontSize: 11.5, color: S.muted, marginTop: 2 }}>
+              {filterCats.map(c => c.label).join(" · ") || "2026"}
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
             {bellCount > 0 && (
               <button
                 onClick={() => setShowReminders(true)}
                 aria-label={`Show ${bellCount} reminder${bellCount > 1 ? "s" : ""}`}
                 style={{
-                  background: "#061B0E", border: "1px solid #3AA86445",
-                  borderRadius: 20, padding: "4px 12px", cursor: "pointer",
-                  fontFamily: S.body, fontSize: 12, color: "#3AA864",
+                  background: "#061B0E", border: "1px solid #3AA86450",
+                  borderRadius: 20, padding: "7px 13px", cursor: "pointer",
+                  fontFamily: S.body, fontSize: 13, color: "#3AA864",
                   fontWeight: 600,
                 }}>
                 🔔 {bellCount}
@@ -316,53 +323,54 @@ export default function App() {
               title="Owner page"
               style={{
                 background: "transparent", border: `1px solid ${S.border}`,
-                borderRadius: 20, padding: "4px 9px", cursor: "pointer",
-                fontSize: 13, lineHeight: 1, color: S.muted,
+                borderRadius: 20, padding: "7px 11px", cursor: "pointer",
+                fontSize: 14, lineHeight: 1, color: S.muted,
               }}>
               ⚙️
             </button>
           </div>
         </div>
 
-        {/* Filter pills */}
-        <div style={{ display: "flex", gap: 6, marginTop: 12, overflowX: "auto" }}>
-          {filters.map(f => {
-            const on = filter === f.key;
-            const sc = f.key !== "all" ? SPORT[f.key] : null;
-            return (
-              <button key={f.key} onClick={() => setFilter(f.key)} style={{
-                padding: "5px 14px", borderRadius: 20,
-                whiteSpace: "nowrap", cursor: "pointer",
-                fontFamily: S.body, fontSize: 12, fontWeight: 500,
-                border: `1px solid ${on ? (sc?.color || S.text) : S.border}`,
-                background: on ? (sc?.bg || "#141E15") : "transparent",
-                color: on ? (sc?.color || S.text) : S.muted,
-                transition: "all 0.1s",
-              }}>
-                {f.label}
-              </button>
-            );
-          })}
+        {/* Filter pills — dynamic, from the categories table */}
+        <div style={{ display: "flex", gap: 7, marginTop: 12, overflowX: "auto", paddingBottom: 2 }}>
+          {[{ key: "all" as const, label: "All", icon: "", color: null as string | null, bg: null as string | null },
+            ...filterCats.map(c => ({ key: c.key as SportKey, label: c.label, icon: c.icon, color: c.color as string | null, bg: c.bg as string | null }))]
+            .map(f => {
+              const on = filter === f.key;
+              return (
+                <button key={f.key} onClick={() => setFilter(f.key)} style={{
+                  padding: "8px 15px", borderRadius: 20,
+                  whiteSpace: "nowrap", cursor: "pointer",
+                  fontFamily: S.body, fontSize: 13, fontWeight: 500,
+                  border: `1px solid ${on ? (f.color || S.text) : S.border}`,
+                  background: on ? (f.bg || "#141E15") : "transparent",
+                  color: on ? (f.color || S.text) : S.sub,
+                  transition: "all 0.1s",
+                }}>
+                  {f.icon ? `${f.icon} ${f.label}` : f.label}
+                </button>
+              );
+            })}
         </div>
       </div>
 
       {/* Body */}
       <div style={{ padding: "14px 14px 48px" }}>
         {loading ? (
-          <div style={{ color: S.muted, fontSize: 12, textAlign: "center", padding: 40 }}>
+          <div style={{ color: S.sub, fontSize: 13, textAlign: "center", padding: 40 }}>
             Loading fixtures…
           </div>
         ) : (
           <>
             {/* Hero countdown */}
-            <HeroCard event={nextUp} countdown={cd} />
+            <HeroCard event={nextUp} cats={cats} countdown={cd} />
 
             {/* Upcoming events */}
             {upcoming.length > 0 && (
               <>
                 <SectionLabel text="Upcoming" />
                 {upcoming.map(e => (
-                  <EventCard key={e.id} event={e}
+                  <EventCard key={e.id} event={e} cats={cats}
                     notified={notified.has(e.id)}
                     onToggle={id => void toggleNotify(id)}
                     onCalendar={handleCalendar} />
@@ -375,7 +383,7 @@ export default function App() {
               <>
                 <SectionLabel text={showAllPast ? "Played" : "Recently played"} />
                 {(showAllPast ? recentPast : recentPast.slice(0, PAST_LIMIT)).map(e => (
-                  <EventCard key={e.id} event={e}
+                  <EventCard key={e.id} event={e} cats={cats}
                     notified={notified.has(e.id)}
                     onToggle={id => void toggleNotify(id)}
                     onCalendar={handleCalendar} />
@@ -384,10 +392,10 @@ export default function App() {
                   <button
                     onClick={() => setShowAllPast(v => !v)}
                     style={{
-                      width: "100%", padding: "8px 0", marginTop: 2,
+                      width: "100%", padding: "11px 0", marginTop: 2,
                       background: "transparent", border: `1px dashed ${S.border}`,
-                      borderRadius: 8, cursor: "pointer",
-                      fontFamily: S.body, fontSize: 11, color: S.muted,
+                      borderRadius: 10, cursor: "pointer",
+                      fontFamily: S.body, fontSize: 12.5, color: S.sub,
                     }}>
                     {showAllPast
                       ? "Show fewer"
@@ -401,15 +409,15 @@ export default function App() {
 
         {/* Footer */}
         <div style={{
-          marginTop: 24, paddingTop: 14, borderTop: `1px solid ${S.border}`,
-          fontFamily: S.body, fontSize: 10, color: S.dim, lineHeight: 1.7,
+          marginTop: 26, paddingTop: 14, borderTop: `1px solid ${S.border}`,
+          fontFamily: S.body, fontSize: 11, color: S.muted, lineHeight: 1.8,
         }}>
           📌 Times in SAST. F1 fixtures & results refresh daily from the
           official calendar; everything else is editable on the{" "}
-          <a href="#/admin" style={{ color: S.muted }}>owner page</a>.
+          <a href="#/admin" style={{ color: S.sub }}>owner page</a>.
           <br />
           📅{" "}
-          <a href={CALENDAR_FEED_URL} style={{ color: S.muted }}>
+          <a href={CALENDAR_FEED_URL} style={{ color: S.sub }}>
             Subscribe to the calendar feed
           </a>{" "}
           to see every fixture in your own calendar app.

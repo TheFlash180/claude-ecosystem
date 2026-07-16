@@ -1,8 +1,8 @@
-// Event data: the database is the source of truth (editable in /admin,
-// F1 auto-synced daily from Jolpica). The bundled events.json is only an
-// offline/failure fallback so the installed PWA still renders something.
+// Event + category data: the database is the source of truth (editable in
+// /admin, F1 auto-synced daily). The bundled events.json and built-in
+// category list are only an offline/failure fallback.
 import { sb } from './supabase';
-import { SPORT, type SportEvent, type SportKey } from './config';
+import { DEFAULT_CATEGORIES, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from './config';
 import eventsData from '../data/events.json';
 
 interface DbEventRow {
@@ -22,6 +22,16 @@ interface DbEventRow {
   is_special: boolean;
   is_conditional: boolean;
   date_tbc: boolean;
+}
+
+interface DbCategoryRow {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  bg: string;
+  live_minutes: number;
+  sort_order: number;
 }
 
 function fromDb(r: DbEventRow): SportEvent {
@@ -45,6 +55,18 @@ function fromDb(r: DbEventRow): SportEvent {
   };
 }
 
+function catFromDb(r: DbCategoryRow): Category {
+  return {
+    key: r.key,
+    label: r.label,
+    icon: r.icon,
+    color: r.color,
+    bg: r.bg,
+    liveMinutes: r.live_minutes,
+    sortOrder: r.sort_order,
+  };
+}
+
 interface RawJsonEvent {
   id: number;
   sport: string;
@@ -63,8 +85,9 @@ interface RawJsonEvent {
 }
 
 export function fallbackEvents(): SportEvent[] {
+  const known = new Set(DEFAULT_CATEGORIES.map((c) => c.key));
   return (eventsData.events as RawJsonEvent[])
-    .filter((e) => e.sport in SPORT)
+    .filter((e) => known.has(e.sport))
     .map((e) => ({
       ...e,
       id: String(e.id),
@@ -73,18 +96,38 @@ export function fallbackEvents(): SportEvent[] {
     }));
 }
 
-export async function fetchEvents(): Promise<{ events: SportEvent[]; fromDb: boolean }> {
+export interface RegistryData {
+  events: SportEvent[];
+  categories: Category[];
+  cats: CatMap;
+  fromDb: boolean;
+}
+
+export async function fetchEvents(): Promise<RegistryData> {
   const client = sb();
   if (client) {
-    const { data, error } = await client
-      .from('sport_events')
-      .select('*')
-      .order('event_date', { ascending: true, nullsFirst: false });
-    if (!error && data && data.length > 0) {
-      return { events: (data as DbEventRow[]).map(fromDb), fromDb: true };
+    const [evRes, catRes] = await Promise.all([
+      client.from('sport_events').select('*').order('event_date', { ascending: true, nullsFirst: false }),
+      client.from('sport_categories').select('*').order('sort_order'),
+    ]);
+    if (!evRes.error && evRes.data && evRes.data.length > 0) {
+      const categories = (!catRes.error && catRes.data && catRes.data.length > 0)
+        ? (catRes.data as DbCategoryRow[]).map(catFromDb)
+        : DEFAULT_CATEGORIES;
+      return {
+        events: (evRes.data as DbEventRow[]).map(fromDb),
+        categories,
+        cats: toCatMap(categories),
+        fromDb: true,
+      };
     }
   }
-  return { events: fallbackEvents(), fromDb: false };
+  return {
+    events: fallbackEvents(),
+    categories: DEFAULT_CATEGORIES,
+    cats: toCatMap(DEFAULT_CATEGORIES),
+    fromDb: false,
+  };
 }
 
 export function sortEvents(events: SportEvent[]): SportEvent[] {

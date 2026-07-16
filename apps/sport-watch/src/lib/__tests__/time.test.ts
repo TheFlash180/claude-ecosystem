@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_LIVE_DURATION, fmtDate, fmtTime, getCountdown, isLive, isPast } from '../time';
+import { DEFAULT_LIVE_DURATION, fmtDate, fmtTime, getCountdown, isLive, isPast, relativeLabel } from '../time';
 
 const NOW = new Date('2026-07-10T12:00:00Z');
 
@@ -62,5 +62,29 @@ describe('SAST formatting', () => {
 
   it('fmtDate shows the SAST calendar day, not the UTC one', () => {
     expect(fmtDate(lateKickoff)).toContain('11');
+  });
+});
+
+describe('relativeLabel', () => {
+  const now = new Date('2026-07-16T08:00:00Z'); // 10:00 SAST Thursday
+
+  it('is null for past, live, or undated events', () => {
+    expect(relativeLabel(null, now)).toBeNull();
+    expect(relativeLabel(new Date('2026-07-16T07:00:00Z'), now)).toBeNull();
+  });
+
+  it('says Today for later the same SAST day', () => {
+    expect(relativeLabel(new Date('2026-07-16T15:40:00Z'), now)).toBe('Today');
+  });
+
+  it('says Tomorrow across the SAST midnight boundary', () => {
+    // 22:30 UTC Thu = 00:30 SAST Friday — tomorrow in SAST even though
+    // it is still Thursday in UTC.
+    expect(relativeLabel(new Date('2026-07-16T22:30:00Z'), now)).toBe('Tomorrow');
+    expect(relativeLabel(new Date('2026-07-17T15:00:00Z'), now)).toBe('Tomorrow');
+  });
+
+  it('counts days farther out', () => {
+    expect(relativeLabel(new Date('2026-07-19T13:00:00Z'), now)).toBe('in 4d');
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildEventIcs, icsDate, icsEscape } from '../ics';
-import type { SportEvent } from '../config';
+import { DEFAULT_CATEGORIES, toCatMap, type SportEvent } from '../config';
+
+const CATS = toCatMap(DEFAULT_CATEGORIES);
 
 const bokTest: SportEvent = {
   id: '5',
@@ -29,11 +31,11 @@ describe('icsEscape', () => {
 
 describe('buildEventIcs', () => {
   it('is null for date-TBC events', () => {
-    expect(buildEventIcs({ ...bokTest, date: null })).toBeNull();
+    expect(buildEventIcs({ ...bokTest, date: null }, CATS)).toBeNull();
   });
 
   it('builds a valid single-event calendar', () => {
-    const ics = buildEventIcs(bokTest)!;
+    const ics = buildEventIcs(bokTest, CATS)!;
     expect(ics).toContain('BEGIN:VCALENDAR');
     expect(ics).toContain('UID:5@sa-sport-watch');
     expect(ics).toContain('DTSTART:20260822T154000Z');
@@ -45,12 +47,22 @@ describe('buildEventIcs', () => {
     expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
   });
 
-  it('uses the 5h MMA window', () => {
+  it('uses the category live window for the event duration (boxing runs 5h)', () => {
     const ics = buildEventIcs({
       ...bokTest,
-      sport: 'mma',
-      date: new Date('2026-07-19T00:00:00Z'),
-    })!;
-    expect(ics).toContain('DTEND:20260719T050000Z');
+      sport: 'boxing',
+      date: new Date('2026-09-12T00:00:00Z'),
+    }, CATS)!;
+    expect(ics).toContain('DTEND:20260912T050000Z');
+  });
+
+  it('falls back to a 2h neutral category for unknown sports', () => {
+    const ics = buildEventIcs({
+      ...bokTest,
+      sport: 'darts',
+      date: new Date('2026-09-12T00:00:00Z'),
+    }, CATS)!;
+    expect(ics).toContain('DTEND:20260912T020000Z');
+    expect(ics).toContain('SUMMARY:🏅 Springboks vs All Blacks');
   });
 });

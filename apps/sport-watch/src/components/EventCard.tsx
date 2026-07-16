@@ -1,10 +1,9 @@
-import { S, SPORT, type SportEvent } from "../lib/config";
-import { fmtDate, fmtTime, isPast, isLive } from "../lib/time";
-import { downloadEventIcs } from "../lib/ics";
+import { catOf, flagName, S, type CatMap, type SportEvent } from "../lib/config";
+import { fmtDate, fmtTime, isPast, isLive, relativeLabel } from "../lib/time";
 
 function BellIcon({ on, color }: { on: boolean; color: string }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24"
+    <svg width="17" height="17" viewBox="0 0 24 24"
       fill={on ? color : "none"}
       stroke={on ? color : S.muted}
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -15,108 +14,126 @@ function BellIcon({ on, color }: { on: boolean; color: string }) {
   );
 }
 
-export function EventCard({ event, notified, onToggle, onCalendar }: {
+export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
   event: SportEvent;
+  cats: CatMap;
   notified: boolean;
   onToggle: (id: string) => void;
-  onCalendar?: (ev: SportEvent) => void;
+  onCalendar: (ev: SportEvent) => void;
 }) {
-  const sp = SPORT[event.sport];
-  const past = isPast(event.date) && !isLive(event.date, sp.liveDuration);
-  const live = isLive(event.date, sp.liveDuration);
+  const cat = catOf(cats, event.sport);
+  const liveMs = cat.liveMinutes * 60000;
+  const past = isPast(event.date) && !isLive(event.date, liveMs);
+  const live = isLive(event.date, liveMs);
+  const rel = !past && !live ? relativeLabel(event.date) : null;
+  const soon = rel === "Today" || rel === "Tomorrow";
 
   return (
     <div style={{
-      background: live ? sp.bg : S.surface,
-      borderRadius: 10,
-      padding: "11px 12px",
-      marginBottom: 7,
-      borderLeft: `3px solid ${live ? sp.color : past ? S.dim : event.isSpecial ? "#D4A035" : sp.color + "65"}`,
-      display: "flex", alignItems: "center", gap: 11,
-      opacity: past ? 0.35 : 1,
-      outline: live ? `1px solid ${sp.color}22` : event.isSpecial && !past ? `1px solid #D4A03530` : "none",
+      background: live ? cat.bg : S.surface,
+      borderRadius: 12,
+      padding: "13px 14px",
+      marginBottom: 8,
+      borderLeft: `3px solid ${live ? cat.color : past ? S.dim : event.isSpecial ? "#D4A035" : cat.color + "70"}`,
+      display: "flex", alignItems: "center", gap: 12,
+      opacity: past ? 0.55 : 1,
+      outline: live ? `1px solid ${cat.color}30` : event.isSpecial && !past ? `1px solid #D4A03535` : "none",
       outlineOffset: -1,
     }}>
-      <div style={{ fontSize: 18, flexShrink: 0 }}>{sp.icon}</div>
+      <div style={{ fontSize: 20, flexShrink: 0 }}>{cat.icon}</div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Competition label */}
+        {/* Competition label + badges */}
         <div style={{
-          fontFamily: S.body, fontSize: 9, fontWeight: 600,
-          letterSpacing: "0.11em", textTransform: "uppercase",
-          color: past ? S.dim : sp.color,
-          marginBottom: 2, display: "flex", alignItems: "center", gap: 6,
+          fontFamily: S.body, fontSize: 10, fontWeight: 600,
+          letterSpacing: "0.1em", textTransform: "uppercase",
+          color: past ? S.muted : cat.color,
+          marginBottom: 3, display: "flex", alignItems: "center", gap: 6,
+          overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
         }}>
-          {event.competition}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{event.competition}</span>
           {live && (
             <span style={{
-              background: sp.color, color: "#000",
-              padding: "1px 5px", borderRadius: 3,
-              fontSize: 7, fontWeight: 800, letterSpacing: "0.1em",
+              background: cat.color, color: "#000",
+              padding: "2px 6px", borderRadius: 4, flexShrink: 0,
+              fontSize: 8, fontWeight: 800, letterSpacing: "0.1em",
             }}>LIVE</span>
           )}
-          {event.result && (
-            <span style={{ color: S.text }}> · {event.result}</span>
+          {rel && (
+            <span style={{
+              border: `1px solid ${soon ? cat.color : S.border}`,
+              color: soon ? cat.color : S.sub,
+              background: soon ? `${cat.color}14` : "transparent",
+              padding: "1.5px 7px", borderRadius: 9, flexShrink: 0,
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+              textTransform: "none",
+            }}>{rel}</span>
           )}
         </div>
 
-        {/* Teams */}
+        {/* Result line (own row — used to hide inside the label) */}
+        {event.result && (
+          <div style={{
+            fontFamily: S.body, fontSize: 12, fontWeight: 600,
+            color: past ? S.sub : S.text, marginBottom: 2,
+          }}>
+            {event.result}
+          </div>
+        )}
+
+        {/* Teams — never renders "null" when a flag was left out */}
         <div style={{
-          fontFamily: S.display, fontSize: 15, fontWeight: 600,
-          color: past ? "#303830" : S.text,
+          fontFamily: S.display, fontSize: 16.5, fontWeight: 600,
+          color: past ? S.muted : S.text,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          lineHeight: 1.2,
+          lineHeight: 1.25,
         }}>
-          {event.homeFlag} {event.home}
-          {event.away != null ? ` vs ${event.awayFlag} ${event.away}` : ""}
+          {flagName(event.homeFlag, event.home)}
+          {event.away ? ` vs ${flagName(event.awayFlag, event.away)}` : ""}
         </div>
 
-        {/* Date / venue / channel */}
+        {/* Date / time — the line you check daily, now actually readable */}
         <div style={{
-          fontFamily: S.body, fontSize: 10,
-          color: past ? "#282E28" : S.muted,
-          marginTop: 2, display: "flex", gap: 4, flexWrap: "wrap",
+          fontFamily: S.body, fontSize: 12.5, fontWeight: 500,
+          color: past ? S.muted : S.sub,
+          marginTop: 3,
         }}>
-          {event.dateTBC || !event.date ? (
-            <span>Date TBA</span>
-          ) : (
-            <>
-              <span>{fmtDate(event.date)}</span>
-              <span>·</span>
-              <span>{fmtTime(event.date)}</span>
-            </>
-          )}
-          {event.venue && (
-            <>
-              <span>·</span>
+          {event.dateTBC || !event.date
+            ? "Date to be announced"
+            : `${fmtDate(event.date)} · ${fmtTime(event.date)}`}
+        </div>
+
+        {/* Venue + where to watch */}
+        {(event.venue || (!past && event.channel)) && (
+          <div style={{
+            fontFamily: S.body, fontSize: 11, color: S.muted,
+            marginTop: 2, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center",
+          }}>
+            {event.venue && (
               <span style={{
-                maxWidth: 170, overflow: "hidden",
+                maxWidth: 200, overflow: "hidden",
                 textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
-                {event.venue}
+                📍 {event.venue}
               </span>
-            </>
-          )}
-        </div>
-
-        {/* Where to watch */}
-        {!past && event.channel && (
-          <div style={{
-            fontFamily: S.body, fontSize: 9.5, color: "#5A625A", marginTop: 2,
-          }}>
-            📺 {event.watchUrl ? (
-              <a href={event.watchUrl} target="_blank" rel="noopener noreferrer"
-                 style={{ color: "#6A726A" }}>
-                {event.channel}
-              </a>
-            ) : event.channel}
+            )}
+            {!past && event.channel && (
+              <span>
+                📺 {event.watchUrl ? (
+                  <a href={event.watchUrl} target="_blank" rel="noopener noreferrer"
+                     style={{ color: S.muted }}>
+                    {event.channel}
+                  </a>
+                ) : event.channel}
+              </span>
+            )}
           </div>
         )}
 
         {/* Conditional note */}
         {(event.isConditional || event.note) && !event.result && (
           <div style={{
-            fontFamily: S.body, fontSize: 9, color: "#8A6830",
+            fontFamily: S.body, fontSize: 10.5, color: "#B08A45",
             marginTop: 3, fontStyle: "italic",
           }}>
             ⚡ {event.note}
@@ -124,18 +141,19 @@ export function EventCard({ event, notified, onToggle, onCalendar }: {
         )}
       </div>
 
-      {/* Calendar + bell buttons */}
+      {/* Calendar + bell buttons (44px targets) */}
       {!past && (
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
           {event.date && (
             <button
-              onClick={() => (onCalendar ? onCalendar(event) : downloadEventIcs(event))}
+              onClick={() => onCalendar(event)}
               title="Add to calendar"
               aria-label={`Add ${event.home} to calendar`}
               style={{
                 border: `1px solid ${S.border}`, background: "transparent",
-                borderRadius: 7, padding: 7, cursor: "pointer",
-                display: "flex", alignItems: "center", fontSize: 13, lineHeight: 1,
+                borderRadius: 10, width: 42, height: 42, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, lineHeight: 1,
               }}
             >
               📅
@@ -144,15 +162,16 @@ export function EventCard({ event, notified, onToggle, onCalendar }: {
           <button
             onClick={() => onToggle(event.id)}
             title={notified ? "Remove reminder" : "Remind me"}
+            aria-label={notified ? `Remove reminder for ${event.home}` : `Remind me about ${event.home}`}
             style={{
-              border: `1px solid ${notified ? sp.color : S.border}`,
-              background: notified ? `${sp.color}18` : "transparent",
-              borderRadius: 7, padding: 7, cursor: "pointer",
-              display: "flex", alignItems: "center",
+              border: `1px solid ${notified ? cat.color : S.border}`,
+              background: notified ? `${cat.color}1C` : "transparent",
+              borderRadius: 10, width: 42, height: 42, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
               transition: "all 0.12s",
             }}
           >
-            <BellIcon on={notified} color={sp.color} />
+            <BellIcon on={notified} color={cat.color} />
           </button>
         </div>
       )}

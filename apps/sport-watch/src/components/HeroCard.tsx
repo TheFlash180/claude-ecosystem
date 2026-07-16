@@ -1,74 +1,77 @@
-import { S, SPORT, type SportEvent } from "../lib/config";
+import { catOf, flagName, S, type CatMap, type SportEvent } from "../lib/config";
 import { fmtDate, fmtTime, getCountdown, isLive } from "../lib/time";
 
-export function HeroCard({ event, countdown }: {
+export function HeroCard({ event, cats, countdown }: {
   event: SportEvent | undefined;
+  cats: CatMap;
   countdown: ReturnType<typeof getCountdown>;
 }) {
   if (!event || !event.date) {
     return (
       <div style={{
-        borderRadius: 14, background: S.surface, border: `1px solid ${S.border}`,
-        padding: "18px 20px", marginBottom: 14, color: S.muted,
-        fontFamily: S.body, fontSize: 12,
+        borderRadius: 16, background: S.surface, border: `1px solid ${S.border}`,
+        padding: "20px 22px", marginBottom: 16, color: S.sub,
+        fontFamily: S.body, fontSize: 13,
       }}>
         No upcoming events on the calendar.
       </div>
     );
   }
 
-  const sp = SPORT[event.sport];
+  const cat = catOf(cats, event.sport);
   const cd = countdown;
-  const live = isLive(event.date, sp.liveDuration);
+  const live = isLive(event.date, cat.liveMinutes * 60000);
 
   return (
     <div style={{
-      borderRadius: 14,
-      background: `linear-gradient(140deg, ${sp.bg} 0%, #090D0A 65%)`,
-      border: `1px solid ${sp.color}20`,
-      padding: "18px 20px", marginBottom: 14,
+      borderRadius: 16,
+      background: `linear-gradient(140deg, ${cat.bg} 0%, #090D0A 65%)`,
+      border: `1px solid ${cat.color}26`,
+      padding: "20px 22px", marginBottom: 16,
       position: "relative", overflow: "hidden",
     }}>
       {/* ambient glow */}
       <div style={{
-        position: "absolute", top: -28, right: -28, width: 100, height: 100,
+        position: "absolute", top: -28, right: -28, width: 110, height: 110,
         borderRadius: "50%",
-        background: `radial-gradient(circle, ${sp.color}28 0%, transparent 70%)`,
+        background: `radial-gradient(circle, ${cat.color}30 0%, transparent 70%)`,
         pointerEvents: "none",
       }} />
 
       <div style={{
-        fontFamily: S.body, fontSize: 9, fontWeight: 600,
+        fontFamily: S.body, fontSize: 10, fontWeight: 700,
         letterSpacing: "0.15em", textTransform: "uppercase",
-        color: sp.color, marginBottom: 8,
+        color: cat.color, marginBottom: 9,
       }}>
-        {sp.icon} {live ? "Live Now" : "Next Up"} · {event.competition}
+        {cat.icon} {live ? "Live Now" : "Next Up"} · {event.competition}
       </div>
 
       <div style={{
-        fontFamily: S.display, fontSize: 21, fontWeight: 700,
-        color: S.text, lineHeight: 1.2, marginBottom: 6,
+        fontFamily: S.display, fontSize: 23, fontWeight: 700,
+        color: S.text, lineHeight: 1.2, marginBottom: 7,
       }}>
-        {event.homeFlag} {event.home}
-        {event.away ? ` vs ${event.awayFlag} ${event.away}` : ""}
+        {flagName(event.homeFlag, event.home)}
+        {event.away ? ` vs ${flagName(event.awayFlag, event.away)}` : ""}
       </div>
 
       <div style={{
-        fontFamily: S.body, fontSize: 11, color: S.muted, marginBottom: 16,
+        fontFamily: S.body, fontSize: 12.5, fontWeight: 500,
+        color: S.sub, marginBottom: 16,
       }}>
-        {fmtDate(event.date)} · {fmtTime(event.date)} · {event.venue}
-        {event.channel && <> · 📺 {event.channel}</>}
+        {fmtDate(event.date)} · {fmtTime(event.date)}
+        {event.venue && <span style={{ color: S.muted }}> · {event.venue}</span>}
+        {event.channel && <span style={{ color: S.muted }}> · 📺 {event.channel}</span>}
       </div>
 
       {live && (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
             width: 10, height: 10, borderRadius: "50%",
-            background: sp.color, animation: "sw-pulse 1.4s ease-in-out infinite",
+            background: cat.color, animation: "sw-pulse 1.4s ease-in-out infinite",
           }} />
           <span style={{
-            fontFamily: S.display, fontSize: 22, fontWeight: 700,
-            color: sp.color, letterSpacing: "0.06em",
+            fontFamily: S.display, fontSize: 23, fontWeight: 700,
+            color: cat.color, letterSpacing: "0.06em",
           }}>
             LIVE NOW
           </span>
@@ -85,13 +88,13 @@ export function HeroCard({ event, countdown }: {
           ].map(({ v, l }, i) => (
             <span key={l} style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
               <span style={{
-                fontFamily: S.display, fontSize: 30,
+                fontFamily: S.display, fontSize: 31,
                 fontWeight: 700, color: S.text, lineHeight: 1,
               }}>
                 {String(v).padStart(2, "0")}
               </span>
               <span style={{
-                fontFamily: S.body, fontSize: 9, color: S.muted,
+                fontFamily: S.body, fontSize: 9.5, color: S.muted,
                 letterSpacing: "0.1em", textTransform: "uppercase",
               }}>
                 {l}
@@ -99,7 +102,7 @@ export function HeroCard({ event, countdown }: {
               {i < 3 && (
                 <span style={{
                   fontFamily: S.display, fontSize: 22,
-                  color: "#1E261E", margin: "0 3px",
+                  color: S.dim, margin: "0 3px",
                 }}>:</span>
               )}
             </span>
