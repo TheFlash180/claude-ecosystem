@@ -25,6 +25,24 @@ export function getCountdown(d: Date | null) {
   };
 }
 
+/** SAST calendar day of a date, as yyyy-mm-dd — for "is it today?" checks. */
+function sastDay(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+}
+
+/** Compact glanceable label for upcoming events: "Today" / "Tomorrow" /
+ *  "in 5d". Null for past, live-now, or undated events. */
+export function relativeLabel(d: Date | null, now = new Date()): string | null {
+  if (!d) return null;
+  const diff = d.getTime() - now.getTime();
+  if (diff <= 0) return null;
+  const today = sastDay(now);
+  const eventDay = sastDay(d);
+  if (eventDay === today) return "Today";
+  if (eventDay === sastDay(new Date(now.getTime() + 86400000))) return "Tomorrow";
+  return `in ${Math.ceil(diff / 86400000)}d`;
+}
+
 export function fmtDate(d: Date) {
   // Same timezone as fmtTime, or a 02:00 SAST kick-off shows the wrong day
   // for viewers outside SAST.

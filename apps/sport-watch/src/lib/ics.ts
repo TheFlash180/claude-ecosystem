@@ -1,11 +1,9 @@
 // iCalendar helpers: per-event "add to calendar" files, plus the URL of the
 // live subscribable feed served by the sport-calendar edge function.
-import { SPORT, type SportEvent } from './config';
+import { catOf, type CatMap, type SportEvent } from './config';
 
 export const CALENDAR_FEED_URL =
   'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sport-calendar';
-
-const DURATION_HOURS: Record<string, number> = { rugby: 2, f1: 2, mma: 5 };
 
 export function icsDate(d: Date): string {
   return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -19,12 +17,13 @@ export function icsEscape(s: string): string {
     .replace(/\r?\n/g, '\\n');
 }
 
-/** A single-event .ics file (RFC 5545). Returns null for date-TBC events. */
-export function buildEventIcs(ev: SportEvent): string | null {
+/** A single-event .ics file (RFC 5545). Returns null for date-TBC events.
+ *  Icon and event duration come from the (dynamic) category. */
+export function buildEventIcs(ev: SportEvent, cats: CatMap): string | null {
   if (!ev.date) return null;
-  const sp = SPORT[ev.sport];
-  const end = new Date(ev.date.getTime() + (DURATION_HOURS[ev.sport] ?? 2) * 3600000);
-  const summary = `${sp.icon} ${ev.home}${ev.away ? ` vs ${ev.away}` : ''}`;
+  const cat = catOf(cats, ev.sport);
+  const end = new Date(ev.date.getTime() + cat.liveMinutes * 60000);
+  const summary = `${cat.icon} ${ev.home}${ev.away ? ` vs ${ev.away}` : ''}`;
   const desc = [ev.competition, ev.channel ? `📺 ${ev.channel}` : null, ev.note]
     .filter(Boolean)
     .join('\n');
@@ -48,8 +47,8 @@ export function buildEventIcs(ev: SportEvent): string | null {
 
 /** Trigger a download of the event as an .ics file the OS hands to the
  *  calendar app. */
-export function downloadEventIcs(ev: SportEvent): boolean {
-  const ics = buildEventIcs(ev);
+export function downloadEventIcs(ev: SportEvent, cats: CatMap): boolean {
+  const ics = buildEventIcs(ev, cats);
   if (!ics) return false;
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);

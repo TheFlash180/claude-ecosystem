@@ -1,6 +1,7 @@
 -- SA Sport Watch: full server-side schema (copy of record — already applied
 -- to the shared Supabase project).
 --
+--   sport_categories       dynamic sport categories (admin-manageable)
 --   sport_events           events live here, not in the app bundle
 --   sport_settings         admin password (RLS, no policies)
 --   sport_push_subs        Web Push subscriptions (writes via RPCs only)
@@ -11,10 +12,31 @@
 --   send-sport-reminders   every 15 min: due reminders -> Web Push
 --   sport-calendar         subscribable ICS feed of all events
 
+-- ---------------------------------------------------------------- categories
+create table sport_categories (
+  key text primary key,
+  label text not null,
+  icon text not null,
+  color text not null,
+  bg text not null,
+  live_minutes int not null default 120,
+  sort_order int not null default 0
+);
+
+insert into sport_categories (key, label, icon, color, bg, live_minutes, sort_order) values
+  ('rugby',    'Rugby',    '🏉',  '#3AA864', '#061B0E', 120, 1),
+  ('mma',      'MMA',      '🥋',  '#D44040', '#1C0606', 300, 2),
+  ('f1',       'F1',       '🏎️', '#E0762F', '#1C0F06', 120, 3),
+  ('boxing',   'Boxing',   '🥊',  '#C9A227', '#1B1504', 300, 4),
+  ('football', 'Football', '⚽',  '#4A9ED4', '#06131C', 120, 5);
+
+alter table sport_categories enable row level security;
+create policy "public read" on sport_categories for select to anon, authenticated using (true);
+
 -- ---------------------------------------------------------------- events
 create table sport_events (
   id text primary key,
-  sport text not null check (sport in ('rugby','mma','f1')),
+  sport text not null references sport_categories(key),
   competition text not null,
   home text not null,
   away text,
@@ -98,6 +120,39 @@ returns boolean language plpgsql security definer set search_path = public as $$
 begin
   if not _sport_admin_ok(p_password) then return false; end if;
   delete from sport_events where id = p_id;
+  return found;
+end $$;
+
+create or replace function sport_admin_upsert_category(
+  p_key text, p_label text, p_icon text, p_color text, p_bg text,
+  p_live_minutes int, p_sort int, p_password text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if not _sport_admin_ok(p_password) then return false; end if;
+  if length(trim(coalesce(p_key,''))) = 0 or length(trim(coalesce(p_label,''))) = 0 then
+    return false;
+  end if;
+  insert into sport_categories (key, label, icon, color, bg, live_minutes, sort_order)
+  values (lower(trim(p_key)), trim(p_label), coalesce(p_icon,'🏅'),
+          coalesce(p_color,'#3AA864'), coalesce(p_bg,'#0B130B'),
+          greatest(coalesce(p_live_minutes,120), 30), coalesce(p_sort, 99))
+  on conflict (key) do update set
+    label = excluded.label, icon = excluded.icon, color = excluded.color,
+    bg = excluded.bg, live_minutes = excluded.live_minutes,
+    sort_order = excluded.sort_order;
+  return true;
+end $$;
+
+-- Deleting a category with events still in it fails via the FK (on purpose).
+create or replace function sport_admin_delete_category(p_key text, p_password text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if not _sport_admin_ok(p_password) then return false; end if;
+  begin
+    delete from sport_categories where key = p_key;
+  exception when foreign_key_violation then
+    return false;
+  end;
   return found;
 end $$;
 
@@ -200,6 +255,8 @@ revoke all on function _sport_admin_ok(text) from public, anon;
 revoke all on function sport_admin_check(text) from public, anon;
 revoke all on function sport_admin_upsert_event(text,text,text,text,text,text,text,timestamptz,text,text,text,text,text,boolean,text) from public, anon;
 revoke all on function sport_admin_delete_event(text,text) from public, anon;
+revoke all on function sport_admin_upsert_category(text,text,text,text,text,int,int,text) from public, anon;
+revoke all on function sport_admin_delete_category(text,text) from public, anon;
 revoke all on function push_register(text,text,text,text) from public, anon;
 revoke all on function push_set_reminder(text,text,timestamptz,text,int) from public, anon;
 revoke all on function push_remove_reminder(text,text) from public, anon;
@@ -209,6 +266,8 @@ revoke all on function get_vapid_private_key() from public, anon, authenticated;
 grant execute on function sport_admin_check(text) to anon;
 grant execute on function sport_admin_upsert_event(text,text,text,text,text,text,text,timestamptz,text,text,text,text,text,boolean,text) to anon;
 grant execute on function sport_admin_delete_event(text,text) to anon;
+grant execute on function sport_admin_upsert_category(text,text,text,text,text,int,int,text) to anon;
+grant execute on function sport_admin_delete_category(text,text) to anon;
 grant execute on function push_register(text,text,text,text) to anon;
 grant execute on function push_set_reminder(text,text,timestamptz,text,int) to anon;
 grant execute on function push_remove_reminder(text,text) to anon;
