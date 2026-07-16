@@ -3,11 +3,14 @@
 // sprint sessions) from the free Jolpica Ergast-compatible API and upserts
 // sport_events rows; fills in race winners for finished rounds that don't
 // have a result yet. Manual fields (channel, note, watch_url, is_special,
-// non-empty result) are never overwritten.
+// non-empty result) are never overwritten. Result-fetch failures are
+// reported in the response (they used to be silent, which hid days of
+// rate-limited fetches at the old 04:15 cron slot).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.jolpi.ca/ergast/f1";
+const UA = { "User-Agent": "sa-sport-watch/1.0 (personal PWA; daily sync)" };
 
 const FLAGS: Record<string, string> = {
   UK: "\u{1F1EC}\u{1F1E7}", "Great Britain": "\u{1F1EC}\u{1F1E7}",
@@ -31,6 +34,14 @@ function isoDate(date?: string, time?: string): string | null {
   return `${date}T${time ?? "12:00:00Z"}`;
 }
 
+// One retry after a pause on 429/5xx — the free API has busy moments.
+async function fetchWithRetry(url: string): Promise<Response> {
+  const first = await fetch(url, { headers: UA });
+  if (first.ok || (first.status !== 429 && first.status < 500)) return first;
+  await new Promise((r) => setTimeout(r, 1500));
+  return fetch(url, { headers: UA });
+}
+
 Deno.serve(async () => {
   const sb = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -38,7 +49,7 @@ Deno.serve(async () => {
   );
 
   const season = new Date().getUTCFullYear();
-  const schedRes = await fetch(`${API}/${season}.json?limit=100`);
+  const schedRes = await fetchWithRetry(`${API}/${season}.json?limit=100`);
   if (!schedRes.ok) {
     return new Response(JSON.stringify({ error: `Jolpica schedule fetch failed: ${schedRes.status}` }), { status: 502 });
   }
@@ -62,6 +73,7 @@ Deno.serve(async () => {
 
   let upserted = 0;
   let resultsFilled = 0;
+  const resultErrors: string[] = [];
   const now = Date.now();
 
   for (const race of races) {
@@ -107,30 +119,32 @@ Deno.serve(async () => {
       }
     }
 
-    // Winner for finished races that don't have a result yet (max 3/run to
-    // stay polite to the API; the daily cron catches up quickly).
+    // Winner for finished races that don't have a result yet (capped per run
+    // to stay polite to the API; the daily cron catches up).
     const raceEntry = existing.get(`${round}|race`);
     const raceTime = isoDate(race.date, race.time);
     const finished = raceTime !== null && new Date(raceTime).getTime() + 3 * 3600000 < now;
-    if (finished && raceEntry && !raceEntry.result && resultsFilled < 3) {
-      const resRes = await fetch(`${API}/${season}/${round}/results.json?limit=1`);
-      if (resRes.ok) {
-        const resJson = await resRes.json();
-        const winner = resJson?.MRData?.RaceTable?.Races?.[0]?.Results?.[0];
-        if (winner?.position === "1") {
-          const label = `\u{1F3C6} ${winner.Driver?.givenName ?? ""} ${winner.Driver?.familyName ?? ""}`.trim()
-            + (winner.Constructor?.name ? ` (${winner.Constructor.name})` : "");
-          const { error } = await sb.from("sport_events")
-            .update({ result: label, updated_at: new Date().toISOString() })
-            .eq("id", raceEntry.id);
-          if (!error) resultsFilled++;
-        }
+    if (finished && raceEntry && !raceEntry.result && resultsFilled < 6) {
+      const resRes = await fetchWithRetry(`${API}/${season}/${round}/results.json?limit=1`);
+      if (!resRes.ok) {
+        resultErrors.push(`r${round}: HTTP ${resRes.status}`);
+        continue;
+      }
+      const resJson = await resRes.json();
+      const winner = resJson?.MRData?.RaceTable?.Races?.[0]?.Results?.[0];
+      if (winner?.position === "1") {
+        const label = `\u{1F3C6} ${winner.Driver?.givenName ?? ""} ${winner.Driver?.familyName ?? ""}`.trim()
+          + (winner.Constructor?.name ? ` (${winner.Constructor.name})` : "");
+        const { error } = await sb.from("sport_events")
+          .update({ result: label, updated_at: new Date().toISOString() })
+          .eq("id", raceEntry.id);
+        if (!error) resultsFilled++;
       }
     }
   }
 
   return new Response(
-    JSON.stringify({ season, races: races.length, upserted, resultsFilled }),
+    JSON.stringify({ season, races: races.length, upserted, resultsFilled, resultErrors }),
     { headers: { "Content-Type": "application/json" } },
   );
 });

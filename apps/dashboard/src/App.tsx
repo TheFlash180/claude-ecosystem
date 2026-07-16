@@ -23,7 +23,6 @@ const EXTERNAL: { name: string; url: string; note: string }[] = [
   { name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/', note: 'gifts & claims' },
 ];
 
-const PLANNED = ['F1 Briefing', 'Chess Coach'];
 
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
@@ -55,12 +54,6 @@ export default function App() {
             <div style={styles.tileName}>{a.name}</div>
             <div style={{ ...styles.tileStatus, color: 'var(--ok)' }}>● {a.note}</div>
           </a>
-        ))}
-        {PLANNED.map((name) => (
-          <div key={name} style={{ ...styles.tile, opacity: 0.45 }}>
-            <div style={styles.tileName}>{name}</div>
-            <div style={styles.tileStatus}>coming soon</div>
-          </div>
         ))}
       </div>
     </AppShell>
