@@ -23,6 +23,12 @@ const EXTERNAL: { name: string; url: string; note: string }[] = [
   { name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/', note: 'gifts & claims' },
 ];
 
+// In planning — see the session notes for each brief.
+const PLANNED: { name: string; note: string }[] = [
+  { name: 'Marvel Watch', note: 'MCU releases & reminders' },
+  { name: 'Meal Prep', note: 'weekly & monthly planning' },
+  { name: 'Workout Plan', note: 'parkrun + gym schedule' },
+];
 
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
@@ -54,6 +60,12 @@ export default function App() {
             <div style={styles.tileName}>{a.name}</div>
             <div style={{ ...styles.tileStatus, color: 'var(--ok)' }}>● {a.note}</div>
           </a>
+        ))}
+        {PLANNED.map((a) => (
+          <div key={a.name} style={{ ...styles.tile, opacity: 0.45 }}>
+            <div style={styles.tileName}>{a.name}</div>
+            <div style={styles.tileStatus}>coming soon · {a.note}</div>
+          </div>
         ))}
       </div>
     </AppShell>
