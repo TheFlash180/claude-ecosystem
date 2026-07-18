@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { saveEvent } from '../lib/eventQueue';
 
 interface Props {
   babyId: string;
@@ -20,13 +20,14 @@ export default function NappyForm({ babyId, userId, onDone }: Props) {
   async function handleTap(nappyType: string) {
     setSaving(true);
     setError('');
-    const { error: err } = await supabase().from('nappy_events').insert({
+    const result = await saveEvent('nappy_events', {
       baby_id: babyId,
       logged_by: userId,
       nappy_type: nappyType,
+      logged_at: new Date().toISOString(),
     });
     setSaving(false);
-    if (err) {
+    if (result === 'error') {
       setError("Couldn't save — check your connection and try again.");
       return;
     }

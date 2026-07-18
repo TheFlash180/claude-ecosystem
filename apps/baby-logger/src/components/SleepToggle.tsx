@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { saveEvent, saveUpdate } from '../lib/eventQueue';
 import type { SleepEvent } from '../types';
 
 interface Props {
@@ -32,18 +32,18 @@ export default function SleepToggle({ babyId, userId, activeSleep, onToggle }: P
   async function handleToggle() {
     setSaving(true);
     setError('');
-    const sb = supabase();
 
-    const { error: err } = activeSleep
-      ? await sb.from('sleep_events')
-          .update({ ended_at: new Date().toISOString() })
-          .eq('id', activeSleep.id)
-      : await sb.from('sleep_events').insert({
+    const result = activeSleep
+      ? await saveUpdate('sleep_events', activeSleep.id, {
+          ended_at: new Date().toISOString(),
+        })
+      : await saveEvent('sleep_events', {
           baby_id: babyId,
           logged_by: userId,
+          started_at: new Date().toISOString(),
         });
     setSaving(false);
-    if (err) {
+    if (result === 'error') {
       setError("Couldn't save — check your connection and try again.");
       return;
     }

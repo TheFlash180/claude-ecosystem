@@ -1,6 +1,8 @@
 // Web Push client. All writes go through token-checked security-definer
 // RPCs — the anon key alone can no longer read or touch anyone's
-// subscriptions (see supabase/push-schema.sql).
+// subscriptions (see supabase/push-schema.sql). Subscription/token
+// primitives live in @ecosystem/shared (also used by marvel-watch).
+import { deviceToken, ensurePushSubscription } from '@ecosystem/shared';
 import { sb } from './supabase';
 import type { SportEvent } from './config';
 
@@ -9,41 +11,8 @@ const TOKEN_KEY = "sa-sport-watch:device-token";
 
 export const DEFAULT_LEAD_MINUTES = 60;
 
-/** One random token per device, kept in localStorage — proof that reminder
- *  changes come from the device that owns the subscription. */
 export function getDeviceToken(): string {
-  let token = localStorage.getItem(TOKEN_KEY);
-  if (!token) {
-    token = crypto.randomUUID();
-    localStorage.setItem(TOKEN_KEY, token);
-  }
-  return token;
-}
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
-}
-
-async function getPushSubscription(): Promise<PushSubscription | null> {
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (!reg?.pushManager) return null;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC).buffer as ArrayBuffer,
-      });
-    }
-    return sub;
-  } catch {
-    return null;
-  }
+  return deviceToken(TOKEN_KEY);
 }
 
 /** Subscribe this device to push and register it (endpoint + device token)
@@ -51,7 +20,7 @@ async function getPushSubscription(): Promise<PushSubscription | null> {
 export async function registerPush(): Promise<boolean> {
   const client = sb();
   if (!client) return false;
-  const sub = await getPushSubscription();
+  const sub = await ensurePushSubscription(VAPID_PUBLIC);
   if (!sub) return false;
   const key = sub.toJSON();
   const { data, error } = await client.rpc('push_register', {

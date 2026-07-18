@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { saveEvent } from '../lib/eventQueue';
 import { localIsoToday } from '../lib/dates';
 
 interface Props {
@@ -18,14 +18,14 @@ export default function WeightForm({ babyId, userId, onDone }: Props) {
     if (!weight) return;
     setSaving(true);
     setError('');
-    const { error: err } = await supabase().from('weight_events').insert({
+    const result = await saveEvent('weight_events', {
       baby_id: babyId,
       logged_by: userId,
       weight_g: parseInt(weight),
       measured_at: date,
     });
     setSaving(false);
-    if (err) {
+    if (result === 'error') {
       setError("Couldn't save — check your connection and try again.");
       return;
     }

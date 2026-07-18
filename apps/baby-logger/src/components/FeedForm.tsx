@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { saveEvent } from '../lib/eventQueue';
 
 interface Props {
   babyId: string;
@@ -24,15 +24,18 @@ export default function FeedForm({ babyId, userId, onDone }: Props) {
   async function handleSave() {
     setSaving(true);
     setError('');
-    const { error: err } = await supabase().from('feed_events').insert({
+    // Explicit timestamp: a queued offline event must keep its real time,
+    // not the DB default at flush time.
+    const result = await saveEvent('feed_events', {
       baby_id: babyId,
       logged_by: userId,
       feed_type: feedType,
       duration_minutes: duration ? parseInt(duration) : null,
       amount_ml: amount ? parseInt(amount) : null,
+      started_at: new Date().toISOString(),
     });
     setSaving(false);
-    if (err) {
+    if (result === 'error') {
       setError("Couldn't save — check your connection and try again.");
       return;
     }

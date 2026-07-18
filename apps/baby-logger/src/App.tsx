@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
+import { flushQueue, queueLength, QUEUE_EVENT } from './lib/eventQueue';
 import type { Baby, UserProfile } from './types';
 import AuthScreen from './components/AuthScreen';
 import PreBirthView from './components/PreBirthView';
@@ -64,6 +65,23 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [baby, setBaby] = useState<Baby | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [pendingSync, setPendingSync] = useState(queueLength());
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  useEffect(() => {
+    const onQueueChange = () => setPendingSync(queueLength());
+    window.addEventListener(QUEUE_EVENT, onQueueChange);
+    return () => window.removeEventListener(QUEUE_EVENT, onQueueChange);
+  }, []);
+
+  // Flush queued offline events on start-up and whenever we come back
+  // online; remount the views afterwards so they show the synced rows.
+  useEffect(() => {
+    if (!online) return;
+    void flushQueue().then((n) => {
+      if (n > 0) setRefreshNonce((x) => x + 1);
+    });
+  }, [online]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -192,7 +210,21 @@ export default function App() {
           fontSize: '0.75rem',
           fontWeight: 600,
         }}>
-          Offline — saving is paused until you're back online
+          {pendingSync > 0
+            ? `Offline — ${pendingSync} event${pendingSync === 1 ? '' : 's'} saved on this phone, syncing when you're back`
+            : 'Offline — new events are saved on this phone and sync later'}
+        </div>
+      )}
+      {online && pendingSync > 0 && (
+        <div style={{
+          background: 'var(--sleep)',
+          color: '#121018',
+          textAlign: 'center',
+          padding: '4px 8px',
+          fontSize: '0.75rem',
+          fontWeight: 600,
+        }}>
+          Syncing {pendingSync} saved event{pendingSync === 1 ? '' : 's'}…
         </div>
       )}
       {state === 'auth' && <AuthScreen />}
@@ -206,6 +238,7 @@ export default function App() {
       )}
       {state === 'post-birth' && baby && profile && session && (
         <PostBirthView
+          key={refreshNonce}
           baby={baby}
           displayName={profile.display_name}
           userId={session.user.id}

@@ -5,23 +5,21 @@
 //   1. Release reminders: stackable 1w / 3d / 1d leads per device.
 //   2. Announcements: any title the TMDB sync inserted with
 //      announced_pushed=false goes to EVERY subscribed device once.
-// VAPID key from env secret or Vault (get_vapid_private_key).
+// VAPID key from Vault (get_marvel_vapid_private_key) — Marvel has its OWN
+// keypair since 2026-07-18; it no longer shares sport-watch's.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
-const VAPID_PUBLIC = "BGYmKYowZiS3ohHCksH6TKHimd-EaDcLX5ehZMAuURlVrBixtIxEpoStOqzsXGU0ExxM_EDB_NoP22yxMWPf0Ho";
+const VAPID_PUBLIC = "BLmIByq8Kf76APBsfcRI-vliFFaZbQyBZtJbkD3rqb8LsUv925pXbgj1DIjGejwbIew-LBJuZc8NNdJXo_7dQJI";
 
 let vapidReady = false;
 
 async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
   if (vapidReady) return true;
-  let key = Deno.env.get("VAPID_PRIVATE_KEY");
-  if (!key) {
-    const { data, error } = await sb.rpc("get_vapid_private_key");
-    if (error || !data) return false;
-    key = data as string;
-  }
+  const { data, error } = await sb.rpc("get_marvel_vapid_private_key");
+  if (error || !data) return false;
+  const key = data as string;
   webpush.setVapidDetails("mailto:rickust18@gmail.com", VAPID_PUBLIC, key);
   vapidReady = true;
   return true;

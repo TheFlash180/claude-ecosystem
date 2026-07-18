@@ -222,3 +222,14 @@ select cron.schedule(
   ) AS request_id;
   $$
 );
+
+-- ---------------------------------------------------------------------------
+-- VAPID key (applied live 2026-07-18, migration marvel_own_vapid_key):
+-- Marvel has its OWN keypair — it no longer shares sport-watch's, so one
+-- leaked private key can't push-spoof both apps. Private key in Vault as
+-- 'marvel_vapid_private_key'; existing subs were purged (old-key subs can't
+-- receive new-key pushes) and clients re-subscribe transparently.
+create or replace function public.get_marvel_vapid_private_key()
+returns text language sql stable security definer set search_path to ''
+as $$ select decrypted_secret from vault.decrypted_secrets where name = 'marvel_vapid_private_key' $$;
+revoke all on function public.get_marvel_vapid_private_key() from public, anon, authenticated;
