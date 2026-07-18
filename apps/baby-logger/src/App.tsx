@@ -8,6 +8,13 @@ import type { Session } from '@supabase/supabase-js';
 
 type AppState = 'loading' | 'auth' | 'pre-birth' | 'post-birth';
 
+// The shared profiles table (FinTrack's) requires owner_key — map it from
+// the email so the fallback insert below can never violate its NOT NULL.
+const OWNER_KEYS: Record<string, string> = {
+  'rickust18@gmail.com': 'rickus',
+  'anjonemaritz01@gmail.com': 'anjone',
+};
+
 const KNOWN_USERS: Record<string, string> = {
   'rickust18@gmail.com': 'Rickus',
   'anjonemaritz01@gmail.com': 'Anjoné',
@@ -115,7 +122,11 @@ export default function App() {
       const displayName = KNOWN_USERS[email] ?? email.split('@')[0];
       const { data: newProfile, error } = await sb
         .from('profiles')
-        .insert({ id: userId, display_name: displayName })
+        .insert({
+          id: userId,
+          display_name: displayName,
+          owner_key: OWNER_KEYS[email.toLowerCase()] ?? 'rickus',
+        })
         .select()
         .single();
       if (error || !newProfile) {
@@ -181,7 +192,7 @@ export default function App() {
           fontSize: '0.75rem',
           fontWeight: 600,
         }}>
-          Offline — events will sync when reconnected
+          Offline — saving is paused until you're back online
         </div>
       )}
       {state === 'auth' && <AuthScreen />}

@@ -12,6 +12,7 @@ interface Props {
 export default function SleepToggle({ babyId, userId, activeSleep, onToggle }: Props) {
   const [elapsed, setElapsed] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!activeSleep) { setElapsed(''); return; }
@@ -30,19 +31,22 @@ export default function SleepToggle({ babyId, userId, activeSleep, onToggle }: P
 
   async function handleToggle() {
     setSaving(true);
+    setError('');
     const sb = supabase();
 
-    if (activeSleep) {
-      await sb.from('sleep_events')
-        .update({ ended_at: new Date().toISOString() })
-        .eq('id', activeSleep.id);
-    } else {
-      await sb.from('sleep_events').insert({
-        baby_id: babyId,
-        logged_by: userId,
-      });
-    }
+    const { error: err } = activeSleep
+      ? await sb.from('sleep_events')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('id', activeSleep.id)
+      : await sb.from('sleep_events').insert({
+          baby_id: babyId,
+          logged_by: userId,
+        });
     setSaving(false);
+    if (err) {
+      setError("Couldn't save — check your connection and try again.");
+      return;
+    }
     onToggle();
   }
 
@@ -66,6 +70,7 @@ export default function SleepToggle({ babyId, userId, activeSleep, onToggle }: P
           {saving ? '...' : activeSleep ? 'Stop sleep' : 'Start sleep'}
         </button>
 
+        {error && <div style={styles.error}>{error}</div>}
         <button onClick={onToggle} style={styles.cancel}>Close</button>
       </div>
     </div>
@@ -104,6 +109,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: 'var(--sleep)',
     marginBottom: 16,
+  },
+  error: {
+    color: '#e07a7a',
+    fontSize: '0.82rem',
+    marginBottom: 8,
+    fontFamily: 'var(--font-body)',
   },
   btn: {
     width: '100%',

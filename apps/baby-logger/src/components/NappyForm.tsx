@@ -15,15 +15,21 @@ const types = [
 
 export default function NappyForm({ babyId, userId, onDone }: Props) {
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleTap(nappyType: string) {
     setSaving(true);
-    await supabase().from('nappy_events').insert({
+    setError('');
+    const { error: err } = await supabase().from('nappy_events').insert({
       baby_id: babyId,
       logged_by: userId,
       nappy_type: nappyType,
     });
     setSaving(false);
+    if (err) {
+      setError("Couldn't save — check your connection and try again.");
+      return;
+    }
     onDone();
   }
 
@@ -44,6 +50,7 @@ export default function NappyForm({ babyId, userId, onDone }: Props) {
             </button>
           ))}
         </div>
+        {error && <div style={styles.error}>{error}</div>}
         <button onClick={onDone} style={styles.cancel}>Cancel</button>
       </div>
     </div>
@@ -81,6 +88,12 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: 10,
     marginBottom: 16,
+  },
+  error: {
+    color: '#e07a7a',
+    fontSize: '0.82rem',
+    marginBottom: 8,
+    fontFamily: 'var(--font-body)',
   },
   btn: {
     display: 'flex',

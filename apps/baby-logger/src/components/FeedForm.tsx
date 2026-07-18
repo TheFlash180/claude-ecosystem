@@ -19,10 +19,12 @@ export default function FeedForm({ babyId, userId, onDone }: Props) {
   const [duration, setDuration] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     setSaving(true);
-    await supabase().from('feed_events').insert({
+    setError('');
+    const { error: err } = await supabase().from('feed_events').insert({
       baby_id: babyId,
       logged_by: userId,
       feed_type: feedType,
@@ -30,6 +32,10 @@ export default function FeedForm({ babyId, userId, onDone }: Props) {
       amount_ml: amount ? parseInt(amount) : null,
     });
     setSaving(false);
+    if (err) {
+      setError("Couldn't save — check your connection and try again.");
+      return;
+    }
     onDone();
   }
 
@@ -77,6 +83,8 @@ export default function FeedForm({ babyId, userId, onDone }: Props) {
           />
         )}
 
+        {error && <div style={styles.error}>{error}</div>}
+
         <div style={styles.actions}>
           <button onClick={onDone} style={styles.cancelBtn}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={styles.saveBtn}>
@@ -97,6 +105,12 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-end',
     justifyContent: 'center',
     zIndex: 50,
+  },
+  error: {
+    color: '#e07a7a',
+    fontSize: '0.82rem',
+    marginBottom: 8,
+    fontFamily: 'var(--font-body)',
   },
   sheet: {
     background: 'var(--surface)',

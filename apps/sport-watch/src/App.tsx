@@ -132,7 +132,11 @@ export default function App() {
       const pruned = pruneToExisting(prev, valid);
       if (pruned.size !== prev.size) saveNotified(pruned);
       (async () => {
-        if (!pushReady.current) pushReady.current = await registerPush();
+        // Only auto-register when permission is already granted: calling
+        // pushManager.subscribe() without a user gesture gets auto-denied
+        // by Chrome, which permanently blocks the bell from ever prompting.
+        const granted = 'Notification' in window && Notification.permission === 'granted';
+        if (granted && !pushReady.current) pushReady.current = await registerPush();
         if (pushReady.current) await syncAllReminders(events, pruned, leadFor);
       })();
       return pruned;

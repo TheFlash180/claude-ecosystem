@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { localIsoToday } from '../lib/dates';
 
 interface Props {
   babyId: string;
@@ -9,19 +10,25 @@ interface Props {
 
 export default function WeightForm({ babyId, userId, onDone }: Props) {
   const [weight, setWeight] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localIsoToday());
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!weight) return;
     setSaving(true);
-    await supabase().from('weight_events').insert({
+    setError('');
+    const { error: err } = await supabase().from('weight_events').insert({
       baby_id: babyId,
       logged_by: userId,
       weight_g: parseInt(weight),
       measured_at: date,
     });
     setSaving(false);
+    if (err) {
+      setError("Couldn't save — check your connection and try again.");
+      return;
+    }
     onDone();
   }
 
@@ -45,6 +52,8 @@ export default function WeightForm({ babyId, userId, onDone }: Props) {
           onChange={(e) => setDate(e.target.value)}
           style={styles.input}
         />
+
+        {error && <div style={styles.error}>{error}</div>}
 
         <div style={styles.actions}>
           <button onClick={onDone} style={styles.cancelBtn}>Cancel</button>
@@ -98,6 +107,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: 8,
     marginTop: 4,
+  },
+  error: {
+    color: '#e07a7a',
+    fontSize: '0.82rem',
+    marginBottom: 8,
+    fontFamily: 'var(--font-body)',
   },
   cancelBtn: {
     flex: 1,

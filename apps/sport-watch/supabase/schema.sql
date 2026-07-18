@@ -169,13 +169,33 @@ create table sport_push_subs (
 create table sport_push_reminders (
   id uuid primary key default gen_random_uuid(),
   sub_id uuid not null references sport_push_subs(id) on delete cascade,
-  event_id text not null,
+  event_id text not null references sport_events(id) on delete cascade,
   event_date timestamptz not null,
   event_label text not null,
   lead_minutes int not null default 60,
   notified boolean default false,
   unique (sub_id, event_id)
 );
+create index sport_push_reminders_event_id_idx on sport_push_reminders (event_id);
+
+-- Reminders store a denormalized event_date; when an event is rescheduled
+-- (F1 sync or admin), pending reminders follow it — and re-arm if the event
+-- moved into the future. Deleting an event cascades its reminders away.
+create or replace function sport_reminders_follow_event()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.event_date is distinct from old.event_date and new.event_date is not null then
+    update sport_push_reminders
+       set event_date = new.event_date,
+           notified = case when new.event_date > now() then false else notified end
+     where event_id = new.id;
+  end if;
+  return new;
+end $$;
+
+create trigger sport_reminders_follow_event
+  after update of event_date on sport_events
+  for each row execute function sport_reminders_follow_event();
 
 alter table sport_push_subs enable row level security;
 alter table sport_push_reminders enable row level security;
