@@ -27,7 +27,7 @@ describe('daysUntil', () => {
 describe('releaseLabel', () => {
   it('handles TBA, today, tomorrow, days, months, years', () => {
     expect(releaseLabel(null, TODAY)).toBe('Date TBA');
-    expect(releaseLabel('2026-07-17', TODAY)).toBe('TODAY 🍿');
+    expect(releaseLabel('2026-07-17', TODAY)).toBe('TODAY');
     expect(releaseLabel('2026-07-18', TODAY)).toBe('Tomorrow');
     expect(releaseLabel('2026-07-31', TODAY)).toBe('in 14 days');
     expect(releaseLabel('2026-12-18', TODAY)).toBe('in 5 months');

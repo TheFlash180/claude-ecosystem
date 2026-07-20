@@ -56,12 +56,12 @@ export function daysUntil(releaseDate: string, today = sastDay()): number {
   return Math.round((Date.parse(releaseDate) - Date.parse(today)) / 86400000);
 }
 
-/** "TODAY 🍿" / "Tomorrow" / "in 12 days" / "in 3 months" / "Out now" */
+/** "TODAY" / "Tomorrow" / "in 12 days" / "in 3 months" / "Out now" */
 export function releaseLabel(releaseDate: string | null, today = sastDay()): string {
   if (!releaseDate) return 'Date TBA';
   const d = daysUntil(releaseDate, today);
   if (d < 0) return 'Out now';
-  if (d === 0) return 'TODAY 🍿';
+  if (d === 0) return 'TODAY';
   if (d === 1) return 'Tomorrow';
   if (d <= 31) return `in ${d} days`;
   const months = Math.round(d / 30.4);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Bell, BellOff, Check } from "lucide-react";
 import { LEAD_DAYS, M, type Title } from "../lib/config";
 import { fmtRelease } from "../lib/titles";
 
@@ -68,9 +69,9 @@ export function LeadPicker({ title: t, current, onSave, onClose }: {
                 border: `2px solid ${on ? M.gold : M.muted}`,
                 background: on ? M.gold : "transparent",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#1A1406", fontSize: 14, fontWeight: 800,
+                color: "#1A1406",
               }}>
-                {on ? "✓" : ""}
+                {on && <Check size={15} strokeWidth={3} />}
               </span>
               <span style={{
                 fontFamily: M.body, fontSize: 14, fontWeight: 600,
@@ -90,8 +91,9 @@ export function LeadPicker({ title: t, current, onSave, onClose }: {
                 flex: 1, border: `1px solid ${M.border}`, background: "transparent",
                 color: M.crimson, borderRadius: 12, padding: "13px 0",
                 fontFamily: M.body, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
               }}>
-              🔕 Remove all
+              <BellOff size={14} strokeWidth={2.2} /> Remove all
             </button>
           )}
           <button
@@ -102,8 +104,11 @@ export function LeadPicker({ title: t, current, onSave, onClose }: {
               background: `linear-gradient(135deg, ${M.crimson} 0%, ${M.crimsonDark} 100%)`,
               color: "#fff", borderRadius: 12, padding: "13px 0",
               fontFamily: M.body, fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}>
-            {picked.size === 0 ? "🔕 Remove reminders" : `🔔 Set ${picked.size} reminder${picked.size > 1 ? "s" : ""}`}
+            {picked.size === 0
+              ? <><BellOff size={14} strokeWidth={2.2} /> Remove reminders</>
+              : <><Bell size={14} strokeWidth={2.2} /> Set {picked.size} reminder{picked.size > 1 ? "s" : ""}</>}
           </button>
         </div>
       </div>

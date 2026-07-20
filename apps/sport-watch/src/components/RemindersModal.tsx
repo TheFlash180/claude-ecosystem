@@ -1,3 +1,4 @@
+import { Bell, BellOff, X } from "lucide-react";
 import { catOf, matchTitle, S, type CatMap, type SportEvent } from "../lib/config";
 import { fmtDate, fmtTime } from "../lib/time";
 
@@ -47,17 +48,19 @@ export function RemindersModal({
           <div style={{
             fontFamily: S.display, fontSize: 17, fontWeight: 700,
             color: S.text, letterSpacing: "-0.01em",
+            display: "flex", alignItems: "center", gap: 7,
           }}>
-            🔔 Your reminders
+            <Bell size={16} strokeWidth={2.2} /> Your reminders
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
             style={{
               background: "transparent", border: "none", cursor: "pointer",
-              color: S.muted, fontSize: 19, lineHeight: 1, padding: 6,
+              color: S.muted, lineHeight: 1, padding: 6,
+              display: "flex", alignItems: "center",
             }}>
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -94,7 +97,7 @@ export function RemindersModal({
                       padding: "5px 8px",
                     }}>
                     {LEAD_OPTIONS.map(o => (
-                      <option key={o.minutes} value={o.minutes}>🔔 {o.label}</option>
+                      <option key={o.minutes} value={o.minutes}>{o.label}</option>
                     ))}
                   </select>
                 </div>
@@ -106,8 +109,9 @@ export function RemindersModal({
                     borderRadius: 18, cursor: "pointer", flexShrink: 0,
                     color: cat.color, fontFamily: S.body, fontSize: 12,
                     fontWeight: 600, padding: "8px 12px",
+                    display: "inline-flex", alignItems: "center", gap: 5,
                   }}>
-                  🔕 Remove
+                  <BellOff size={13} strokeWidth={2.2} /> Remove
                 </button>
               </div>
             );

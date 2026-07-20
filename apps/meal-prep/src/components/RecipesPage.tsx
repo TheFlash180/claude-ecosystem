@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Lightbulb } from 'lucide-react';
 import {
   CATEGORY_META, K, type Category, type Ingredient, type MealType, type Recipe,
 } from '../lib/config';
@@ -66,7 +67,7 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
     const id = await upsertRecipe(clean);
     setBusy(false);
     if (!id) { onToast("Couldn't save — check the fields."); return; }
-    onToast('Recipe saved. 🍳');
+    onToast('Recipe saved.');
     setDraft(null);
     onChanged();
   };
@@ -109,9 +110,9 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
         <Field label="Meal">
           <select style={inputStyle} value={draft.mealType}
             onChange={e => setDraft({ ...draft, mealType: e.target.value as MealType })}>
-            <option value="lunch">🌤️ Lunch</option>
-            <option value="dinner">🌙 Dinner</option>
-            <option value="any">🍽️ Any</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="any">Any</option>
           </select>
         </Field>
         <Field label="Serves">
@@ -133,7 +134,7 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
             onChange={e => setIng(i, { u: e.target.value })} />
           <select style={{ ...inputStyle, flex: 1.6, minWidth: 0, padding: '9px 6px' }} value={ing.c}
             onChange={e => setIng(i, { c: e.target.value as Category })}>
-            {CATEGORY_META.map(c => <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>)}
+            {CATEGORY_META.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
           <button
             onClick={() => setDraft({ ...draft, ingredients: draft.ingredients.filter((_, j) => j !== i) })}
@@ -224,8 +225,10 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
                   <div style={{
                     background: K.raised, borderRadius: 10, padding: '9px 11px',
                     fontSize: 12.5, color: K.sub, lineHeight: 1.6, marginBottom: 10,
+                    display: 'flex', gap: 7,
                   }}>
-                    💡 {r.notes}
+                    <Lightbulb size={14} strokeWidth={2} color={K.honey} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>{r.notes}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>

@@ -54,7 +54,6 @@ export interface ShoppingItem {
 export interface ShoppingSection {
   category: Category;
   label: string;
-  emoji: string;
   items: ShoppingItem[];
 }
 
@@ -130,7 +129,7 @@ export function buildShoppingList(
     const items = bySection.get(meta.key);
     if (!items || items.length === 0) continue;
     items.sort((a, b) => Number(a.custom) - Number(b.custom) || a.label.localeCompare(b.label));
-    sections.push({ category: meta.key, label: meta.label, emoji: meta.emoji, items });
+    sections.push({ category: meta.key, label: meta.label, items });
   }
   return sections;
 }

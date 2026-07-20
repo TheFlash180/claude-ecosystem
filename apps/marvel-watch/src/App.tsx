@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, CSSProperties } from "react";
+import { Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
 import { M, type MediaType, type Title } from "./lib/config";
 import { fetchTitles, groupTitles } from "./lib/titles";
 import { listReminders, registerPush, setReminders } from "./lib/push";
@@ -83,8 +84,8 @@ export default function App() {
     }
     await refreshReminders();
     showToast(leads.length === 0
-      ? "🔕 Reminders removed"
-      : `🔔 Set — we'll nudge you ${leads.length} time${leads.length > 1 ? "s" : ""} before release`);
+      ? "Reminders removed"
+      : `Set — we'll nudge you ${leads.length} time${leads.length > 1 ? "s" : ""} before release`);
   };
 
   const visible = titles.filter(t => filter === "all" || t.mediaType === filter);
@@ -174,8 +175,9 @@ export default function App() {
                   background: `${M.gold}18`, border: `1px solid ${M.gold}55`,
                   borderRadius: 20, padding: "7px 13px",
                   fontFamily: M.body, fontSize: 13, color: M.gold, fontWeight: 700,
+                  display: "inline-flex", alignItems: "center", gap: 5,
                 }}>
-                🔔 {bellCount}
+                <Bell size={14} strokeWidth={2.2} /> {bellCount}
               </span>
             )}
             <button
@@ -185,9 +187,10 @@ export default function App() {
               style={{
                 background: "transparent", border: `1px solid ${M.border}`,
                 borderRadius: 20, padding: "7px 11px", cursor: "pointer",
-                fontSize: 14, lineHeight: 1, color: M.muted,
+                lineHeight: 1, color: M.muted,
+                display: "inline-flex", alignItems: "center",
               }}>
-              ⚙️
+              <Settings size={15} strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -195,9 +198,9 @@ export default function App() {
         {/* Filter pills */}
         <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
           {([
-            { key: "all" as const, label: "All" },
-            { key: "movie" as const, label: "🎬 Movies" },
-            { key: "show" as const, label: "📺 Series" },
+            { key: "all" as const, label: "All", Icon: null as LucideIcon | null },
+            { key: "movie" as const, label: "Movies", Icon: Clapperboard as LucideIcon | null },
+            { key: "show" as const, label: "Series", Icon: Tv as LucideIcon | null },
           ]).map(f => {
             const on = filter === f.key;
             return (
@@ -208,8 +211,9 @@ export default function App() {
                 background: on ? `${M.crimson}1A` : "transparent",
                 color: on ? M.crimson : M.sub,
                 transition: "all 0.1s",
+                display: "inline-flex", alignItems: "center", gap: 6,
               }}>
-                {f.label}
+                {f.Icon && <f.Icon size={14} strokeWidth={2.2} />}{f.label}
               </button>
             );
           })}
@@ -270,7 +274,7 @@ export default function App() {
           marginTop: 26, paddingTop: 14, borderTop: `1px solid ${M.border}`,
           fontFamily: M.body, fontSize: 11, color: M.muted, lineHeight: 1.8,
         }}>
-          🕷️ Releases refresh daily from TMDB; anything missing can be added on
+          Releases refresh daily from TMDB; anything missing can be added on
           the <a href="#/admin" style={{ color: M.sub }}>owner page</a>.
           Newly announced titles push to your phone automatically.
           <br />

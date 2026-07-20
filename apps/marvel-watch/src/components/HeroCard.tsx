@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { M, UNIVERSE_LABEL, type Title } from "../lib/config";
 import { daysUntil, fmtRelease } from "../lib/titles";
 
@@ -47,7 +48,7 @@ export function HeroCard({ title: t, onBell, belled }: {
           letterSpacing: "0.16em", textTransform: "uppercase",
           color: M.gold, marginBottom: 6,
         }}>
-          {d === 0 ? "🍿 Releasing today" : "Next release"} · {t.mediaType === "movie" ? "In cinemas" : "On Disney+"} · {UNIVERSE_LABEL[t.universe]}
+          {d === 0 ? "Releasing today" : "Next release"} · {t.mediaType === "movie" ? "In cinemas" : "On Disney+"} · {UNIVERSE_LABEL[t.universe]}
         </div>
 
         <div style={{
@@ -89,8 +90,9 @@ export function HeroCard({ title: t, onBell, belled }: {
               color: belled ? M.gold : M.text,
               borderRadius: 20, padding: "9px 16px", cursor: "pointer",
               fontFamily: M.body, fontSize: 12.5, fontWeight: 700,
+              display: "inline-flex", alignItems: "center", gap: 6,
             }}>
-            {belled ? "🔔 Reminders on" : "🔔 Remind me"}
+            <Bell size={14} strokeWidth={2.2} /> {belled ? "Reminders on" : "Remind me"}
           </button>
         </div>
       </div>

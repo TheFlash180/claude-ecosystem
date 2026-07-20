@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Settings, X } from "lucide-react";
 import { catOf, S, type Category, type CatMap, type SportEvent, type SportKey } from "../lib/config";
 import { sb } from "../lib/supabase";
 import { fmtDate, fmtTime } from "../lib/time";
@@ -201,8 +202,11 @@ export default function AdminPage({
   if (!unlocked) {
     return (
       <div style={{ padding: "60px 24px", maxWidth: 360, margin: "0 auto", textAlign: "center" }}>
-        <div style={{ fontFamily: S.display, fontSize: 20, fontWeight: 700, color: S.text, marginBottom: 12 }}>
-          ⚙️ Owner page
+        <div style={{
+          fontFamily: S.display, fontSize: 20, fontWeight: 700, color: S.text, marginBottom: 12,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+          <Settings size={18} strokeWidth={2} /> Owner page
         </div>
         <input
           type="password"
@@ -266,8 +270,11 @@ export default function AdminPage({
   return (
     <div style={{ padding: "20px 14px 48px", maxWidth: 480, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontFamily: S.display, fontSize: 18, fontWeight: 700, color: S.text }}>
-          ⚙️ Manage events
+        <div style={{
+          fontFamily: S.display, fontSize: 18, fontWeight: 700, color: S.text,
+          display: "flex", alignItems: "center", gap: 7,
+        }}>
+          <Settings size={16} strokeWidth={2} /> Manage events
         </div>
         <a href="#/" style={{ color: S.sub, fontSize: 12.5 }}>← app</a>
       </div>
@@ -292,8 +299,10 @@ export default function AdminPage({
               </span>
               <button onClick={() => { setCatIsNew(false); setCatDraft({ key: c.key, label: c.label, icon: c.icon, color: c.color, bg: c.bg, liveHours: String(c.liveMinutes / 60) }); }}
                 style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "5px 10px" }}>Edit</button>
-              <button onClick={() => void removeCategory(c)}
-                style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "5px 10px", color: "#D44040" }}>✕</button>
+              <button onClick={() => void removeCategory(c)} aria-label={`Remove ${c.label}`}
+                style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "5px 8px", color: "#D44040", display: "flex", alignItems: "center" }}>
+                <X size={14} />
+              </button>
             </div>
           ))}
           {catDraft ? (
@@ -358,8 +367,10 @@ export default function AdminPage({
             </div>
             <button onClick={() => { setEditingId(ev.id); setAdding(false); setDraft(toDraft(ev)); }}
               style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 12px" }}>Edit</button>
-            <button onClick={() => void remove(ev)}
-              style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 12px", color: "#D44040" }}>✕</button>
+            <button onClick={() => void remove(ev)} aria-label={`Remove ${ev.home}`}
+              style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 10px", color: "#D44040", display: "flex", alignItems: "center" }}>
+              <X size={15} />
+            </button>
           </div>
           {editingId === ev.id && draft && editor(ev.id, ev.sport, draft)}
         </div>

@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, CSSProperties } from 'react';
+import {
+  Bell, BellOff, BookOpen, CalendarDays, ChevronLeft, ChevronRight,
+  CookingPot, ShoppingCart, type LucideIcon,
+} from 'lucide-react';
 import { K, type PlanSlot, type Recipe, type ShoppingRow, type Slot } from './lib/config';
 import {
   addDays, buildShoppingList, fmtWeekRange, sastDay, weekStartOf,
@@ -53,7 +57,7 @@ export default function App() {
       ok2 = await setSlot(week, leftover.day, leftover.slot, recipe.id, true);
     }
     if (!ok || !ok2) showToast("Couldn't save that — try again.");
-    else showToast(leftover ? '♻️ Planned, leftovers included.' : `${recipe.emoji} Planned.`);
+    else showToast(leftover ? 'Planned, leftovers included.' : `${recipe.name} planned.`);
     await loadWeek(week);
   };
 
@@ -87,7 +91,7 @@ export default function App() {
   const toggleBell = async () => {
     if (bell) {
       const ok = await disablePrepReminder();
-      if (ok) { setBell(false); showToast('🔕 Sunday reminder off.'); }
+      if (ok) { setBell(false); showToast('Sunday reminder off.'); }
       else showToast("Couldn't update the reminder.");
       return;
     }
@@ -97,7 +101,7 @@ export default function App() {
       }
     } catch { /* unsupported */ }
     const ok = await enablePrepReminder();
-    if (ok) { setBell(true); showToast('🔔 Sunday-morning prep reminder is on.'); }
+    if (ok) { setBell(true); showToast('Sunday-morning prep reminder is on.'); }
     else showToast('Allow notifications and try again.');
   };
 
@@ -165,19 +169,20 @@ export default function App() {
               background: bell ? `${K.honey}1C` : 'transparent',
               border: `1px solid ${bell ? K.honey : K.border}`,
               borderRadius: 20, padding: '7px 13px', cursor: 'pointer',
-              fontSize: 14, lineHeight: 1, color: bell ? K.honey : K.muted,
+              fontSize: 12, lineHeight: 1, color: bell ? K.honey : K.muted,
               fontWeight: 700, flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
             }}>
-            {bell ? '🔔 Sun' : '🔕'}
+            {bell ? <><Bell size={14} strokeWidth={2.2} /> Sun</> : <BellOff size={14} strokeWidth={2.2} />}
           </button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
           {([
-            { key: 'plan' as Tab, label: '📅 Plan' },
-            { key: 'shop' as Tab, label: '🛒 Shop' },
-            { key: 'recipes' as Tab, label: '📖 Recipes' },
+            { key: 'plan' as Tab, label: 'Plan', Icon: CalendarDays as LucideIcon },
+            { key: 'shop' as Tab, label: 'Shop', Icon: ShoppingCart as LucideIcon },
+            { key: 'recipes' as Tab, label: 'Recipes', Icon: BookOpen as LucideIcon },
           ]).map(t => {
             const on = tab === t.key;
             return (
@@ -187,8 +192,9 @@ export default function App() {
                 background: 'transparent', border: 'none',
                 borderBottom: `2.5px solid ${on ? K.terra : 'transparent'}`,
                 color: on ? K.terra : K.sub,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
-                {t.label}
+                <t.Icon size={15} strokeWidth={on ? 2.4 : 2} /> {t.label}
               </button>
             );
           })}
@@ -202,8 +208,8 @@ export default function App() {
           padding: '12px 16px 2px',
         }}>
           <button onClick={() => setWeek(addDays(week, -7))} aria-label="Previous week"
-            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, fontSize: 13 }}>
-            ←
+            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, display: 'flex', alignItems: 'center' }}>
+            <ChevronLeft size={16} />
           </button>
           <button
             onClick={() => setWeek(thisWeek)}
@@ -217,8 +223,8 @@ export default function App() {
             </span>
           </button>
           <button onClick={() => setWeek(addDays(week, 7))} aria-label="Next week"
-            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, fontSize: 13 }}>
-            →
+            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, display: 'flex', alignItems: 'center' }}>
+            <ChevronRight size={16} />
           </button>
         </div>
       )}
@@ -253,9 +259,13 @@ export default function App() {
         <div style={{
           marginTop: 26, paddingTop: 14, borderTop: `1px solid ${K.border}`,
           fontSize: 11, color: K.muted, lineHeight: 1.8,
+          display: 'flex', gap: 7,
         }}>
-          🍳 Plan lunches and dinners, and the shopping list writes itself.
-          Turn on the 🔔 for a Sunday-morning prep nudge with the week's menu.
+          <CookingPot size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 3 }} />
+          <span>
+            Plan lunches and dinners, and the shopping list writes itself.
+            Turn on the bell for a Sunday-morning prep nudge with the week's menu.
+          </span>
         </div>
       </div>
     </div>
