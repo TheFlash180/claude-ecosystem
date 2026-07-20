@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { PartyPopper, ShoppingBasket, X } from 'lucide-react';
 import { K } from '../lib/config';
 import type { ShoppingSection } from '../lib/plan';
+import { CATEGORY_ICON } from './icons';
 
 // The week's consolidated shopping list, grouped by aisle. Ticks sync to the
 // cloud so both phones see the same list in the shop.
@@ -37,26 +39,31 @@ export function ShoppingList({ sections, onTick, onAddExtra, onRemoveExtra }: {
               background: done === all.length ? K.sage : K.terra, transition: 'width 0.2s',
             }} />
           </div>
-          <span style={{ fontSize: 12, color: K.sub, fontWeight: 600, flexShrink: 0 }}>
-            {done}/{all.length}{done === all.length && all.length > 0 ? ' 🎉' : ''}
+          <span style={{ fontSize: 12, color: K.sub, fontWeight: 600, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {done}/{all.length}
+            {done === all.length && all.length > 0 && <PartyPopper size={13} color={K.sage} />}
           </span>
         </div>
       )}
 
       {all.length === 0 && (
         <div style={{ color: K.muted, fontSize: 13.5, textAlign: 'center', padding: '36px 20px', lineHeight: 1.6 }}>
+          <ShoppingBasket size={26} strokeWidth={1.6} style={{ marginBottom: 8 }} />
+          <br />
           Nothing to buy yet — plan some meals on the Plan tab and the
-          ingredients gather here automatically. 🧺
+          ingredients gather here automatically.
         </div>
       )}
 
-      {sections.map(sec => (
+      {sections.map(sec => {
+        const SecIcon = CATEGORY_ICON[sec.category];
+        return (
         <div key={sec.category} style={{ marginBottom: 16 }}>
           <div style={{
             fontFamily: K.display, fontSize: 14.5, fontWeight: 700, color: K.sub,
-            margin: '0 2px 7px',
+            margin: '0 2px 7px', display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            {sec.emoji} {sec.label}
+            <SecIcon size={15} strokeWidth={2} /> {sec.label}
           </div>
           {sec.items.map(item => (
             <div key={item.key} style={{
@@ -81,14 +88,15 @@ export function ShoppingList({ sections, onTick, onAddExtra, onRemoveExtra }: {
                 <button
                   onClick={() => onRemoveExtra(item.key)}
                   aria-label="Remove item"
-                  style={{ background: 'transparent', border: 'none', color: K.muted, cursor: 'pointer', fontSize: 13 }}>
-                  ✕
+                  style={{ background: 'transparent', border: 'none', color: K.muted, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <X size={15} />
                 </button>
               )}
             </div>
           ))}
         </div>
-      ))}
+        );
+      })}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <input

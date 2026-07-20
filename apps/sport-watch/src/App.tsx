@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
+import { Bell, CalendarDays, Settings } from "lucide-react";
 import { catOf, DEFAULT_CATEGORIES, matchTitle, S, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from "./lib/config";
 import { fetchEvents, sortEvents } from "./lib/events";
 import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
@@ -185,11 +186,11 @@ export default function App() {
         void setReminder(ev, leadFor(id));
       }
       showToast(granted
-        ? "🔔 Reminder set — you'll get a push before it starts"
-        : "🔔 Saved — allow notifications for push alerts");
+        ? "Reminder set — you'll get a push before it starts"
+        : "Saved — allow notifications for push alerts");
     } else {
       void removeReminder(id);
-      showToast("🔕 Reminder removed");
+      showToast("Reminder removed");
     }
 
     setNotified(prev => {
@@ -205,11 +206,11 @@ export default function App() {
     saveLead(ev.id, minutes);
     setLeads(prev => ({ ...prev, [ev.id]: minutes }));
     void setReminder(ev, minutes);
-    showToast(`🔔 Push moves to ${minutes >= 1440 ? "1 day" : minutes >= 60 ? `${minutes / 60}h` : `${minutes} min`} before`);
+    showToast(`Push moves to ${minutes >= 1440 ? "1 day" : minutes >= 60 ? `${minutes / 60}h` : `${minutes} min`} before`);
   };
 
   const handleCalendar = (ev: SportEvent) => {
-    if (downloadEventIcs(ev, cats)) showToast("📅 Added — open the file to save it to your calendar");
+    if (downloadEventIcs(ev, cats)) showToast("Added — open the file to save it to your calendar");
   };
 
   const liveMsOf = (e: SportEvent) => catOf(cats, e.sport).liveMinutes * 60000;
@@ -316,8 +317,9 @@ export default function App() {
                   borderRadius: 20, padding: "7px 13px", cursor: "pointer",
                   fontFamily: S.body, fontSize: 13, color: "#3AA864",
                   fontWeight: 600,
+                  display: "inline-flex", alignItems: "center", gap: 5,
                 }}>
-                🔔 {bellCount}
+                <Bell size={14} strokeWidth={2.2} /> {bellCount}
               </button>
             )}
             {/* Installed PWAs have no address bar — this is the way in. */}
@@ -328,9 +330,10 @@ export default function App() {
               style={{
                 background: "transparent", border: `1px solid ${S.border}`,
                 borderRadius: 20, padding: "7px 11px", cursor: "pointer",
-                fontSize: 14, lineHeight: 1, color: S.muted,
+                lineHeight: 1, color: S.muted,
+                display: "inline-flex", alignItems: "center",
               }}>
-              ⚙️
+              <Settings size={15} strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -416,11 +419,11 @@ export default function App() {
           marginTop: 26, paddingTop: 14, borderTop: `1px solid ${S.border}`,
           fontFamily: S.body, fontSize: 11, color: S.muted, lineHeight: 1.8,
         }}>
-          📌 Times in SAST. F1 fixtures & results refresh daily from the
+          Times in SAST. F1 fixtures & results refresh daily from the
           official calendar; everything else is editable on the{" "}
           <a href="#/admin" style={{ color: S.sub }}>owner page</a>.
           <br />
-          📅{" "}
+          <CalendarDays size={12} strokeWidth={2} style={{ verticalAlign: "-2px", marginRight: 4 }} />
           <a href={CALENDAR_FEED_URL} style={{ color: S.sub }}>
             Subscribe to the calendar feed
           </a>{" "}

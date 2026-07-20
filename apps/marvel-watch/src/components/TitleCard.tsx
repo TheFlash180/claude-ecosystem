@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { Bell, BellOff, Clapperboard, Star, Tv } from "lucide-react";
 import { LEAD_DAYS, M, UNIVERSE_LABEL, type Title } from "../lib/config";
 import { daysUntil, fmtRelease, releaseLabel } from "../lib/titles";
 
@@ -23,7 +25,9 @@ function Poster({ t, width = 92 }: { t: Title; width?: number }) {
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: 6,
     }}>
-      <span style={{ fontSize: 26 }}>{t.mediaType === "movie" ? "🎬" : "📺"}</span>
+      {t.mediaType === "movie"
+        ? <Clapperboard size={26} strokeWidth={1.6} color={M.gold} />
+        : <Tv size={26} strokeWidth={1.6} color={M.gold} />}
       <span style={{
         fontFamily: M.display, fontSize: 15, color: M.gold,
         letterSpacing: "0.06em",
@@ -34,14 +38,15 @@ function Poster({ t, width = 92 }: { t: Title; width?: number }) {
   );
 }
 
-function Badge({ text, color }: { text: string; color: string }) {
+function Badge({ text, color, icon }: { text: string; color: string; icon?: ReactNode }) {
   return (
     <span style={{
       border: `1px solid ${color}55`, color, background: `${color}14`,
       padding: "2px 8px", borderRadius: 9, fontSize: 9.5, fontWeight: 700,
       letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0,
+      display: "inline-flex", alignItems: "center", gap: 4,
     }}>
-      {text}
+      {icon}{text}
     </span>
   );
 }
@@ -67,9 +72,13 @@ export function TitleCard({ title: t, leads, onBell }: {
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
-          <Badge text={t.mediaType === "movie" ? "🎬 Movie" : "📺 Series"} color={M.sub} />
+          <Badge
+            text={t.mediaType === "movie" ? "Movie" : "Series"}
+            color={M.sub}
+            icon={t.mediaType === "movie" ? <Clapperboard size={10} strokeWidth={2.4} /> : <Tv size={10} strokeWidth={2.4} />}
+          />
           <Badge text={UNIVERSE_LABEL[t.universe]} color={t.universe === "sony" ? M.blue : M.crimson} />
-          {t.isSpecial && !released && <Badge text="★ Event" color={M.gold} />}
+          {t.isSpecial && !released && <Badge text="Event" color={M.gold} icon={<Star size={10} strokeWidth={2.4} fill={M.gold} />} />}
         </div>
 
         <div style={{
@@ -118,9 +127,13 @@ export function TitleCard({ title: t, leads, onBell }: {
               fontFamily: M.body, fontSize: 12, fontWeight: 600,
               opacity: t.releaseDate ? 1 : 0.55,
             }}>
-            {belled
-              ? `🔔 ${LEAD_DAYS.filter(l => leads.has(l.days)).map(l => l.days === 7 ? "1w" : `${l.days}d`).join(" · ")}`
-              : t.releaseDate ? "🔔 Remind me" : "🔕 Awaiting date"}
+            {belled ? (
+              <><Bell size={13} strokeWidth={2.2} /> {LEAD_DAYS.filter(l => leads.has(l.days)).map(l => l.days === 7 ? "1w" : `${l.days}d`).join(" · ")}</>
+            ) : t.releaseDate ? (
+              <><Bell size={13} strokeWidth={2.2} /> Remind me</>
+            ) : (
+              <><BellOff size={13} strokeWidth={2.2} /> Awaiting date</>
+            )}
           </button>
         )}
       </div>

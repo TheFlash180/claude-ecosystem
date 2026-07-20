@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Recycle } from 'lucide-react';
 import { DAY_NAMES, K, type PlanSlot, type Recipe, type Slot } from '../lib/config';
 import { leftoverCandidates } from '../lib/plan';
 
@@ -95,12 +96,13 @@ export function RecipePicker({ day, slot, recipes, slots, onSave, onClose }: {
                 key={`${c.day}|${c.slot}`}
                 onClick={() => onSave(chosen, c)}
                 style={{
-                  display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                  width: '100%', textAlign: 'left', cursor: 'pointer',
                   background: K.surface, border: `1px solid ${K.sage}66`, borderRadius: 12,
                   padding: '11px 13px', marginBottom: 7,
                   fontFamily: K.body, fontSize: 13.5, fontWeight: 600, color: K.sage,
+                  display: 'flex', alignItems: 'center', gap: 7,
                 }}>
-                ♻️ Leftovers → {DAY_NAMES[c.day]} {c.slot}
+                <Recycle size={14} strokeWidth={2.2} /> Leftovers → {DAY_NAMES[c.day]} {c.slot}
               </button>
             ))}
             <button

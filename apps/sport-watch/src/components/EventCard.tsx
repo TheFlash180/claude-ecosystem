@@ -1,18 +1,6 @@
+import { Bell, CalendarPlus, MapPin, Tv, Zap } from "lucide-react";
 import { catOf, flagName, S, type CatMap, type SportEvent } from "../lib/config";
 import { fmtDate, fmtTime, isPast, isLive, relativeLabel } from "../lib/time";
-
-function BellIcon({ on, color }: { on: boolean; color: string }) {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24"
-      fill={on ? color : "none"}
-      stroke={on ? color : S.muted}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    >
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-    </svg>
-  );
-}
 
 export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
   event: SportEvent;
@@ -113,13 +101,14 @@ export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
               <span style={{
                 maxWidth: 200, overflow: "hidden",
                 textOverflow: "ellipsis", whiteSpace: "nowrap",
+                display: "inline-flex", alignItems: "center", gap: 3,
               }}>
-                📍 {event.venue}
+                <MapPin size={11} strokeWidth={2} style={{ flexShrink: 0 }} /> {event.venue}
               </span>
             )}
             {!past && event.channel && (
-              <span>
-                📺 {event.watchUrl ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Tv size={11} strokeWidth={2} style={{ flexShrink: 0 }} /> {event.watchUrl ? (
                   <a href={event.watchUrl} target="_blank" rel="noopener noreferrer"
                      style={{ color: S.muted }}>
                     {event.channel}
@@ -135,8 +124,9 @@ export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
           <div style={{
             fontFamily: S.body, fontSize: 10.5, color: "#B08A45",
             marginTop: 3, fontStyle: "italic",
+            display: "flex", alignItems: "center", gap: 4,
           }}>
-            ⚡ {event.note}
+            <Zap size={11} strokeWidth={2} style={{ flexShrink: 0 }} /> {event.note}
           </div>
         )}
       </div>
@@ -153,10 +143,10 @@ export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
                 border: `1px solid ${S.border}`, background: "transparent",
                 borderRadius: 10, width: 42, height: 42, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 16, lineHeight: 1,
+                color: S.muted,
               }}
             >
-              📅
+              <CalendarPlus size={17} strokeWidth={2} />
             </button>
           )}
           <button
@@ -171,7 +161,11 @@ export function EventCard({ event, cats, notified, onToggle, onCalendar }: {
               transition: "all 0.12s",
             }}
           >
-            <BellIcon on={notified} color={cat.color} />
+            <Bell
+              size={17} strokeWidth={2}
+              fill={notified ? cat.color : "none"}
+              color={notified ? cat.color : S.muted}
+            />
           </button>
         </div>
       )}

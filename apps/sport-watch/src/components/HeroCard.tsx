@@ -1,3 +1,4 @@
+import { Tv } from "lucide-react";
 import { catOf, flagName, S, type CatMap, type SportEvent } from "../lib/config";
 import { fmtDate, fmtTime, getCountdown, isLive } from "../lib/time";
 
@@ -60,7 +61,11 @@ export function HeroCard({ event, cats, countdown }: {
       }}>
         {fmtDate(event.date)} · {fmtTime(event.date)}
         {event.venue && <span style={{ color: S.muted }}> · {event.venue}</span>}
-        {event.channel && <span style={{ color: S.muted }}> · 📺 {event.channel}</span>}
+        {event.channel && (
+          <span style={{ color: S.muted }}>
+            {" · "}<Tv size={11} strokeWidth={2} style={{ verticalAlign: "-1px" }} /> {event.channel}
+          </span>
+        )}
       </div>
 
       {live && (

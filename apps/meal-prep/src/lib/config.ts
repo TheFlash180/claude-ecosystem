@@ -37,22 +37,24 @@ export interface ShoppingRow {
   custom: boolean;
 }
 
-export const SLOTS: { key: Slot; label: string; emoji: string }[] = [
-  { key: 'lunch', label: 'Lunch', emoji: '🌤️' },
-  { key: 'dinner', label: 'Dinner', emoji: '🌙' },
+export const SLOTS: { key: Slot; label: string }[] = [
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'dinner', label: 'Dinner' },
 ];
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export const CATEGORY_META: { key: Category; label: string; emoji: string }[] = [
-  { key: 'meat', label: 'Meat & fish', emoji: '🥩' },
-  { key: 'veg', label: 'Fruit & veg', emoji: '🥕' },
-  { key: 'dairy', label: 'Dairy & eggs', emoji: '🥛' },
-  { key: 'bakery', label: 'Bakery', emoji: '🍞' },
-  { key: 'frozen', label: 'Frozen', emoji: '🧊' },
-  { key: 'pantry', label: 'Pantry', emoji: '🥫' },
-  { key: 'spices', label: 'Spices', emoji: '🧂' },
-  { key: 'other', label: 'Other', emoji: '🛒' },
+// Aisle icons live in components/icons.tsx (lucide) — this stays UI-free
+// so the pure plan logic can run under node in tests.
+export const CATEGORY_META: { key: Category; label: string }[] = [
+  { key: 'meat', label: 'Meat & fish' },
+  { key: 'veg', label: 'Fruit & veg' },
+  { key: 'dairy', label: 'Dairy & eggs' },
+  { key: 'bakery', label: 'Bakery' },
+  { key: 'frozen', label: 'Frozen' },
+  { key: 'pantry', label: 'Pantry' },
+  { key: 'spices', label: 'Spices' },
+  { key: 'other', label: 'Other' },
 ];
 
 export const K = {

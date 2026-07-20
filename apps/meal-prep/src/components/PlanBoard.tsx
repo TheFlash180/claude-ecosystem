@@ -1,3 +1,4 @@
+import { Moon, Recycle, Sun, X } from 'lucide-react';
 import { DAY_NAMES, K, SLOTS, type PlanSlot, type Recipe, type Slot } from '../lib/config';
 import { dayDate, fmtDay, sastDay } from '../lib/plan';
 
@@ -41,17 +42,22 @@ export function PlanBoard({ weekStart, slots, recipes, onPick, onClear }: {
               </span>
             </div>
 
-            {SLOTS.map(({ key, label, emoji }) => {
+            {SLOTS.map(({ key, label }) => {
               const filled = byKey.get(`${day}|${key}`);
               const recipe = filled ? recipes.get(filled.recipeId) : undefined;
+              const SlotIcon = key === 'lunch' ? Sun : Moon;
               return (
                 <div key={key} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 14px',
                   borderTop: key === 'dinner' ? `1px dashed ${K.border}` : 'none',
                 }}>
-                  <span style={{ fontSize: 10, color: K.muted, width: 52, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    {emoji} {label}
+                  <span style={{
+                    fontSize: 10, color: K.muted, width: 58, flexShrink: 0,
+                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    <SlotIcon size={11} strokeWidth={2.2} /> {label}
                   </span>
                   <button
                     onClick={() => onPick(day, key)}
@@ -65,7 +71,9 @@ export function PlanBoard({ weekStart, slots, recipes, onPick, onClear }: {
                     }}>
                     {recipe
                       ? <>{recipe.emoji} {recipe.name}{filled?.isLeftover && (
-                          <span style={{ color: K.sage, fontSize: 11.5, fontWeight: 600 }}> · ♻️ leftovers</span>
+                          <span style={{ color: K.sage, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {' · '}<Recycle size={11} strokeWidth={2.2} style={{ verticalAlign: '-1px' }} /> leftovers
+                          </span>
                         )}</>
                       : '+ plan a meal'}
                   </button>
@@ -75,9 +83,10 @@ export function PlanBoard({ weekStart, slots, recipes, onPick, onClear }: {
                       aria-label={`Clear ${label.toLowerCase()}`}
                       style={{
                         background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: K.muted, fontSize: 13, padding: '2px 4px', flexShrink: 0,
+                        color: K.muted, padding: '2px 4px', flexShrink: 0,
+                        display: 'flex', alignItems: 'center',
                       }}>
-                      ✕
+                      <X size={15} />
                     </button>
                   )}
                 </div>

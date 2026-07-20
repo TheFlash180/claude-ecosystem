@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Clapperboard, Settings, Tv, X } from "lucide-react";
 import { M, type MediaType, type Title, type Universe } from "../lib/config";
 import { sb } from "../lib/supabase";
 import { fmtRelease } from "../lib/titles";
@@ -130,8 +131,11 @@ export default function AdminPage({ titles, onChanged, onToast }: {
   if (!unlocked) {
     return (
       <div style={{ padding: "60px 24px", maxWidth: 360, margin: "0 auto", textAlign: "center" }}>
-        <div style={{ fontFamily: M.display, fontSize: 26, color: M.text, marginBottom: 12 }}>
-          ⚙️ Owner page
+        <div style={{
+          fontFamily: M.display, fontSize: 26, color: M.text, marginBottom: 12,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+          <Settings size={22} strokeWidth={2} /> Owner page
         </div>
         <input
           type="password"
@@ -164,8 +168,8 @@ export default function AdminPage({ titles, onChanged, onToast }: {
       <div style={{ display: "flex", gap: 8 }}>
         <Field label="Type">
           <select style={inputStyle} value={d.mediaType} onChange={e => setDraft({ ...d, mediaType: e.target.value as MediaType })}>
-            <option value="movie">🎬 Movie</option>
-            <option value="show">📺 Series</option>
+            <option value="movie">Movie</option>
+            <option value="show">Series</option>
           </select>
         </Field>
         <Field label="Universe">
@@ -207,8 +211,11 @@ export default function AdminPage({ titles, onChanged, onToast }: {
   return (
     <div style={{ padding: "20px 14px 48px", maxWidth: 520, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontFamily: M.display, fontSize: 24, color: M.text }}>
-          ⚙️ Manage titles
+        <div style={{
+          fontFamily: M.display, fontSize: 24, color: M.text,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <Settings size={20} strokeWidth={2} /> Manage titles
         </div>
         <a href="#/" style={{ color: M.sub, fontSize: 12.5 }}>← app</a>
       </div>
@@ -230,7 +237,9 @@ export default function AdminPage({ titles, onChanged, onToast }: {
       {titles.map(t => (
         <div key={t.id} style={{ background: M.surface, borderRadius: 12, padding: "10px 12px", marginBottom: 7 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <span>{t.mediaType === "movie" ? "🎬" : "📺"}</span>
+            {t.mediaType === "movie"
+              ? <Clapperboard size={16} strokeWidth={2} color={M.sub} style={{ flexShrink: 0 }} />
+              : <Tv size={16} strokeWidth={2} color={M.sub} style={{ flexShrink: 0 }} />}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ color: M.text, fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {t.title}{t.manual && <span style={{ color: M.gold, fontSize: 10 }}> · manual</span>}
@@ -241,8 +250,10 @@ export default function AdminPage({ titles, onChanged, onToast }: {
             </div>
             <button onClick={() => { setEditingId(t.id); setAdding(false); setDraft(toDraft(t)); }}
               style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 12px" }}>Edit</button>
-            <button onClick={() => void remove(t)}
-              style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 12px", color: M.crimson }}>✕</button>
+            <button onClick={() => void remove(t)} aria-label={`Remove ${t.title}`}
+              style={{ ...inputStyle, cursor: "pointer", width: "auto", padding: "6px 10px", color: M.crimson, display: "flex", alignItems: "center" }}>
+              <X size={15} />
+            </button>
           </div>
           {editingId === t.id && draft && editor(t.id, draft)}
         </div>
