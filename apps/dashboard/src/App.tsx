@@ -25,7 +25,6 @@ const EXTERNAL: { name: string; url: string; note: string }[] = [
 
 // In planning — see the session notes for each brief.
 const PLANNED: { name: string; note: string }[] = [
-  { name: 'Meal Prep', note: 'weekly & monthly planning' },
   { name: 'Workout Plan', note: 'parkrun + gym schedule' },
 ];
 
