@@ -24,9 +24,7 @@ const EXTERNAL: { name: string; url: string; note: string }[] = [
 ];
 
 // In planning — see the session notes for each brief.
-const PLANNED: { name: string; note: string }[] = [
-  { name: 'Workout Plan', note: 'parkrun + gym schedule' },
-];
+const PLANNED: { name: string; note: string }[] = [];
 
 export default function App() {
   const [cloud, setCloud] = useState<CloudStatus>('checking');
