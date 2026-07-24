@@ -44,16 +44,27 @@ alter table marvel_settings enable row level security;
 -- no policies: definer functions only
 
 -- >>> set the real password when applying; never commit it <<<
-insert into marvel_settings (key, value) values ('admin_password', 'CHANGE-ME');
+-- Seeded with a bcrypt hash of the literal 'CHANGE-ME'. Set the real password
+-- after deploying, hashed, so plaintext never touches the repo or the database:
+--   update marvel_settings
+--   set value = extensions.crypt('your-password', extensions.gen_salt('bf', 10))
+--   where key = 'admin_password';
+insert into marvel_settings (key, value)
+values ('admin_password', extensions.crypt('CHANGE-ME', extensions.gen_salt('bf', 10)));
 
 create or replace function _marvel_hash_token(p_token text)
 returns text language sql immutable as
 $$ select encode(sha256(convert_to(p_token, 'utf8')), 'hex') $$;
 
+-- The password is stored as a bcrypt hash (pgcrypto, cost 10), not plaintext:
+-- this RPC is anon-callable by design, so a constant-time-ish ~100ms hash makes
+-- brute-forcing it over REST impractical. Marvel and Sport Watch share one
+-- password by choice, but each app still stores its own hash.
 create or replace function _marvel_admin_ok(p_password text)
-returns boolean language sql stable security definer set search_path = public as
-$$ select exists (select 1 from marvel_settings
-                  where key = 'admin_password' and value = p_password) $$;
+returns boolean language sql stable security definer set search_path = '' as
+$$ select exists (select 1 from public.marvel_settings
+                  where key = 'admin_password'
+                    and value = extensions.crypt(p_password, value)) $$;
 
 create or replace function marvel_admin_check(p_password text)
 returns boolean language sql stable security definer set search_path = public as

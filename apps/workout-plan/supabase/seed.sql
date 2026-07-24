@@ -75,6 +75,9 @@ insert into workout_routine_exercises (routine_id,exercise_id,sort_order,target_
 -- Personal profile + starting bodyweight are set live, e.g.:
 --   insert into workout_profile (id,dob,height_cm,sex,goal,target_weight_kg,activity_factor)
 --   values (1,'YYYY-MM-DD',170,'male','recomp',65,1.5) on conflict (id) do nothing;
--- And set the real admin password (never commit it):
---   update workout_settings set value='...' where key='admin_password';
+-- And set the real admin password (never commit it) — stored hashed, so the
+-- plaintext never lands in the database:
+--   update workout_settings
+--   set value = extensions.crypt('your-password', extensions.gen_salt('bf', 10))
+--   where key = 'admin_password';
 
