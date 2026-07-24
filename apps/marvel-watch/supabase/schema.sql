@@ -223,6 +223,12 @@ select cron.schedule(
   $$
 );
 
+-- Weekly prune: released titles' reminders linger harmlessly (the sender is
+-- date-guarded and the app filters the bell count to upcoming-only), but this
+-- keeps the table tidy.
+select cron.schedule('marvel-prune-reminders', '40 3 * * 1',
+  $$ delete from marvel_push_reminders where release_date < current_date - 7 $$);
+
 -- ---------------------------------------------------------------------------
 -- VAPID key (applied live 2026-07-18, migration marvel_own_vapid_key):
 -- Marvel has its OWN keypair — it no longer shares sport-watch's, so one

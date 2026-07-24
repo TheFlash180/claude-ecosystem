@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState, CSSProperties } from "react";
 import { Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
 import { M, type MediaType, type Title } from "./lib/config";
-import { fetchTitles, groupTitles } from "./lib/titles";
+import { daysUntil, fetchTitles, groupTitles } from "./lib/titles";
 import { listReminders, registerPush, setReminders } from "./lib/push";
 import { HeroCard } from "./components/HeroCard";
 import { TitleCard } from "./components/TitleCard";
@@ -91,7 +91,12 @@ export default function App() {
   const visible = titles.filter(t => filter === "all" || t.mediaType === filter);
   const groups = groupTitles(visible);
   const comingUp = groups.upcoming.filter(t => t.id !== groups.nextUp?.id);
-  const bellCount = reminders.size;
+  // Only count reminders for titles that haven't released yet — a released
+  // movie's reminder lingers in the map but shouldn't inflate the badge.
+  const upcomingIds = new Set(
+    titles.filter(t => t.releaseDate && daysUntil(t.releaseDate) >= 0).map(t => t.id),
+  );
+  const bellCount = [...reminders.keys()].filter(id => upcomingIds.has(id)).length;
 
   const chrome = (
     <style>{`

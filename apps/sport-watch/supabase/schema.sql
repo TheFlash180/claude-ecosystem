@@ -355,3 +355,9 @@ select cron.schedule(
   ) AS request_id;
   $$
 );
+
+-- Weekly prune of reminders for fixtures that finished a couple of days ago —
+-- the app already filters the bell count to upcoming-only; this keeps the
+-- table from growing without bound.
+select cron.schedule('sport-prune-reminders', '35 3 * * 1',
+  $$ delete from sport_push_reminders where event_date < now() - interval '2 days' $$);
