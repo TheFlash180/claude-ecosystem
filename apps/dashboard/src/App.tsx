@@ -1,20 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { AppShell, supabaseConfigured, getSupabase } from '@ecosystem/shared';
+import { parseApps } from './lib/apps';
 
 type CloudStatus = 'checking' | 'connected' | 'not-configured' | 'error';
 
-interface AppEntry {
-  slug: string;
-  name: string;
-}
-
 // Injected by tooling/build-all.mjs: every app deployed alongside the hub.
-function installedApps(): AppEntry[] {
-  try {
-    return JSON.parse((import.meta.env.VITE_APPS as string | undefined) ?? '[]');
-  } catch {
-    return [];
-  }
+function installedApps() {
+  return parseApps(import.meta.env.VITE_APPS as string | undefined);
 }
 
 // Apps that live outside this repo but belong to the family.

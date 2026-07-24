@@ -137,25 +137,44 @@ export default function AdminPage({ titles, onChanged, onToast }: {
         }}>
           <Settings size={22} strokeWidth={2} /> Owner page
         </div>
-        <input
-          type="password"
-          placeholder="Admin password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !checking) void unlock(password); }}
-          style={{ ...inputStyle, marginBottom: 10, textAlign: "center" }}
-          autoFocus
-        />
-        <button
-          onClick={() => void unlock(password)}
-          disabled={checking || password.length === 0}
-          style={{
-            ...inputStyle, cursor: "pointer",
-            background: `linear-gradient(135deg, ${M.crimson}, ${M.crimsonDark})`,
-            border: "none", color: "#fff", fontWeight: 700,
-          }}>
-          {checking ? "Checking…" : "Unlock"}
-        </button>
+        {/* A real <form> with a username field is what makes Chrome offer to
+            save the password. Every app is served from the same origin
+            (…github.io/<app>/), and password managers key on origin, not path
+            — so without a username they'd collide into one entry. Marvel and
+            Sport Watch deliberately share "watch-apps": they use the same
+            password, so one saved credential unlocks both. */}
+        <form onSubmit={(e) => { e.preventDefault(); if (!checking) void unlock(password); }}>
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value="watch-apps"
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 }}
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="Admin password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...inputStyle, marginBottom: 10, textAlign: "center" }}
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={checking || password.length === 0}
+            style={{
+              ...inputStyle, cursor: "pointer",
+              background: `linear-gradient(135deg, ${M.crimson}, ${M.crimsonDark})`,
+              border: "none", color: "#fff", fontWeight: 700,
+            }}>
+            {checking ? "Checking…" : "Unlock"}
+          </button>
+        </form>
         <div style={{ marginTop: 16 }}>
           <a href="#/" style={{ color: M.sub, fontSize: 12.5 }}>← back to the app</a>
         </div>

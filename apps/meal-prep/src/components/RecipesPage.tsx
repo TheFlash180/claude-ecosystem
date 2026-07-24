@@ -265,28 +265,45 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
               It disappears from every planned week too. Deleting needs the
               admin password.
             </div>
-            <input
-              type="password"
-              placeholder="Admin password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !busy) void doDelete(askDelete, password); }}
-              style={{ ...inputStyle, marginBottom: 10 }}
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setAskDelete(null)}
-                style={{ ...inputStyle, cursor: 'pointer', width: 'auto', flex: 1 }}>Cancel</button>
-              <button
-                onClick={() => void doDelete(askDelete, password)}
-                disabled={busy || !password}
-                style={{
-                  ...inputStyle, cursor: 'pointer', width: 'auto', flex: 1, border: 'none',
-                  background: K.terra, color: '#fff', fontWeight: 700,
-                }}>
-                {busy ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+            {/* A form + username field lets the password manager fill this.
+                Every app shares one origin (…github.io/<app>/) and managers key
+                on origin, not path, so the username is what keeps Meal Prep's
+                credential distinct from the watch apps'. */}
+            <form onSubmit={e => { e.preventDefault(); if (!busy && password) void doDelete(askDelete, password); }}>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value="meal-prep"
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }}
+              />
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Admin password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 10 }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => setAskDelete(null)}
+                  style={{ ...inputStyle, cursor: 'pointer', width: 'auto', flex: 1 }}>Cancel</button>
+                <button
+                  type="submit"
+                  disabled={busy || !password}
+                  style={{
+                    ...inputStyle, cursor: 'pointer', width: 'auto', flex: 1, border: 'none',
+                    background: K.terra, color: '#fff', fontWeight: 700,
+                  }}>
+                  {busy ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
