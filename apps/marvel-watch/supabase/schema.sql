@@ -229,6 +229,14 @@ select cron.schedule(
 select cron.schedule('marvel-prune-reminders', '40 3 * * 1',
   $$ delete from marvel_push_reminders where release_date < current_date - 7 $$);
 
+-- Weekly declutter of auto-synced titles released more than ~4 months ago
+-- (manual/admin titles are kept). Safe from re-sync: the TMDB sync only fetches
+-- releases from the last 120 days, so anything older won't reappear.
+select cron.schedule('marvel-prune-titles', '45 3 * * 1',
+  $$ delete from marvel_titles
+      where manual = false and release_date is not null
+        and release_date < current_date - 130 $$);
+
 -- ---------------------------------------------------------------------------
 -- VAPID key (applied live 2026-07-18, migration marvel_own_vapid_key):
 -- Marvel has its OWN keypair — it no longer shares sport-watch's, so one

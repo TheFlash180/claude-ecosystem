@@ -216,9 +216,17 @@ export default function App() {
     if (downloadEventIcs(ev, cats)) showToast("Added — open the file to save it to your calendar");
   };
 
+  // Keep the "played" list tidy: only fixtures that finished within the last
+  // month. Older ones (incl. past F1 rounds the daily sync keeps re-adding for
+  // the season) just drop off the UI rather than cluttering "Show all".
+  const PLAYED_WINDOW_MS = 31 * 86400000;
+  const playedCutoff = Date.now() - PLAYED_WINDOW_MS;
+
   const liveMsOf = (e: SportEvent) => catOf(cats, e.sport).liveMinutes * 60000;
   const visible  = events.filter(e => filter === "all" || e.sport === filter);
-  const past     = visible.filter(e => isPast(e.date) && !isLive(e.date, liveMsOf(e)) && !e.dateTBC);
+  const past     = visible.filter(e =>
+    e.date && isPast(e.date) && !isLive(e.date, liveMsOf(e)) && !e.dateTBC
+    && e.date.getTime() >= playedCutoff);
   const recentPast = [...past].reverse(); // newest first
   const upcoming = visible.filter(e => !isPast(e.date) || isLive(e.date, liveMsOf(e)) || e.dateTBC);
   const nextUp   = upcoming.find(e => e.date && !e.dateTBC);
