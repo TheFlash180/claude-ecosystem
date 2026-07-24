@@ -65,7 +65,7 @@ alter table mealprep_settings enable row level security;
 insert into mealprep_settings (key, value) values ('admin_password', 'CHANGE-ME');
 
 create or replace function _mealprep_hash_token(p_token text)
-returns text language sql immutable as
+returns text language sql immutable set search_path = '' as
 $$ select encode(sha256(convert_to(p_token, 'utf8')), 'hex') $$;
 
 create or replace function _mealprep_admin_ok(p_password text)

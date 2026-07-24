@@ -123,12 +123,15 @@ export default function App() {
 
   useEffect(() => { void loadEvents(); }, [loadEvents]);
 
-  // Once real events are in: prune bells whose event no longer exists (the
-  // header count must never include ghosts), then bring the server's push
-  // reminders in line with this device.
+  // Once real events are in: prune bells whose event no longer exists OR has
+  // already finished (the header count must reflect only upcoming reminders,
+  // and a played fixture's bell should clear itself), then bring the server's
+  // push reminders in line with this device.
   useEffect(() => {
     if (events.length === 0) return;
-    const valid = new Set(events.map(e => e.id));
+    const done = (e: SportEvent) =>
+      !e.dateTBC && isPast(e.date) && !isLive(e.date, catOf(cats, e.sport).liveMinutes * 60000);
+    const valid = new Set(events.filter(e => !done(e)).map(e => e.id));
     setNotified(prev => {
       const pruned = pruneToExisting(prev, valid);
       if (pruned.size !== prev.size) saveNotified(pruned);
