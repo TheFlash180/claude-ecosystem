@@ -118,12 +118,23 @@ create policy "public read" on workout_runs for select to anon, authenticated us
 -- workout_settings: no read policy (admin password stays server-side)
 
 -- >>> set the real password when applying; never commit it <<<
-insert into workout_settings (key, value) values ('admin_password', 'CHANGE-ME');
+-- Seeded with a bcrypt hash of the literal 'CHANGE-ME'. Set the real password
+-- after deploying, hashed, so plaintext never touches the repo or the database:
+--   update workout_settings
+--   set value = extensions.crypt('your-password', extensions.gen_salt('bf', 10))
+--   where key = 'admin_password';
+insert into workout_settings (key, value)
+values ('admin_password', extensions.crypt('CHANGE-ME', extensions.gen_salt('bf', 10)));
 
 -- ------------------------------------------------------------------ RPCs
+-- The password is stored as a bcrypt hash (pgcrypto, cost 10), not plaintext:
+-- this RPC is anon-callable by design, so a ~100ms hash makes brute-forcing it
+-- over REST impractical.
 create or replace function workout_admin_check(p_password text)
-returns boolean language sql stable security definer set search_path = public as
-$$ select exists (select 1 from workout_settings where key = 'admin_password' and value = p_password) $$;
+returns boolean language sql stable security definer set search_path = '' as
+$$ select exists (select 1 from public.workout_settings
+                  where key = 'admin_password'
+                    and value = extensions.crypt(p_password, value)) $$;
 
 create or replace function workout_save_profile(
   p_dob date, p_height numeric, p_sex text, p_goal text,

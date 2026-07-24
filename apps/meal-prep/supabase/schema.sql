@@ -62,16 +62,26 @@ alter table mealprep_settings enable row level security;
 -- no policies: definer functions only
 
 -- >>> set the real password when applying; never commit it <<<
-insert into mealprep_settings (key, value) values ('admin_password', 'CHANGE-ME');
+-- Seeded with a bcrypt hash of the literal 'CHANGE-ME'. Set the real password
+-- after deploying, hashed, so plaintext never touches the repo or the database:
+--   update mealprep_settings
+--   set value = extensions.crypt('your-password', extensions.gen_salt('bf', 10))
+--   where key = 'admin_password';
+insert into mealprep_settings (key, value)
+values ('admin_password', extensions.crypt('CHANGE-ME', extensions.gen_salt('bf', 10)));
 
 create or replace function _mealprep_hash_token(p_token text)
 returns text language sql immutable set search_path = '' as
 $$ select encode(sha256(convert_to(p_token, 'utf8')), 'hex') $$;
 
+-- The password is stored as a bcrypt hash (pgcrypto, cost 10), not plaintext:
+-- this RPC is anon-callable by design, so a ~100ms hash makes brute-forcing it
+-- over REST impractical.
 create or replace function _mealprep_admin_ok(p_password text)
-returns boolean language sql stable security definer set search_path = public as
-$$ select exists (select 1 from mealprep_settings
-                  where key = 'admin_password' and value = p_password) $$;
+returns boolean language sql stable security definer set search_path = '' as
+$$ select exists (select 1 from public.mealprep_settings
+                  where key = 'admin_password'
+                    and value = extensions.crypt(p_password, value)) $$;
 
 create or replace function mealprep_admin_check(p_password text)
 returns boolean language sql stable security definer set search_path = public as

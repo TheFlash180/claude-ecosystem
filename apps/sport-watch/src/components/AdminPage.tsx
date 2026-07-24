@@ -208,24 +208,43 @@ export default function AdminPage({
         }}>
           <Settings size={18} strokeWidth={2} /> Owner page
         </div>
-        <input
-          type="password"
-          placeholder="Admin password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !checking) void unlock(password); }}
-          style={{ ...inputStyle, marginBottom: 10, textAlign: "center" }}
-          autoFocus
-        />
-        <button
-          onClick={() => void unlock(password)}
-          disabled={checking || password.length === 0}
-          style={{
-            ...inputStyle, cursor: "pointer", background: "#141E15",
-            border: "1px solid #3AA864", color: "#3AA864", fontWeight: 600,
-          }}>
-          {checking ? "Checking…" : "Unlock"}
-        </button>
+        {/* A real <form> with a username field is what makes Chrome offer to
+            save the password. Every app is served from the same origin
+            (…github.io/<app>/), and password managers key on origin, not path
+            — so without a username they'd collide into one entry. Shares
+            "watch-apps" with Marvel Watch on purpose: same password, so one
+            saved credential unlocks both. */}
+        <form onSubmit={(e) => { e.preventDefault(); if (!checking) void unlock(password); }}>
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value="watch-apps"
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 }}
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="Admin password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...inputStyle, marginBottom: 10, textAlign: "center" }}
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={checking || password.length === 0}
+            style={{
+              ...inputStyle, cursor: "pointer", background: "#141E15",
+              border: "1px solid #3AA864", color: "#3AA864", fontWeight: 600,
+            }}>
+            {checking ? "Checking…" : "Unlock"}
+          </button>
+        </form>
         <div style={{ marginTop: 16 }}>
           <a href="#/" style={{ color: S.sub, fontSize: 12.5 }}>← back to the app</a>
         </div>
