@@ -1,4 +1,4 @@
--- SA Sport Watch: full server-side schema (copy of record — already applied
+-- Ultimate Sport Watch: full server-side schema (copy of record — already applied
 -- to the shared Supabase project).
 --
 --   sport_categories       dynamic sport categories (admin-manageable)

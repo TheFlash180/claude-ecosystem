@@ -34,7 +34,8 @@ async function fireNotification(title: string, body: string): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) {
-      await reg.showNotification(title, { body, icon: "pwa-192.png" });
+      // badge must be the transparent white-glyph PNG — see public/push-sw.js.
+      await reg.showNotification(title, { body, icon: "pwa-192.png", badge: "badge-96.png" });
       return true;
     }
   } catch { /* fall through */ }
@@ -58,7 +59,7 @@ async function checkReminders(events: SportEvent[], notified: Set<string>) {
     if (diff > 0 && diff <= 3600000) {
       const mins = Math.max(1, Math.round(diff / 60000));
       await fireNotification(
-        `🇿🇦 ${matchTitle({ ...ev, homeFlag: "", awayFlag: "" })}`,
+        matchTitle({ ...ev, homeFlag: "", awayFlag: "" }),
         `Starts in ${mins} min · ${fmtTime(ev.date)}${ev.venue ? ` · ${ev.venue}` : ""}`,
       );
       alerted.add(ev.id);
@@ -311,7 +312,7 @@ export default function App() {
               fontFamily: S.display, fontSize: 22, fontWeight: 700,
               color: S.text, letterSpacing: "-0.01em",
             }}>
-              🇿🇦 SA Sport Watch
+              Ultimate Sport Watch
             </div>
             <div style={{ fontSize: 11.5, color: S.muted, marginTop: 2 }}>
               {filterCats.map(c => c.label).join(" · ") || "2026"}

@@ -30,7 +30,7 @@ export function buildEventIcs(ev: SportEvent, cats: CatMap): string | null {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//SA Sport Watch//EN',
+    'PRODID:-//Ultimate Sport Watch//EN',
     'BEGIN:VEVENT',
     `UID:${ev.id}@sa-sport-watch`,
     `DTSTAMP:${icsDate(new Date())}`,

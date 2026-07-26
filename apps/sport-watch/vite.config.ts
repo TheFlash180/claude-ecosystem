@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'SA Sport Watch',
-        short_name: 'SA Sport Watch',
-        description: 'All major SA sport events in one place',
+        name: 'Ultimate Sport Watch',
+        short_name: 'Ultimate Sport Watch',
+        description: 'All your major sport events in one place',
         theme_color: '#080C09',
         background_color: '#080C09',
         display: 'standalone',

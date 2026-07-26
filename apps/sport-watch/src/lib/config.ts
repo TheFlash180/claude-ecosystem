@@ -1,4 +1,4 @@
-// Shared types + visual config for SA Sport Watch.
+// Shared types + visual config for Ultimate Sport Watch.
 
 /** Sport categories live in the sport_categories table (manageable from the
  *  admin page); these built-ins are the offline/dev fallback. */

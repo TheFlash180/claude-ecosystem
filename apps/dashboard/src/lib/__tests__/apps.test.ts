@@ -3,9 +3,9 @@ import { parseApps } from '../apps';
 
 describe('parseApps', () => {
   it('parses the tile list injected by the build', () => {
-    const raw = '[{"slug":"sport-watch","name":"SA Sport Watch"},{"slug":"meal-prep","name":"Meal Prep"}]';
+    const raw = '[{"slug":"sport-watch","name":"Ultimate Sport Watch"},{"slug":"meal-prep","name":"Meal Prep"}]';
     expect(parseApps(raw)).toEqual([
-      { slug: 'sport-watch', name: 'SA Sport Watch' },
+      { slug: 'sport-watch', name: 'Ultimate Sport Watch' },
       { slug: 'meal-prep', name: 'Meal Prep' },
     ]);
   });
