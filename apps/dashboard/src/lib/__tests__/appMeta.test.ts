@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FALLBACK_META, greeting, metaFor } from '../appMeta';
+import { COMING_SOON, FALLBACK_META, greeting, metaFor } from '../appMeta';
 
 describe('metaFor', () => {
   it('gives each known app its own colour and icon', () => {
@@ -44,5 +44,24 @@ describe('greeting', () => {
     expect(greeting(-1)).toBe('Hello');
     expect(greeting(24)).toBe('Hello');
     expect(greeting(NaN)).toBe('Hello');
+  });
+});
+
+describe('COMING_SOON', () => {
+  it('gives every planned app its own colour and icon, not the grey fallback', () => {
+    // Forgetting the META row would ship a roadmap tile that looks broken.
+    for (const app of COMING_SOON) {
+      expect(metaFor(app.slug), `${app.slug} needs a META entry`).not.toEqual(FALLBACK_META);
+      expect(metaFor(app.slug).color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    }
+  });
+
+  it('has a name and slug for every entry, with no duplicate slugs', () => {
+    for (const app of COMING_SOON) {
+      expect(app.slug).toBeTruthy();
+      expect(app.name).toBeTruthy();
+    }
+    const slugs = COMING_SOON.map(a => a.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
   });
 });
