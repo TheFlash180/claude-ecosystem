@@ -35,7 +35,8 @@ export interface PlannedApp {
  *  its META row — the tile picks up colour and icon like any other, and the
  *  test below fails if the META row is forgotten. */
 export const COMING_SOON: PlannedApp[] = [
-  { slug: 'glovebox', name: 'Glovebox' },
+  // Glovebox shipped — build-all picks it up from its index.html <title>, so
+  // listing it here too would render the tile twice.
 ];
 
 /** Unknown slugs still get a usable tile: a newly deployed app should look
