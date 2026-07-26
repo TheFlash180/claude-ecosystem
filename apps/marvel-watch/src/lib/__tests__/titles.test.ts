@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysUntil, groupTitles, releaseLabel } from '../titles';
+import { daysUntil, groupTitles, releaseLabel, remindersList } from '../titles';
 import type { Title } from '../config';
 
 const TODAY = '2026-07-17';
@@ -71,5 +71,45 @@ describe('groupTitles', () => {
     const g = groupTitles([t('today', '2026-07-17')], TODAY);
     expect(g.nextUp?.id).toBe('today');
     expect(g.outNow).toHaveLength(0);
+  });
+});
+
+describe('remindersList', () => {
+  const titles = [
+    t('late', '2026-09-01'),
+    t('soon', '2026-07-20'),
+    t('gone', '2026-07-10'),
+    t('none', '2026-08-01'),
+  ];
+  const reminders = new Map([
+    ['late', new Set([1, 7])],
+    ['soon', new Set([3])],
+    ['gone', new Set([7])],
+  ]);
+
+  it('lists titles with reminders, soonest release first', () => {
+    const out = remindersList(titles, reminders, TODAY);
+    expect(out.map(e => e.title.id)).toEqual(['soon', 'late']);
+  });
+
+  it('drops released titles so the header bell can reach zero', () => {
+    // 'gone' still has a reminder row, but its push can never fire again.
+    const out = remindersList(titles, reminders, TODAY);
+    expect(out.map(e => e.title.id)).not.toContain('gone');
+  });
+
+  it('orders leads longest-first and ignores titles with none', () => {
+    const out = remindersList(titles, reminders, TODAY);
+    expect(out.find(e => e.title.id === 'late')?.leads).toEqual([7, 1]);
+    expect(out.map(e => e.title.id)).not.toContain('none');
+  });
+
+  it('treats an empty lead set as no reminder', () => {
+    const out = remindersList(titles, new Map([['soon', new Set<number>()]]), TODAY);
+    expect(out).toEqual([]);
+  });
+
+  it('is empty when nothing is set', () => {
+    expect(remindersList(titles, new Map(), TODAY)).toEqual([]);
   });
 });

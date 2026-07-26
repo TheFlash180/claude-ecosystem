@@ -87,6 +87,31 @@ export interface Grouped {
   outNow: Title[];
 }
 
+export interface ReminderEntry {
+  title: Title;
+  /** Lead days set on this device, longest first (1w · 3d · 1d). */
+  leads: number[];
+}
+
+/** Every title this device still holds a reminder on, soonest release first.
+ *  Already-released titles are dropped — their push can never fire again, so
+ *  counting them would leave the header bell stuck above zero. The header
+ *  count and the reminders list both read this, so they cannot disagree. */
+export function remindersList(
+  titles: Title[],
+  reminders: Map<string, Set<number>>,
+  today = sastDay(),
+): ReminderEntry[] {
+  return titles
+    .filter(t => {
+      const leads = reminders.get(t.id);
+      if (!leads || leads.size === 0) return false;
+      return t.releaseDate !== null && daysUntil(t.releaseDate, today) >= 0;
+    })
+    .map(t => ({ title: t, leads: [...reminders.get(t.id)!].sort((a, b) => b - a) }))
+    .sort((a, b) => a.title.releaseDate!.localeCompare(b.title.releaseDate!));
+}
+
 export function groupTitles(titles: Title[], today = sastDay(), recentDays = 60): Grouped {
   const dated = titles.filter(t => t.releaseDate !== null);
   const upcoming = dated
