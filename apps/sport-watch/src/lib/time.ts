@@ -1,4 +1,4 @@
-// Pure date/time helpers for SA Sport Watch — kept free of React and app
+// Pure date/time helpers for Ultimate Sport Watch — kept free of React and app
 // config so they can be unit-tested.
 
 export const DEFAULT_LIVE_DURATION = 7200000; // 2h

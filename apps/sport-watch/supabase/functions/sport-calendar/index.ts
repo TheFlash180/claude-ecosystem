@@ -1,4 +1,4 @@
-// SA Sport Watch: subscribable ICS calendar feed (copy of record — deployed
+// Ultimate Sport Watch: subscribable ICS calendar feed (copy of record — deployed
 // as sport-calendar). Add the function URL to Google Calendar / Apple
 // Calendar ("subscribe by URL") and every fixture — including F1 sessions
 // auto-synced from Jolpica — appears and stays fresh.
@@ -44,9 +44,9 @@ Deno.serve(async () => {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//SA Sport Watch//EN",
+    "PRODID:-//Ultimate Sport Watch//EN",
     "CALSCALE:GREGORIAN",
-    "X-WR-CALNAME:SA Sport Watch",
+    "X-WR-CALNAME:Ultimate Sport Watch",
     "X-WR-TIMEZONE:Africa/Johannesburg",
   ];
 
@@ -76,7 +76,7 @@ Deno.serve(async () => {
   return new Response(lines.join("\r\n") + "\r\n", {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": 'inline; filename="sa-sport-watch.ics"',
+      "Content-Disposition": 'inline; filename="ultimate-sport-watch.ics"',
       "Cache-Control": "public, max-age=900",
     },
   });

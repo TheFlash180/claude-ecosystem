@@ -1,4 +1,4 @@
-// SA Sport Watch: F1 auto-sync (copy of record — deployed as sync-f1).
+// Ultimate Sport Watch: F1 auto-sync (copy of record — deployed as sync-f1).
 // Called daily by pg_cron. Pulls the season calendar (race + qualifying +
 // sprint sessions) from the free Jolpica Ergast-compatible API and upserts
 // sport_events rows; fills in race winners for finished rounds that don't

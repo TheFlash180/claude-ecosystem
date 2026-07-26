@@ -1,4 +1,4 @@
-// SA Sport Watch push sender (copy of record — deployed as
+// Ultimate Sport Watch push sender (copy of record — deployed as
 // send-sport-reminders). Called by pg_cron every 15 minutes; sends a Web
 // Push for every un-notified reminder whose per-reminder lead window
 // (lead_minutes before kick-off) has opened. The VAPID private key comes
@@ -81,7 +81,7 @@ Deno.serve(async () => {
     const mins = Math.max(1, Math.round((eventDate.getTime() - now.getTime()) / 60000));
 
     const payload = JSON.stringify({
-      title: `\u{1F1FF}\u{1F1E6} ${r.event_label}`,
+      title: r.event_label,
       body: `Starts ${leadText(mins)}`,
     });
 

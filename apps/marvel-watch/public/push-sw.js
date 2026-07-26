@@ -1,5 +1,5 @@
 self.addEventListener('push', function (event) {
-  var data = { title: 'SA Sport Watch', body: 'Event starting soon' };
+  var data = { title: 'Marvel Watch', body: 'Event starting soon' };
   try {
     data = event.data.json();
   } catch (e) {
