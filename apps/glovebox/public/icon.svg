@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#080B12"/>
+  <!-- glovebox lid, ajar -->
+  <rect x="96" y="214" width="320" height="164" rx="26" fill="none" stroke="#5B8DEF" stroke-width="24"/>
+  <line x1="96" y1="292" x2="416" y2="292" stroke="#5B8DEF" stroke-width="20"/>
+  <rect x="222" y="316" width="68" height="20" rx="10" fill="#5B8DEF"/>
+  <!-- papers poking out -->
+  <path d="M170 214 v-52 a14 14 0 0 1 14-14 h96 a14 14 0 0 1 14 14 v52" fill="none" stroke="#5B8DEF" stroke-width="18" opacity="0.55"/>
+</svg>
