@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { AppShell, supabaseConfigured, getSupabase } from '@ecosystem/shared';
 import {
-  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Gift,
+  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Gift, Car,
   LayoutGrid, ArrowUpRight, type LucideIcon,
 } from 'lucide-react';
 import { parseApps } from './lib/apps';
-import { metaFor, greeting, type IconKey } from './lib/appMeta';
+import { COMING_SOON, metaFor, greeting, type IconKey } from './lib/appMeta';
 
 type CloudStatus = 'checking' | 'connected' | 'not-configured' | 'error';
 
@@ -29,6 +29,7 @@ const ICONS: Record<IconKey, LucideIcon> = {
   dumbbell: Dumbbell,
   wallet: Wallet,
   gift: Gift,
+  car: Car,
   app: LayoutGrid,
 };
 
@@ -80,6 +81,17 @@ export default function App() {
         ))}
       </div>
 
+      {COMING_SOON.length > 0 && (
+        <>
+          <h3 className="section-label">Coming soon</h3>
+          <div className="grid">
+            {COMING_SOON.map((a) => (
+              <Tile key={a.slug} slug={a.slug} name={a.name} soon />
+            ))}
+          </div>
+        </>
+      )}
+
       {apps.length === 0 && (
         <p className="empty">
           No bundled apps were found in this build — the tiles above still work.
@@ -90,20 +102,16 @@ export default function App() {
 }
 
 function Tile({
-  slug, name, href, external,
+  slug, name, href, external, soon,
 }: {
-  slug: string; name: string; href: string; external?: boolean;
+  slug: string; name: string; href?: string; external?: boolean; soon?: boolean;
 }) {
   const meta = metaFor(slug);
   const Icon = ICONS[meta.icon];
-  return (
-    <a
-      className="tile"
-      href={href}
-      // Drives the per-app tint without a stylesheet entry per app.
-      style={{ ['--tile' as string]: meta.color }}
-      {...(external ? { rel: 'noreferrer' } : {})}
-    >
+  // Drives the per-app tint without a stylesheet entry per app.
+  const style = { ['--tile' as string]: meta.color };
+  const body = (
+    <>
       <span className="tile-icon" aria-hidden="true">
         <Icon size={20} strokeWidth={2} />
       </span>
@@ -111,9 +119,24 @@ function Tile({
         <span className="tile-name">
           {name}
           {external && <ArrowUpRight className="tile-out" size={13} strokeWidth={2.5} />}
+          {soon && <span className="tile-soon">Soon</span>}
         </span>
         <span className="tile-note">{meta.note}</span>
       </span>
+    </>
+  );
+
+  // A planned app is deliberately not a link and not a focus stop: there is
+  // nothing to open yet, and a dead tile that looks tappable is worse than an
+  // honest placeholder. The "Soon" pill carries the status visually and in the
+  // reading order, so it needs no extra ARIA.
+  if (soon) {
+    return <div className="tile tile--soon" style={style}>{body}</div>;
+  }
+
+  return (
+    <a className="tile" href={href} style={style} {...(external ? { rel: 'noreferrer' } : {})}>
+      {body}
     </a>
   );
 }
@@ -191,6 +214,17 @@ const CSS = `
   white-space: nowrap; overflow: hidden;
 }
 .tile-out { color: var(--text-dim); flex-shrink: 0; }
+
+/* Planned apps read as deliberate-but-inactive: dimmed, no lift, no pointer. */
+.tile--soon { opacity: 0.6; cursor: default; }
+.tile--soon::before { opacity: 0.4; }
+.tile-soon {
+  flex-shrink: 0; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--tile); line-height: 1.5;
+  border-radius: 999px; padding: 1px 7px;
+  background: color-mix(in srgb, var(--tile) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tile) 38%, transparent);
+}
 .tile-note {
   font-size: 0.75rem; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -218,6 +252,7 @@ const CSS = `
 @supports not (color: color-mix(in srgb, red 50%, blue)) {
   .tile-icon { background: var(--surface-raised); border-color: var(--border); }
   .tile:hover, .tile:focus-visible { border-color: var(--tile); }
+  .tile-soon { background: var(--surface-raised); border-color: var(--border); }
 }
 
 @media (prefers-reduced-motion: reduce) {

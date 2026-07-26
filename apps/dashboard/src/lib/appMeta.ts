@@ -6,7 +6,7 @@
  *  and can be unit-tested; App.tsx maps the key to a lucide icon. */
 export type IconKey =
   | 'baby' | 'film' | 'chef' | 'trophy' | 'dumbbell'
-  | 'wallet' | 'gift' | 'app';
+  | 'wallet' | 'gift' | 'car' | 'app';
 
 export interface AppMeta {
   color: string;
@@ -22,7 +22,21 @@ const META: Record<string, AppMeta> = {
   'workout-plan': { color: '#C6F135', icon: 'dumbbell', note: 'training & progress' },
   'fintrack-pro': { color: '#2DD4BF', icon: 'wallet',   note: 'household finance' },
   'baby-registry':{ color: '#D9A441', icon: 'gift',     note: 'gifts & claims' },
+  'glovebox':     { color: '#5B8DEF', icon: 'car',      note: 'licence, disc & services' },
 };
+
+export interface PlannedApp {
+  slug: string;
+  name: string;
+}
+
+/** Apps on the roadmap, shown as non-interactive tiles so the plan is visible
+ *  without pretending the app exists. Adding one is a single entry here plus
+ *  its META row — the tile picks up colour and icon like any other, and the
+ *  test below fails if the META row is forgotten. */
+export const COMING_SOON: PlannedApp[] = [
+  { slug: 'glovebox', name: 'Glovebox' },
+];
 
 /** Unknown slugs still get a usable tile: a newly deployed app should look
  *  deliberate rather than broken while its entry is being added. */
