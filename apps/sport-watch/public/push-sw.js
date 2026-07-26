@@ -10,7 +10,11 @@ self.addEventListener('push', function (event) {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: 'pwa-192.png',
-      badge: 'pwa-192.png',
+      // Android keeps only the badge's alpha channel and paints that
+      // silhouette solid white, so the badge must be a transparent PNG with a
+      // white glyph. Reusing pwa-192.png here renders a plain white square,
+      // because that icon is a fully opaque full-bleed tile.
+      badge: 'badge-96.png',
       vibrate: [200, 100, 200],
       data: data,
     })

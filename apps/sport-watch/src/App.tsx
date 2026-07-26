@@ -34,7 +34,8 @@ async function fireNotification(title: string, body: string): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) {
-      await reg.showNotification(title, { body, icon: "pwa-192.png" });
+      // badge must be the transparent white-glyph PNG — see public/push-sw.js.
+      await reg.showNotification(title, { body, icon: "pwa-192.png", badge: "badge-96.png" });
       return true;
     }
   } catch { /* fall through */ }
