@@ -129,36 +129,75 @@ alter table marvel_push_subs enable row level security;
 alter table marvel_push_reminders enable row level security;
 -- NO open policies: token-checked definer RPCs only.
 
+-- A browser mints a fresh push endpoint whenever it rotates a subscription
+-- (VAPID change, service-worker or PWA reinstall), and this table is unique
+-- on endpoint — so one device used to pile up a row per rotation under the
+-- same device_token_hash. That split a device's reminders across several
+-- sub_ids: marvel_set_reminders wrote to one row while marvel_list_reminders
+-- read across all of them, so "remove" left the bell lit and a title held on
+-- two rows pushed twice. Registration now keeps exactly one row per device.
 create or replace function marvel_push_register(
   p_endpoint text, p_p256dh text, p_auth text, p_token text)
 returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_hash text;
+  v_sub uuid;
 begin
   if length(coalesce(p_token,'')) < 8 or length(coalesce(p_endpoint,'')) < 8 then
     return false;
   end if;
+  v_hash := _marvel_hash_token(p_token);
+
   insert into marvel_push_subs (endpoint, p256dh, auth, device_token_hash)
-  values (p_endpoint, p_p256dh, p_auth, _marvel_hash_token(p_token))
+  values (p_endpoint, p_p256dh, p_auth, v_hash)
   on conflict (endpoint) do update set
     p256dh = excluded.p256dh, auth = excluded.auth,
-    device_token_hash = excluded.device_token_hash;
+    device_token_hash = excluded.device_token_hash
+  returning id into v_sub;
+
+  -- Carry reminders off the device's older rows before dropping them; the
+  -- cascade clears anything that would have collided with a row we keep.
+  update marvel_push_reminders r
+     set sub_id = v_sub
+   where r.sub_id <> v_sub
+     and r.sub_id in (select id from marvel_push_subs where device_token_hash = v_hash)
+     and not exists (
+       select 1 from marvel_push_reminders k
+        where k.sub_id = v_sub
+          and k.title_id = r.title_id
+          and k.lead_days = r.lead_days);
+
+  delete from marvel_push_subs
+   where device_token_hash = v_hash and id <> v_sub;
+
   return true;
 end $$;
 
 -- Replace this device's reminder set for a title with exactly p_leads.
+-- Clearing is scoped to the device, not to one subscription row, so an empty
+-- p_leads removes the reminder everywhere even if stale rows still exist.
 create or replace function marvel_set_reminders(
   p_token text, p_title_id text, p_label text, p_date date, p_leads int[])
 returns boolean language plpgsql security definer set search_path = public as $$
 declare
+  v_hash text;
   v_sub uuid;
   v_lead int;
 begin
+  v_hash := _marvel_hash_token(p_token);
+  -- Newest row is the device's live endpoint.
   select id into v_sub from marvel_push_subs
-   where device_token_hash = _marvel_hash_token(p_token);
+   where device_token_hash = v_hash
+   order by created_at desc
+   limit 1;
   if v_sub is null then return false; end if;
 
-  delete from marvel_push_reminders
-   where sub_id = v_sub and title_id = p_title_id
-     and (p_leads is null or not (lead_days = any (p_leads)));
+  delete from marvel_push_reminders r
+   using marvel_push_subs s
+   where r.sub_id = s.id
+     and s.device_token_hash = v_hash
+     and r.title_id = p_title_id
+     and (p_leads is null or not (r.lead_days = any (p_leads)));
 
   if p_leads is not null then
     foreach v_lead in array p_leads loop

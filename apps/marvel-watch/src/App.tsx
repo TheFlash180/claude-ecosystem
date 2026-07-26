@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState, CSSProperties } from "react";
 import { Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
 import { M, type MediaType, type Title } from "./lib/config";
-import { daysUntil, fetchTitles, groupTitles } from "./lib/titles";
+import { fetchTitles, groupTitles, remindersList } from "./lib/titles";
 import { listReminders, registerPush, setReminders } from "./lib/push";
 import { HeroCard } from "./components/HeroCard";
 import { TitleCard } from "./components/TitleCard";
 import { LeadPicker } from "./components/LeadPicker";
+import { RemindersModal } from "./components/RemindersModal";
 
 const AdminPage = lazy(() => import("./components/AdminPage"));
 
@@ -42,6 +43,7 @@ export default function App() {
   const [filter, setFilter] = useState<"all" | MediaType>("all");
   const [reminders, setRemindersMap] = useState<Map<string, Set<number>>>(new Map());
   const [picker, setPicker] = useState<Title | null>(null);
+  const [showReminders, setShowReminders] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -88,15 +90,23 @@ export default function App() {
       : `Set — we'll nudge you ${leads.length} time${leads.length > 1 ? "s" : ""} before release`);
   };
 
+  const removeReminders = async (t: Title) => {
+    const ok = await setReminders(t, []);
+    if (!ok) {
+      showToast("Couldn't remove — allow notifications and try again.");
+      return;
+    }
+    await refreshReminders();
+    showToast("Reminders removed");
+  };
+
   const visible = titles.filter(t => filter === "all" || t.mediaType === filter);
   const groups = groupTitles(visible);
   const comingUp = groups.upcoming.filter(t => t.id !== groups.nextUp?.id);
-  // Only count reminders for titles that haven't released yet — a released
-  // movie's reminder lingers in the map but shouldn't inflate the badge.
-  const upcomingIds = new Set(
-    titles.filter(t => t.releaseDate && daysUntil(t.releaseDate) >= 0).map(t => t.id),
-  );
-  const bellCount = [...reminders.keys()].filter(id => upcomingIds.has(id)).length;
+  // Built from every title, not the filtered view: the bell reflects what this
+  // device has set, not whichever pill happens to be selected.
+  const reminderEntries = remindersList(titles, reminders);
+  const bellCount = reminderEntries.length;
 
   const chrome = (
     <style>{`
@@ -138,6 +148,17 @@ export default function App() {
       {chrome}
       {toastEl}
 
+      {showReminders && (
+        <RemindersModal
+          entries={reminderEntries}
+          // One sheet at a time: the picker replaces this list rather than
+          // stacking on top of it.
+          onEdit={t => { setShowReminders(false); void openPicker(t); }}
+          onRemove={t => void removeReminders(t)}
+          onClose={() => setShowReminders(false)}
+        />
+      )}
+
       {picker && (
         <LeadPicker
           title={picker}
@@ -174,16 +195,18 @@ export default function App() {
 
           <div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
             {bellCount > 0 && (
-              <span
-                aria-label={`${bellCount} titles with reminders`}
+              <button
+                onClick={() => setShowReminders(true)}
+                aria-label={`Show ${bellCount} title${bellCount > 1 ? "s" : ""} with reminders`}
+                title="Your reminders"
                 style={{
                   background: `${M.gold}18`, border: `1px solid ${M.gold}55`,
-                  borderRadius: 20, padding: "7px 13px",
+                  borderRadius: 20, padding: "7px 13px", cursor: "pointer",
                   fontFamily: M.body, fontSize: 13, color: M.gold, fontWeight: 700,
                   display: "inline-flex", alignItems: "center", gap: 5,
                 }}>
                 <Bell size={14} strokeWidth={2.2} /> {bellCount}
-              </span>
+              </button>
             )}
             <button
               onClick={() => { window.location.hash = "#/admin"; }}
