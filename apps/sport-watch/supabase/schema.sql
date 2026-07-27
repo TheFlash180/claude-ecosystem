@@ -214,18 +214,43 @@ alter table sport_push_reminders enable row level security;
 -- below (a device can only touch reminders tied to its own random token),
 -- and only the service role (edge function) can read subscriptions.
 
+-- A browser mints a fresh endpoint whenever it rotates a push subscription
+-- (VAPID change, service-worker or PWA reinstall), and this table is unique on
+-- endpoint — so without the cleanup below a device accumulates a row per
+-- rotation, and the same event's reminder can end up held against two of them,
+-- which sends the notification twice. Keep one row per device.
 create or replace function push_register(
   p_endpoint text, p_p256dh text, p_auth text, p_token text)
 returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_hash text;
+  v_sub uuid;
 begin
   if length(coalesce(p_token,'')) < 8 or length(coalesce(p_endpoint,'')) < 8 then
     return false;
   end if;
+  v_hash := _sport_hash_token(p_token);
+
   insert into sport_push_subs (endpoint, p256dh, auth, device_token_hash)
-  values (p_endpoint, p_p256dh, p_auth, _sport_hash_token(p_token))
+  values (p_endpoint, p_p256dh, p_auth, v_hash)
   on conflict (endpoint) do update set
     p256dh = excluded.p256dh, auth = excluded.auth,
-    device_token_hash = excluded.device_token_hash;
+    device_token_hash = excluded.device_token_hash
+  returning id into v_sub;
+
+  -- Carry reminders off the device's older rows first; unique (sub_id,
+  -- event_id) means a duplicate would collide, so those are left to cascade.
+  update sport_push_reminders r
+     set sub_id = v_sub
+   where r.sub_id <> v_sub
+     and r.sub_id in (select id from sport_push_subs where device_token_hash = v_hash)
+     and not exists (
+       select 1 from sport_push_reminders k
+        where k.sub_id = v_sub and k.event_id = r.event_id);
+
+  delete from sport_push_subs
+   where device_token_hash = v_hash and id <> v_sub;
+
   return true;
 end $$;
 
@@ -235,8 +260,12 @@ create or replace function push_set_reminder(
 returns boolean language plpgsql security definer set search_path = public as $$
 declare v_sub uuid;
 begin
+  -- Newest row is the device's live endpoint; without the ordering this took
+  -- whichever row the planner happened to return first.
   select id into v_sub from sport_push_subs
-   where device_token_hash = _sport_hash_token(p_token);
+   where device_token_hash = _sport_hash_token(p_token)
+   order by created_at desc
+   limit 1;
   if v_sub is null then return false; end if;
   insert into sport_push_reminders (sub_id, event_id, event_date, event_label, lead_minutes, notified)
   values (v_sub, p_event_id, p_event_date, p_event_label,

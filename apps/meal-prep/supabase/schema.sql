@@ -201,18 +201,33 @@ create table mealprep_push_subs (
 alter table mealprep_push_subs enable row level security;
 -- NO open policies: token-checked definer RPCs only.
 
+-- A browser mints a fresh endpoint whenever it rotates a push subscription
+-- (VAPID change, service-worker or PWA reinstall), and this table is unique on
+-- endpoint — so without the cleanup below a device accumulates a row per
+-- rotation. The prep-day push goes to EVERY row, so N rows is N notifications.
+-- Keep one row per device.
 create or replace function mealprep_push_register(
   p_endpoint text, p_p256dh text, p_auth text, p_token text)
 returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_hash text;
+  v_sub uuid;
 begin
   if length(coalesce(p_token,'')) < 8 or length(coalesce(p_endpoint,'')) < 8 then
     return false;
   end if;
+  v_hash := _mealprep_hash_token(p_token);
+
   insert into mealprep_push_subs (endpoint, p256dh, auth, device_token_hash, enabled)
-  values (p_endpoint, p_p256dh, p_auth, _mealprep_hash_token(p_token), true)
+  values (p_endpoint, p_p256dh, p_auth, v_hash, true)
   on conflict (endpoint) do update set
     p256dh = excluded.p256dh, auth = excluded.auth,
-    device_token_hash = excluded.device_token_hash, enabled = true;
+    device_token_hash = excluded.device_token_hash, enabled = true
+  returning id into v_sub;
+
+  delete from mealprep_push_subs
+   where device_token_hash = v_hash and id <> v_sub;
+
   return true;
 end $$;
 

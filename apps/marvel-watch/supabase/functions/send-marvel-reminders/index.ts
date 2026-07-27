@@ -74,19 +74,34 @@ Deno.serve(async () => {
   // ---- 1. due release reminders ----
   const { data: reminders, error: remErr } = await sb
     .from("marvel_push_reminders")
-    .select("id, title_label, release_date, lead_days, marvel_push_subs(id, endpoint, p256dh, auth)")
+    .select("id, title_id, title_label, release_date, lead_days, marvel_push_subs(id, endpoint, p256dh, auth)")
     .eq("notified", false)
     .gte("release_date", today);
   if (remErr) {
     return new Response(JSON.stringify({ error: remErr.message }), { status: 500 });
   }
 
-  const doneIds: string[] = [];
+  // Leads stack (1w / 3d / 1d), so several windows can open in the same run —
+  // a reminder set two days before release has all three open at once. The
+  // wording comes from days-to-release rather than from the lead, so firing
+  // each row sent the *identical* notification two or three times over.
+  // Collapse to one push per device per title, keeping the widest open lead;
+  // the narrower ones stay armed and fire on their own days.
+  const widestOpen = new Map<string, typeof reminders[number]>();
   for (const r of reminders ?? []) {
     const daysOut = daysBetween(today, r.release_date);
     if (daysOut > r.lead_days) continue; // window not open yet
     const sub = (r as any).marvel_push_subs;
     if (!sub?.endpoint) continue;
+    const key = `${sub.id}|${r.title_id}`;
+    const prev = widestOpen.get(key);
+    if (!prev || r.lead_days > prev.lead_days) widestOpen.set(key, r);
+  }
+
+  const doneIds: string[] = [];
+  for (const r of widestOpen.values()) {
+    const daysOut = daysBetween(today, r.release_date);
+    const sub = (r as any).marvel_push_subs;
     const when = daysOut === 0 ? "releases TODAY \u{1F37F}"
       : daysOut === 1 ? "releases tomorrow"
       : `releases in ${daysOut} days`;
