@@ -45,9 +45,10 @@ export interface NormalisedEvent {
   date_text: string | null;
 }
 
-/** Strip HTML to a short plain-text blurb. Quicket descriptions are pages of
- *  marked-up terms; the card only ever shows a couple of lines. */
-export function toSummary(html: string | null | undefined): string | null {
+/** HTML to plain text, in full. Kept separate from toSummary because the date
+ *  parser must see the whole blurb: run dates are often a paragraph or two in,
+ *  well past where a card-sized summary would cut off. */
+export function plainText(html: string | null | undefined): string | null {
   if (!html) return null;
   const text = String(html)
     .replace(/<[^>]+>/g, " ")
@@ -59,6 +60,13 @@ export function toSummary(html: string | null | undefined): string | null {
     .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")
     .trim();
+  return text || null;
+}
+
+/** Strip HTML to a short plain-text blurb for display. Quicket descriptions are
+ *  pages of marked-up terms; the card only ever shows a couple of lines. */
+export function toSummary(html: string | null | undefined): string | null {
+  const text = plainText(html);
   if (!text) return null;
   return text.length > SUMMARY_CHARS ? text.slice(0, SUMMARY_CHARS - 1) + "…" : text;
 }
@@ -242,8 +250,11 @@ async function fetchMontecasino(): Promise<NormalisedEvent[]> {
     if (!title) continue;
 
     const body = `${p?.excerpt?.rendered ?? ""} ${p?.content?.rendered ?? ""}`;
+    // Parse the FULL text: run dates are frequently a paragraph or two down,
+    // so reading only the card-sized summary silently loses most of them.
+    const full = plainText(body);
+    const run = parseShowRun(full ? decodeEntities(full) : null);
     const blurb = toSummary(body);
-    const run = parseShowRun(blurb ? decodeEntities(blurb) : null);
 
     out.push({
       source: "montecasino",
@@ -251,7 +262,7 @@ async function fetchMontecasino(): Promise<NormalisedEvent[]> {
       name: title,
       url: link || null,
       image_url: null,
-      summary: blurb,
+      summary: blurb ? decodeEntities(blurb) : null,
       // Evening curtain-up is the norm; only the day is knowable from prose.
       starts_at: run.start ? `${run.start}T19:00:00+02:00` : null,
       ends_at: run.end ? `${run.end}T22:00:00+02:00` : null,
