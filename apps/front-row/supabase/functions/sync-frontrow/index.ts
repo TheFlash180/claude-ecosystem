@@ -41,6 +41,8 @@ export interface NormalisedEvent {
   price_from: number | null;
   listed_at: string | null;
   dedupe_key: string;
+  /** Human run text, kept when a date could not be parsed confidently. */
+  date_text: string | null;
 }
 
 /** Strip HTML to a short plain-text blurb. Quicket descriptions are pages of
@@ -121,7 +123,152 @@ export function normaliseQuicket(e: Record<string, any>): NormalisedEvent | null
     price_from: prices.length ? Math.min(...prices) : null,
     listed_at: sastTimestamp(e.dateCreated),
     dedupe_key: dedupeKey(String(e.name), venue?.name ?? null, startsAt),
+    date_text: null,
   };
+}
+
+// ---------------------------------------------------------------- montecasino
+// Quicket carries the Outdoor Events Arena but none of the theatre: no Teatro,
+// no Pieter Toerien, no Semi-Soete. Those live on Montecasino's own site, which
+// runs WordPress and exposes a `whatson` custom post type through the standard
+// REST API — a sanctioned, structured source for the venue itself, and it
+// catches every show regardless of who sells the tickets.
+//
+// The catch: its ACF date fields are not exposed, so a run's dates exist only
+// in the body prose. parseShowRun below is a copy of the app's
+// src/lib/showDates.ts, which carries the tests. Change one, change both.
+
+const MONTE = { lat: -26.0256, lng: 27.9989 };
+
+const MONTHS: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8,
+  oct: 9, nov: 10, dec: 11,
+};
+const MONTH_RE = Object.keys(MONTHS).join("|");
+
+function isoDay(year: number, month: number, day: number): string | null {
+  const d = new Date(Date.UTC(year, month, day, 12));
+  if (d.getUTCMonth() !== month || d.getUTCDate() !== day) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function inferYear(month: number, day: number, today: Date): number {
+  const year = today.getUTCFullYear();
+  const candidate = Date.UTC(year, month, day, 12);
+  return candidate >= today.getTime() - 21 * 86400000 ? year : year + 1;
+}
+
+export function parseShowRun(text: string | null | undefined, today = new Date()) {
+  if (!text) return { start: null as string | null, end: null as string | null, text: null as string | null };
+  const s = String(text).replace(/\s+/g, " ");
+
+  const across = new RegExp(
+    `(\\d{1,2})\\s+(${MONTH_RE})\\s*(?:-|–|—|to|until|till)\\s*(\\d{1,2})\\s+(${MONTH_RE})\\s*(\\d{4})?`, "i").exec(s);
+  if (across) {
+    const [, d1, m1, d2, m2, y] = across;
+    const mo1 = MONTHS[m1.toLowerCase()], mo2 = MONTHS[m2.toLowerCase()];
+    const year = y ? Number(y) : inferYear(mo1, Number(d1), today);
+    const start = isoDay(year, mo1, Number(d1));
+    const end = isoDay(mo2 < mo1 ? year + 1 : year, mo2, Number(d2));
+    if (start) return { start, end, text: across[0] };
+  }
+
+  const within = new RegExp(
+    `(\\d{1,2})\\s*(?:-|–|—|to|until|till)\\s*(\\d{1,2})\\s+(${MONTH_RE})\\s*(\\d{4})?`, "i").exec(s);
+  if (within) {
+    const [, d1, d2, m, y] = within;
+    const mo = MONTHS[m.toLowerCase()];
+    const year = y ? Number(y) : inferYear(mo, Number(d1), today);
+    const start = isoDay(year, mo, Number(d1));
+    const end = isoDay(year, mo, Number(d2));
+    if (start) return { start, end, text: within[0] };
+  }
+
+  const single = new RegExp(`(\\d{1,2})\\s+(${MONTH_RE})\\s*(\\d{4})?`, "i").exec(s);
+  if (single) {
+    const [, d, m, y] = single;
+    const mo = MONTHS[m.toLowerCase()];
+    const year = y ? Number(y) : inferYear(mo, Number(d), today);
+    const start = isoDay(year, mo, Number(d));
+    if (start) return { start, end: null, text: single[0] };
+  }
+
+  return { start: null, end: null, text: null };
+}
+
+/** The URL path carries the venue: /whatson/theatre/teatro/semi-soete/ */
+export function monteVenue(link: string): { venue: string; section: string } {
+  const parts = String(link).split("/").filter(Boolean);
+  const i = parts.indexOf("whatson");
+  const section = i >= 0 ? (parts[i + 1] ?? "") : "";
+  const sub = i >= 0 ? (parts[i + 2] ?? "") : "";
+  if (sub === "teatro") return { venue: "Teatro at Montecasino", section };
+  if (sub === "pieter-toerien") return { venue: "Pieter Toerien Theatre, Montecasino", section };
+  return { venue: "Montecasino", section };
+}
+
+function decodeEntities(s: string): string {
+  return s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/gi, "&").replace(/&nbsp;/gi, " ")
+    .replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&#8217;|&rsquo;/gi, "'").replace(/&#8211;|&ndash;/gi, "–");
+}
+
+async function fetchMontecasino(): Promise<NormalisedEvent[]> {
+  const url = "https://www.montecasino.co.za/wp-json/wp/v2/whatson"
+    + "?per_page=100&_fields=id,slug,link,title,content,excerpt,date,modified";
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "FrontRow/1.0 (personal event tracker; daily poll)",
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`Montecasino wp-json: HTTP ${res.status}`);
+  const posts = await res.json() as Record<string, any>[];
+
+  const out: NormalisedEvent[] = [];
+  for (const p of posts ?? []) {
+    const link = String(p?.link ?? "");
+    const { venue, section } = monteVenue(link);
+    // Casino floor promotions ("Winning Sunday", jackpot draws) are not events
+    // anyone wants pushed; the URL section separates them cleanly.
+    if (section === "gaming") continue;
+
+    const title = decodeEntities(String(p?.title?.rendered ?? "").trim());
+    if (!title) continue;
+
+    const body = `${p?.excerpt?.rendered ?? ""} ${p?.content?.rendered ?? ""}`;
+    const blurb = toSummary(body);
+    const run = parseShowRun(blurb ? decodeEntities(blurb) : null);
+
+    out.push({
+      source: "montecasino",
+      external_id: String(p.id),
+      name: title,
+      url: link || null,
+      image_url: null,
+      summary: blurb,
+      // Evening curtain-up is the norm; only the day is knowable from prose.
+      starts_at: run.start ? `${run.start}T19:00:00+02:00` : null,
+      ends_at: run.end ? `${run.end}T22:00:00+02:00` : null,
+      venue_name: venue,
+      lat: MONTE.lat,
+      lng: MONTE.lng,
+      locality: "Gauteng · Fourways",
+      categories: section ? [section] : [],
+      organiser: "Montecasino",
+      price_from: null,
+      // WordPress publish date is when the show was announced.
+      listed_at: p?.date ? sastTimestamp(p.date) : null,
+      dedupe_key: dedupeKey(title, venue, run.start ? `${run.start}T19:00:00+02:00` : null),
+      date_text: run.text,
+    });
+  }
+  return out;
 }
 
 async function fetchQuicket(sb: SupabaseClient): Promise<NormalisedEvent[]> {
@@ -182,6 +329,7 @@ async function fetchQuicket(sb: SupabaseClient): Promise<NormalisedEvent[]> {
 
 const SOURCES: Record<string, (sb: SupabaseClient) => Promise<NormalisedEvent[]>> = {
   quicket: fetchQuicket,
+  montecasino: () => fetchMontecasino(),
 };
 
 Deno.serve(async () => {
@@ -235,11 +383,20 @@ Deno.serve(async () => {
   }
 
   // Drop events that have finished; the notifier and UI only look forward.
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const { count } = await sb.from("frontrow_events")
     .delete({ count: "exact" })
-    .lt("starts_at", new Date(Date.now() - 7 * 86400000).toISOString());
+    .lt("starts_at", weekAgo);
 
-  return new Response(JSON.stringify({ report, pruned: count ?? 0 }), {
+  // Dateless rows (a Montecasino run whose prose could not be parsed) would
+  // otherwise live forever, since the rule above can never match a null. Drop
+  // them once the source stops listing them.
+  const { count: stale } = await sb.from("frontrow_events")
+    .delete({ count: "exact" })
+    .is("starts_at", null)
+    .lt("last_seen", weekAgo);
+
+  return new Response(JSON.stringify({ report, pruned: (count ?? 0) + (stale ?? 0) }), {
     headers: { "Content-Type": "application/json" },
   });
 });
