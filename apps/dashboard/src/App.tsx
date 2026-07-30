@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppShell, supabaseConfigured, getSupabase } from '@ecosystem/shared';
 import {
-  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Gift, Car,
+  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Gift, Car, Tag, Ticket,
   LayoutGrid, ArrowUpRight, type LucideIcon,
 } from 'lucide-react';
 import { parseApps } from './lib/apps';
@@ -30,6 +30,8 @@ const ICONS: Record<IconKey, LucideIcon> = {
   wallet: Wallet,
   gift: Gift,
   car: Car,
+  tag: Tag,
+  ticket: Ticket,
   app: LayoutGrid,
 };
 

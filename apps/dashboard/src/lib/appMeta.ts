@@ -6,7 +6,7 @@
  *  and can be unit-tested; App.tsx maps the key to a lucide icon. */
 export type IconKey =
   | 'baby' | 'film' | 'chef' | 'trophy' | 'dumbbell'
-  | 'wallet' | 'gift' | 'car' | 'app';
+  | 'wallet' | 'gift' | 'car' | 'tag' | 'ticket' | 'app';
 
 export interface AppMeta {
   color: string;
@@ -23,6 +23,8 @@ const META: Record<string, AppMeta> = {
   'fintrack-pro': { color: '#2DD4BF', icon: 'wallet',   note: 'household finance' },
   'baby-registry':{ color: '#D9A441', icon: 'gift',     note: 'gifts & claims' },
   'glovebox':     { color: '#5B8DEF', icon: 'car',      note: 'licence, disc & services' },
+  'price-watch':  { color: '#A78BFA', icon: 'tag',      note: 'price drops & history' },
+  'front-row':    { color: '#EC4899', icon: 'ticket',   note: 'events before they sell out' },
 };
 
 export interface PlannedApp {
@@ -37,6 +39,8 @@ export interface PlannedApp {
 export const COMING_SOON: PlannedApp[] = [
   // Glovebox shipped — build-all picks it up from its index.html <title>, so
   // listing it here too would render the tile twice.
+  { slug: 'price-watch', name: 'Price Watch' },
+  { slug: 'front-row', name: 'Front Row' },
 ];
 
 /** Unknown slugs still get a usable tile: a newly deployed app should look
