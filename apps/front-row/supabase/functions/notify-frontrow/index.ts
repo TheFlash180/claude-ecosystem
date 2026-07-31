@@ -6,7 +6,8 @@
 // sold out, which is the failure this app was built for.
 //
 // frontrow_notified holds one row per (watch, event) already sent, so re-runs
-// are idempotent and adding a watch never replays the back catalogue.
+// are idempotent; and a watch only reports listings newer than itself, so
+// adding one never replays the back catalogue.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -99,8 +100,14 @@ Deno.serve(async () => {
   // told twice about the same show is the bug, not a feature.
   const perDevice = new Map<string, Map<string, { ev: any; watchIds: string[] }>>();
   for (const w of watches) {
+    // A watch reports what gets listed from now on. Anything listed before it
+    // existed is already visible in the app, so pushing it would just be a
+    // burst of six notifications about things on screen the moment you add
+    // your first watch.
+    const from = w.created_at ? Date.parse(w.created_at) : 0;
     for (const ev of events) {
       if (already.has(`${w.id}|${ev.id}`)) continue;
+      if (ev.listed_at && Date.parse(ev.listed_at) < from) continue;
       if (!matches(ev, w)) continue;
       const byEvent = perDevice.get(w.device_token_hash) ?? new Map();
       const entry = byEvent.get(ev.id) ?? { ev, watchIds: [] };
