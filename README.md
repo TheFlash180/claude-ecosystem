@@ -30,10 +30,31 @@ That shared project is a real coupling to be aware of:
   `auth.users`); baby-logger reuses it.
 - **baby-registry-pwa owns** `categories`/`items`/`retailers`/`claims`/
   `registry_settings` and their security-definer RPCs.
-- **sport-watch owns** `sport_push_subs`/`sport_push_reminders`, the
-  `send-sport-reminders` edge function, and a pg_cron job (see
-  [apps/sport-watch/supabase/](apps/sport-watch/supabase/)).
 - The `ping` table only exists for the keep-alive cron.
+
+Everything else is owned by exactly one in-repo app, which prefixes its tables
+with its own name. Each app's `supabase/` folder holds the **copy of record**
+for its schema, edge functions and cron jobs — those files are deployed
+separately, so editing one does not change the running system:
+
+| App | Tables | Edge functions | pg_cron |
+|---|---|---|---|
+| sport-watch | `sport_*` | `sync-f1`, `send-sport-reminders`, `sport-calendar` | `sport-f1-sync`, `sport-push-reminders`, `sport-prune-reminders` |
+| marvel-watch | `marvel_*` | `sync-marvel`, `send-marvel-reminders` | `marvel-tmdb-sync`, `marvel-push-reminders`, `marvel-prune-*` |
+| meal-prep | `mealprep_*` | `send-mealprep-reminder` | `mealprep-prep-reminder` |
+| workout-plan | `workout_*` | — | — |
+| baby-logger | `babies`, `*_events` | — | — |
+| glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
+| front-row | `frontrow_*` | `sync-frontrow`, `notify-frontrow` | `frontrow-sync`, `frontrow-notify` |
+
+The apps that predate accounts (everything except baby-logger and fintrack-pro)
+are **device-scoped, not user-scoped**: RLS is enabled with no policies at all,
+and every write goes through a `security definer` RPC that checks a SHA-256
+hash of a random token held in the device's localStorage. Shared world data
+(fixtures, titles, events) is public-read; nothing device-scoped is readable
+without the token. Supabase's advisors flag both patterns — RLS-with-no-policy
+and anon-executable security-definer functions — and both flags are expected
+here, not something to "fix" by adding policies.
 
 Schema changes in any repo land in the same database — check the other repos'
 `supabase/` folders before renaming or dropping anything shared.
