@@ -40,7 +40,7 @@ export const COMING_SOON: PlannedApp[] = [
   // Glovebox shipped — build-all picks it up from its index.html <title>, so
   // listing it here too would render the tile twice.
   { slug: 'price-watch', name: 'Price Watch' },
-  { slug: 'front-row', name: 'Front Row' },
+  // Front Row shipped — build-all picks it up from its index.html <title>.
 ];
 
 /** Unknown slugs still get a usable tile: a newly deployed app should look
