@@ -26,9 +26,14 @@ create table mealprep_recipes (
   meal_type text not null default 'any'
     check (meal_type in ('lunch','dinner','any','side','snack','dessert')),
   serves int not null default 4 check (serves between 1 and 20),
-  ingredients jsonb not null default '[]'::jsonb,  -- [{n,q,u,c}]
+  ingredients jsonb not null default '[]'::jsonb,  -- [{n,q,u,c,f?}]
   steps jsonb not null default '[]'::jsonb,        -- ordered array of strings
   total_minutes integer,                    -- hands-on + cooking, for the time filters
+  -- Serving-size scaling. false where the quantities are not really
+  -- quantities: the pap guide is a ratio explainer, a mug cake is one mug and
+  -- a fixed microwave time. An ingredient carrying "f": true is fixed too —
+  -- the litre of oil you deep-fry in does not double because dinner did.
+  scalable boolean not null default true,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -40,6 +45,9 @@ create policy "public read" on mealprep_recipes for select to anon, authenticate
 -- other seeing it on the shopping list is the entire point, so no device token.
 create table mealprep_cook_list (
   recipe_id text primary key references mealprep_recipes(id) on delete cascade,
+  -- How many you are cooking for, so the shopping list agrees with the recipe
+  -- sheet. null = the recipe's own serves.
+  servings int check (servings between 1 and 20),
   added_at timestamptz not null default now()
 );
 alter table mealprep_cook_list enable row level security;
@@ -139,11 +147,12 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------- cook list
-create or replace function mealprep_cook_add(p_recipe_id text)
+create or replace function mealprep_cook_add(p_recipe_id text, p_servings int default null)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
-  insert into mealprep_cook_list (recipe_id) values (p_recipe_id)
-  on conflict (recipe_id) do nothing;
+  if p_servings is not null and (p_servings < 1 or p_servings > 20) then return false; end if;
+  insert into mealprep_cook_list (recipe_id, servings) values (p_recipe_id, p_servings)
+  on conflict (recipe_id) do update set servings = excluded.servings;
   return true;
 end $$;
 
@@ -267,7 +276,7 @@ revoke all on function _mealprep_admin_ok(text) from public, anon;
 revoke all on function mealprep_admin_check(text) from public, anon;
 revoke all on function mealprep_upsert_recipe(text,text,text,text,int,jsonb,text,jsonb,integer) from public, anon;
 revoke all on function mealprep_delete_recipe(text,text) from public, anon;
-revoke all on function mealprep_cook_add(text) from public, anon;
+revoke all on function mealprep_cook_add(text,int) from public, anon;
 revoke all on function mealprep_cook_remove(text) from public, anon;
 revoke all on function mealprep_cook_clear() from public, anon;
 revoke all on function mealprep_tick(text,text,boolean) from public, anon;
@@ -281,7 +290,7 @@ revoke all on function get_mealprep_vapid_private_key() from public, anon, authe
 grant execute on function mealprep_admin_check(text) to anon;
 grant execute on function mealprep_upsert_recipe(text,text,text,text,int,jsonb,text,jsonb,integer) to anon;
 grant execute on function mealprep_delete_recipe(text,text) to anon;
-grant execute on function mealprep_cook_add(text) to anon;
+grant execute on function mealprep_cook_add(text,int) to anon;
 grant execute on function mealprep_cook_remove(text) to anon;
 grant execute on function mealprep_cook_clear() to anon;
 grant execute on function mealprep_tick(text,text,boolean) to anon;

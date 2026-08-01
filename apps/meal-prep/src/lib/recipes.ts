@@ -2,8 +2,10 @@
 // node in tests.
 import {
   CATEGORY_META,
-  type Category, type Ingredient, type MealType, type Recipe, type ShoppingRow,
+  type Category, type CookEntry, type Ingredient, type MealType, type Recipe,
+  type ShoppingRow,
 } from './config';
+import { scaleRecipe } from './scale';
 
 // ---- browsing ----
 
@@ -98,22 +100,24 @@ function fmtQty(q: number, u: string): string {
 /**
  * Consolidate the chosen recipes into one list, grouped by aisle.
  *
- * The same recipe chosen twice counts twice — cooking it two nights means
- * buying for two nights. Quantities that are not numbers ("a handful") make
- * the whole line uncountable rather than silently reading as zero.
+ * Each entry is bought at the serving size it was added at, so choosing "cook
+ * for 8" on the recipe sheet buys for 8. The same recipe listed twice counts
+ * twice — cooking it two nights means buying for two nights. Quantities that
+ * are not numbers ("a handful") make the whole line uncountable rather than
+ * silently reading as zero.
  */
 export function buildShoppingList(
-  recipeIds: string[],
+  entries: CookEntry[],
   recipes: Map<string, Recipe>,
   state: ShoppingRow[],
 ): ShoppingSection[] {
   interface Agg { name: string; unit: string; qty: number; countable: boolean; category: Category }
   const agg = new Map<string, Agg>();
 
-  for (const id of recipeIds) {
-    const r = recipes.get(id);
+  for (const entry of entries) {
+    const r = recipes.get(entry.recipeId);
     if (!r) continue;
-    for (const ing of r.ingredients) {
+    for (const ing of scaleRecipe(r, entry.servings ?? r.serves).ingredients) {
       if (!ing?.n) continue;
       const key = itemKeyOf(ing);
       const q = typeof ing.q === 'number' ? ing.q : parseFloat(ing.q);
