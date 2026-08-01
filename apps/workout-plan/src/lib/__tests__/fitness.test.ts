@@ -1,24 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addDays, ageFromDob, bestSet, bmr, dayIndex, est1RM, formatRunTime,
-  nutritionTargets, parseRunTime, sessionsThisWeek, weekStart,
+  ageFromDob, bmr, formatRunTime, nutritionTargets, parseRunTime, runStats, weightTrend,
 } from '../fitness';
-import type { Profile } from '../config';
-
-describe('dates', () => {
-  it('dayIndex has Monday = 0', () => {
-    expect(dayIndex('2026-07-20')).toBe(0); // Monday
-    expect(dayIndex('2026-07-25')).toBe(5); // Saturday
-    expect(dayIndex('2026-07-26')).toBe(6); // Sunday
-  });
-  it('weekStart snaps back to Monday', () => {
-    expect(weekStart('2026-07-23')).toBe('2026-07-20');
-    expect(weekStart('2026-07-20')).toBe('2026-07-20');
-  });
-  it('addDays crosses months', () => {
-    expect(addDays('2026-07-31', 1)).toBe('2026-08-01');
-  });
-});
+import type { BodyweightEntry, Profile, RunEntry } from '../config';
 
 describe('ageFromDob', () => {
   it('accounts for whether the birthday has passed', () => {
@@ -59,17 +43,34 @@ describe('nutrition', () => {
   });
 });
 
-describe('strength', () => {
-  it('Epley 1RM: 10 reps at 60kg ≈ 80kg', () => {
-    expect(Math.round(est1RM(60, 10))).toBe(80);
-    expect(est1RM(null, 12)).toBe(0); // bodyweight move
+describe('weightTrend', () => {
+  const entries: BodyweightEntry[] = [
+    { date: '2026-07-01', weightKg: 63.4 },
+    { date: '2026-07-15', weightKg: 62.1 },
+    { date: '2026-08-01', weightKg: 61.7 },
+  ];
+
+  it('reads the latest weigh-in and the change since the first', () => {
+    const t = weightTrend(entries, 58);
+    expect(t.current).toBe(61.7);
+    expect(t.delta).toBe(-1.7);
+    expect(t.toTarget).toBe(3.7);
   });
-  it('bestSet takes the top estimated 1RM', () => {
-    const best = bestSet([
-      { exerciseId: 'x', setNo: 1, weightKg: 20, reps: 12 },
-      { exerciseId: 'x', setNo: 2, weightKg: 24, reps: 8 },
-    ]);
-    expect(Math.round(best)).toBe(30); // 24 * (1 + 8/30)
+
+  it('shows no change from a single weigh-in', () => {
+    // One reading is a starting point, not a trend — "0.0 kg" would read as
+    // "you have made no progress".
+    const t = weightTrend([entries[0]], null);
+    expect(t.current).toBe(63.4);
+    expect(t.delta).toBeNull();
+  });
+
+  it('goes negative once the target is passed', () => {
+    expect(weightTrend(entries, 63)!.toTarget).toBe(-1.3);
+  });
+
+  it('handles no weigh-ins at all', () => {
+    expect(weightTrend([], 58)).toEqual({ current: null, delta: null, toTarget: null });
   });
 });
 
@@ -87,9 +88,27 @@ describe('run times', () => {
   });
 });
 
-describe('sessionsThisWeek', () => {
-  it('counts distinct dates inside the current ISO week only', () => {
-    const dates = ['2026-07-20', '2026-07-20', '2026-07-22', '2026-07-19' /* prev week */];
-    expect(sessionsThisWeek(dates, '2026-07-23')).toBe(2);
+describe('runStats', () => {
+  const run = (date: string, seconds: number): RunEntry => ({ date, seconds, location: 'parkrun', note: '' });
+  // Newest first, the order the query returns.
+  const runs = [run('2026-08-01', 1450), run('2026-07-25', 1493), run('2026-07-18', 1520)];
+
+  it('takes the fastest time as the PB', () => {
+    expect(runStats(runs).pbSeconds).toBe(1450);
+    expect(runStats(runs).latestSeconds).toBe(1450);
+    expect(runStats(runs).latestIsPb).toBe(true);
+  });
+
+  it('does not call a slower latest run a PB', () => {
+    expect(runStats([run('2026-08-08', 1600), ...runs]).latestIsPb).toBe(false);
+  });
+
+  it('does not celebrate the very first run as a PB', () => {
+    // There was nothing to beat — congratulating it cheapens the real one.
+    expect(runStats([run('2026-07-18', 1520)]).latestIsPb).toBe(false);
+  });
+
+  it('handles no runs', () => {
+    expect(runStats([])).toEqual({ pbSeconds: null, latestSeconds: null, latestIsPb: false });
   });
 });

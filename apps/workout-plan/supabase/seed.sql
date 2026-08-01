@@ -1,7 +1,8 @@
--- Workout Plan starter seed (copy of record — the plan already applied live).
--- 23 exercises (demo photos from the public-domain free-exercise-db) + an
--- 8-day weekly split. The profile row (personal stats) and the admin password
--- are set live, not committed -- see the commented example at the bottom.
+-- Workout Plan starter seed (copy of record — already applied live).
+-- 33 exercises (demo photos from the public-domain free-exercise-db) and the
+-- 7 workouts in the library. The profile row (personal stats) and the admin
+-- password are set live, not committed -- see the commented example at the
+-- bottom.
 
 insert into workout_exercises (id,name,muscle,equipment,setting,image_url,instructions,sort_order) values
 ('db-floor-press','Dumbbell Floor Press','triceps','dumbbell','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Floor_Press/0.jpg','Lay on the floor holding dumbbells in your hands. Your knees can be bent. Begin with the weights fully extended above you. Lower the weights until your upper arm comes in contact with the floor. You can tuck your elbows to emphasize triceps size and strength, or to focus on your chest angle your arms to the side. Pause at the bottom, and then bring the weight together at the top by extending through the elbows.',1),
@@ -26,51 +27,70 @@ insert into workout_exercises (id,name,muscle,equipment,setting,image_url,instru
 ('rear-delt-fly','Rear Delt Fly','shoulders','dumbbell','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Rear_Delt_Raise/0.jpg','While holding a dumbbell in each hand, lay with your chest down on a flat bench. Position the palms of the hands in a neutral manner (palms facing your torso) as you keep the arms extended with the elbows slightly bent. This will be your starting position. Now raise the arms to the side until your elbows are at shoulder height and your arms are roughly parallel to the floor as you exhale. Tip: Maintain your arms perpendicular to the torso while keeping them extended throughout the movement. Also, keep the contraction at the top for a second. Slowly lower the dumbbells to the starting position as you inhale. Repeat for the recommended amount of repetitions and then switch to the other arm.',20),
 ('goblet-squat','Goblet Squat','quadriceps','kettlebells','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Goblet_Squat/0.jpg','Stand holding a light kettlebell by the horns close to your chest. This will be your starting position. Squat down between your legs until your hamstrings are on your calves. Keep your chest and head up and your back straight. At the bottom position, pause and use your elbows to push your knees out. Return to the starting position, and repeat for 10-20 repetitions.',21),
 ('rear-lunge','Dumbbell Reverse Lunge','quadriceps','dumbbell','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Rear_Lunge/0.jpg','Stand with your torso upright holding two dumbbells in your hands by your sides. This will be your starting position. Step backward with your right leg around two feet or so from the left foot and lower your upper body down, while keeping the torso upright and maintaining balance. Inhale as you go down. Tip: As in the other exercises, do not allow your knee to go forward beyond your toes as you come down, as this will put undue stress on the knee joint. Make sure that you keep your front shin perpendicular to the ground. Keep the torso upright during the lunge; flexible hip flexors are important. A long lunge emphasizes the Gluteus Maximus; a short lunge emphasizes Quadriceps. Push up and go back to the starting position as you exhale. Tip: Use the ball of your feet to push in order to accentuate the quadriceps. To focus on the glutes, press with your heels. Now repeat with the opposite leg.',22),
-('plank','Plank','abdominals','body only','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg','Get into a prone position on the floor, supporting your weight on your toes and your forearms. Your arms are bent and directly below the shoulder. Keep your body straight at all times, and hold this position as long as possible. To increase difficulty, an arm or leg can be raised.',23)
+('plank','Plank','abdominals','body only','home','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg','Get into a prone position on the floor, supporting your weight on your toes and your forearms. Your arms are bent and directly below the shoulder. Keep your body straight at all times, and hold this position as long as possible. To increase difficulty, an arm or leg can be raised.',23),
+('leg-swings','Leg Swings','hamstrings','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Front_Leg_Raises/0.jpg','Stand next to a chair or other support, holding on with one hand. Swing your leg forward, keeping the leg straight. Continue with a downward swing, bringing the leg as far back as your flexibility allows. Repeat 5-10 times, and then switch legs.',24),
+('hip-circles','Standing Hip Circles','abductors','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Standing_Hip_Circles/0.jpg','Begin standing on one leg, holding to a vertical support. Raise the unsupported knee to 90 degrees. This will be your starting position. Open the hip as far as possible, attempting to make a big circle with your knee. Perform this movement slowly for a number of repetitions, and repeat on the other side.',25),
+('inchworm','Inchworm','hamstrings','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Inchworm/0.jpg','Stand with your feet close together. Keeping your legs straight, stretch down and put your hands on the floor directly in front of you. This will be your starting position. Begin by walking your hands forward slowly, alternating your left and your right. As you do so, bend only at the hip, keeping your legs straight. Keep going until your body is parallel to the ground in a pushup position. Now, keep your hands in place and slowly take short steps with your feet, moving only a few inches at a time. Continue walking until your feet are by your hands, keeping your legs straight as you do so.',26),
+('worlds-greatest','World''s Greatest Stretch','hamstrings','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Worlds_Greatest_Stretch/0.jpg','This is a three-part stretch. Begin by lunging forward, with your front foot flat on the ground and on the toes of your back foot. With your knees bent, squat down until your knee is almost touching the ground. Keep your torso erect, and hold this position for 10-20 seconds. Now, place the arm on the same side as your front leg on the ground, with the elbow next to the foot. Your other hand should be placed on the ground, parallel to your lead leg, to help support you during this portion of the stretch. After 10-20 seconds, place your hands on either side of your front foot. Raise the toes of the front foot off of the ground, and straighten your leg. You may need to reposition your rear leg to do so. Hold for 10-20 seconds, and then repeat the entire sequence for the other side.',27),
+('cat-stretch','Cat Stretch','lower back','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cat_Stretch/0.jpg','Position yourself on the floor on your hands and knees. Pull your belly in and round your spine, lower back, shoulders, and neck, letting your head drop. Hold for 15 seconds.',28),
+('childs-pose','Child''s Pose','lower back','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Childs_Pose/0.jpg','Get on your hands and knees, walk your hands in front of you. Lower your buttocks down to sit on your heels. Let your arms drag along the floor as you sit back to stretch your entire spine. Once you settle onto your heels, bring your hands next to your feet and relax. Breathe into your back. Rest your forehead on the floor. Avoid this position if you have knee problems.',29),
+('kneel-hip-flexor','Kneeling Hip Flexor Stretch','quadriceps','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Kneeling_Hip_Flexor/0.jpg','Kneel on a mat and bring your right knee up so the bottom of your foot is on the floor and extend your left leg out behind you so the top of your foot is on the floor. Shift your weight forward until you feel a stretch in your hip. Hold for 15 seconds, then repeat for your other side.',30),
+('knee-across-body','Knee Across The Body','glutes','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Knee_Across_The_Body/0.jpg','Lie down on the floor with your right leg straight. Bend your left leg and lower it across your body, holding the knee down toward the floor with your right hand. (The knee does not need to touch the floor if you are tight.) Place your left arm comfortably beside you and turn your head to the left. Imagine you have a weight tied to your tailbone — let your tailbone fall back toward the floor as your chest reaches in the opposite direction to stretch your lower back. Switch sides.',31),
+('runners-stretch','Runner''s Stretch','hamstrings','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Runners_Stretch/0.jpg','It is easiest to get into this stretch if you start standing up, put one leg behind you, and slowly lower your torso down to the floor. Keep the front heel on the floor (if it lifts up, scoot your other leg further back). Place your hands on either side of your front leg. To get more out of this stretch, push your butt up toward the ceiling, and then gradually lower it back toward the floor. You will stretch the hip flexor of the back leg and the hamstring and buttocks of the front.',32),
+('elbows-back','Elbows Back','chest','body only','both','https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Elbows_Back/0.jpg','Stand up straight. Place both hands on your lower back, fingers pointing downward and elbows out. Then gently pull your elbows back, aiming to touch them together.',33)
 on conflict (id) do nothing;
 
-insert into workout_routines (id,day,title,kind,subtitle,variant,sort_order) values
-('mon-push',0,'Push Day','home','Chest · Shoulders · Triceps','main',0),
-('tue-sport',1,'Padel / Squash','sport','Your active day — go play','main',1),
-('wed-gym',2,'Gym · Full Body','gym','Planet Fitness — go heavy','main',2),
-('wed-home',2,'Full Body (home)','home','Friend bailed? Do this at home','fallback',3),
-('thu-pull',3,'Pull Day','home','Back · Biceps · Rear delts','main',4),
-('fri-lower',4,'Lower + Core','home','Legs · Glutes · Core','main',5),
-('sat-run',5,'parkrun 5 km','run','Saturday 5k — chase the clock','main',6),
-('sun-rest',6,'Rest / Mobility','rest','Recover — you earned it','main',7)
+insert into workout_routines (id,title,kind,subtitle,summary,est_minutes,sort_order) values
+('push','Push Day','home','Chest · Shoulders · Triceps','Everything that pushes — chest, shoulders and triceps — with the dumbbells at home. Rest 60–90 seconds between sets and stop a rep or two short of failure on the compounds.',35,1),
+('pull','Pull Day','home','Back · Biceps · Rear delts','Back, biceps and rear delts. Chin-ups first while you are fresh, then rows and curls. If a full chin-up is still out of reach, jump to the top and lower yourself as slowly as you can.',30,2),
+('lower-core','Lower + Core','home','Legs · Glutes · Core','Legs, glutes and core. Depth beats load — get your hips below your knees on the squats before you reach for a heavier dumbbell.',35,3),
+('full-body-home','Full Body (home)','home','Whole body · dumbbells only','The whole body in one session with nothing but dumbbells and a bar. This is the one for a day the gym or your padel partner falls through.',35,4),
+('full-body-gym','Full Body (gym)','gym','Planet Fitness — go heavy','Machines and free weights at the gym — the one day a week to go genuinely heavy. Leg press first while your legs are fresh, core last.',45,5),
+('run-5k','parkrun 5 km','run','Warm up, then chase the clock','Four minutes of dynamic warm-up, then run. Go out slower than feels right for the first kilometre and finish strong. Log the time on Progress afterwards.',40,6),
+('mobility','Mobility & Stretch','mobility','Rest-day reset','Ten minutes of stretching on a rest day, or straight after a run while you are still warm. Hold each one for about 30 seconds and keep breathing — never bounce.',12,7)
 on conflict (id) do nothing;
 
 insert into workout_routine_exercises (routine_id,exercise_id,sort_order,target_sets,target_reps,note) values
-('mon-push','db-floor-press',1,3,'10',''),
-('mon-push','db-shoulder-press',2,3,'10',''),
-('mon-push','pushups',3,3,'12','Slow the tempo as it gets easy'),
-('mon-push','side-lateral-raise',4,3,'15','Light — form over weight'),
-('mon-push','oh-triceps-ext',5,3,'12',''),
-('mon-push','ab-wheel',6,3,'8-10','From knees'),
-('wed-gym','leg-press',1,4,'10',''),
-('wed-gym','machine-bench',2,3,'10',''),
-('wed-gym','lat-pulldown',3,3,'10',''),
-('wed-gym','seated-row',4,3,'10',''),
-('wed-gym','romanian-deadlift',5,3,'10','Feel the hamstring stretch'),
-('wed-gym','calf-raise',6,4,'15',''),
-('wed-gym','hanging-leg-raise',7,3,'12',''),
-('wed-home','split-squat',1,3,'10 each','Hold your dumbbells'),
-('wed-home','pushups',2,3,'12',''),
-('wed-home','chin-up',3,3,'AMRAP','Negatives if needed'),
-('wed-home','db-row',4,3,'10 each',''),
-('wed-home','glute-bridge',5,3,'15',''),
-('wed-home','ab-wheel',6,3,'8-10',''),
-('thu-pull','chin-up',1,3,'AMRAP','Slow negatives build strength'),
-('thu-pull','db-row',2,3,'10 each',''),
-('thu-pull','db-curl',3,3,'12',''),
-('thu-pull','rear-delt-fly',4,3,'15','Light'),
-('thu-pull','ab-wheel',5,3,'8-10',''),
-('fri-lower','goblet-squat',1,3,'12',''),
-('fri-lower','rear-lunge',2,3,'10 each',''),
-('fri-lower','db-rdl',3,3,'12',''),
-('fri-lower','glute-bridge',4,3,'15','Squeeze at the top'),
-('fri-lower','calf-raise',5,3,'20',''),
-('fri-lower','plank',6,3,'45s','');
+('push','db-floor-press',1,3,'10',''),
+('push','db-shoulder-press',2,3,'10',''),
+('push','pushups',3,3,'12','Slow the tempo as it gets easy'),
+('push','side-lateral-raise',4,3,'15','Light — form over weight'),
+('push','oh-triceps-ext',5,3,'12',''),
+('push','ab-wheel',6,3,'8-10','From knees'),
+('full-body-gym','leg-press',1,4,'10',''),
+('full-body-gym','machine-bench',2,3,'10',''),
+('full-body-gym','lat-pulldown',3,3,'10',''),
+('full-body-gym','seated-row',4,3,'10',''),
+('full-body-gym','romanian-deadlift',5,3,'10','Feel the hamstring stretch'),
+('full-body-gym','calf-raise',6,4,'15',''),
+('full-body-gym','hanging-leg-raise',7,3,'12',''),
+('full-body-home','split-squat',1,3,'10 each','Hold your dumbbells'),
+('full-body-home','pushups',2,3,'12',''),
+('full-body-home','chin-up',3,3,'AMRAP','Negatives if needed'),
+('full-body-home','db-row',4,3,'10 each',''),
+('full-body-home','glute-bridge',5,3,'15',''),
+('full-body-home','ab-wheel',6,3,'8-10',''),
+('pull','chin-up',1,3,'AMRAP','Slow negatives build strength'),
+('pull','db-row',2,3,'10 each',''),
+('pull','db-curl',3,3,'12',''),
+('pull','rear-delt-fly',4,3,'15','Light'),
+('pull','ab-wheel',5,3,'8-10',''),
+('lower-core','goblet-squat',1,3,'12',''),
+('lower-core','rear-lunge',2,3,'10 each',''),
+('lower-core','db-rdl',3,3,'12',''),
+('lower-core','glute-bridge',4,3,'15','Squeeze at the top'),
+('lower-core','calf-raise',5,3,'20',''),
+('lower-core','plank',6,3,'45s',''),
+('run-5k','leg-swings',1,1,'10 each leg','Hold a pole or a wall'),
+('run-5k','hip-circles',2,1,'8 each way',''),
+('run-5k','inchworm',3,1,'5 walk-outs',''),
+('run-5k','worlds-greatest',4,1,'4 each side','The one that actually matters before a run'),
+('mobility','cat-stretch',1,1,'30 sec','Round and release slowly, in time with your breathing'),
+('mobility','childs-pose',2,1,'45 sec','Breathe into your lower back'),
+('mobility','kneel-hip-flexor',3,1,'30 sec each side','Squeeze the glute of the kneeling leg'),
+('mobility','knee-across-body',4,1,'30 sec each side',''),
+('mobility','runners-stretch',5,1,'30 sec each side','Front heel stays down'),
+('mobility','elbows-back',6,1,'20 sec × 3','Undoes a day at a desk');
 
 -- Personal profile + starting bodyweight are set live, e.g.:
 --   insert into workout_profile (id,dob,height_cm,sex,goal,target_weight_kg,activity_factor)

@@ -3,18 +3,23 @@ import { Dumbbell } from 'lucide-react';
 import { W } from '../lib/config';
 
 /** Exercise demo photo with a graceful volt-dumbbell fallback if it fails
- *  to load (e.g. offline before the cache is warm). */
-export function ExerciseImage({ src, alt, size, radius = 12 }: {
-  src: string; alt: string; size: number; radius?: number;
+ *  to load (e.g. offline before the cache is warm). Either a fixed `size`,
+ *  or `fill` to take the width of its container as a square. */
+export function ExerciseImage({ src, alt, size, radius = 12, fill = false }: {
+  src: string; alt: string; size?: number; radius?: number; fill?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const box = fill
+    ? { width: '100%', aspectRatio: '1 / 1' as const }
+    : { width: size, height: size };
+
   if (!src || failed) {
     return (
       <div style={{
-        width: size, height: size, borderRadius: radius, flexShrink: 0,
-        background: W.raised, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...box, borderRadius: radius, flexShrink: 0, background: W.raised,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <Dumbbell size={size * 0.4} color={W.voltDim} strokeWidth={1.6} />
+        <Dumbbell size={(size ?? 60) * 0.4} color={W.voltDim} strokeWidth={1.6} />
       </div>
     );
   }
@@ -24,7 +29,7 @@ export function ExerciseImage({ src, alt, size, radius = 12 }: {
       alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}
-      style={{ width: size, height: size, objectFit: 'cover', borderRadius: radius, flexShrink: 0, background: W.raised }}
+      style={{ ...box, objectFit: 'cover', borderRadius: radius, flexShrink: 0, background: W.raised }}
     />
   );
 }

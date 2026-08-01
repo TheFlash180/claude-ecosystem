@@ -1,7 +1,7 @@
 // Workout Plan: types + athletic visual identity. Charcoal + volt green,
 // Anton condensed display — a gym-poster feel, distinct from the other apps.
 
-export type RoutineKind = 'home' | 'gym' | 'sport' | 'run' | 'rest';
+export type RoutineKind = 'home' | 'gym' | 'run' | 'mobility';
 export type Setting = 'home' | 'gym' | 'both';
 export type Goal = 'recomp' | 'cut' | 'build';
 
@@ -22,13 +22,14 @@ export interface RoutineExercise {
   note: string;
 }
 
+/** A workout *type* you can browse and follow — not a day of the week. */
 export interface Routine {
   id: string;
-  day: number | null;   // 0 = Monday
   title: string;
   kind: RoutineKind;
   subtitle: string;
-  variant: 'main' | 'fallback';
+  summary: string;
+  estMinutes: number | null;
   exercises: RoutineExercise[];
 }
 
@@ -41,18 +42,8 @@ export interface Profile {
   activityFactor: number;
 }
 
-export interface LoggedSet {
-  exerciseId: string;
-  setNo: number;
-  weightKg: number | null;
-  reps: number;
-}
-
 export interface BodyweightEntry { date: string; weightKg: number; }
 export interface RunEntry { date: string; seconds: number; location: string; note: string; }
-
-export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const GOAL_LABEL: Record<Goal, string> = {
   recomp: 'Recomp (lose fat + build)',
@@ -60,8 +51,8 @@ export const GOAL_LABEL: Record<Goal, string> = {
   build: 'Build muscle',
 };
 
-// Athletic palette — charcoal with a volt-green accent; each day-kind
-// gets its own hue so the week reads at a glance.
+// Athletic palette — charcoal with a volt-green accent; each workout kind
+// gets its own hue so the library reads at a glance.
 export const W = {
   bg:      '#0E1013',
   surface: '#171A1F',
@@ -78,9 +69,11 @@ export const W = {
 };
 
 export const KIND_META: Record<RoutineKind, { label: string; color: string }> = {
-  home:  { label: 'Home',   color: '#C6F135' },
-  gym:   { label: 'Gym',    color: '#4EA1FF' },
-  sport: { label: 'Sport',  color: '#FFB020' },
-  run:   { label: 'Run',    color: '#FF6B35' },
-  rest:  { label: 'Rest',   color: '#8C93A0' },
+  home:     { label: 'Home',     color: '#C6F135' },
+  gym:      { label: 'Gym',      color: '#4EA1FF' },
+  run:      { label: 'Run',      color: '#FF6B35' },
+  mobility: { label: 'Mobility', color: '#8C93A0' },
 };
+
+/** Library filter chips, in display order. */
+export const KIND_ORDER: RoutineKind[] = ['home', 'gym', 'run', 'mobility'];
