@@ -46,6 +46,7 @@ separately, so editing one does not change the running system:
 | baby-logger | `babies`, `*_events` | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
 | front-row | `frontrow_*` | `sync-frontrow`, `notify-frontrow` | `frontrow-sync`, `frontrow-notify` |
+| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 
 The apps that predate accounts (everything except baby-logger and fintrack-pro)
 are **device-scoped, not user-scoped**: RLS is enabled with no policies at all,

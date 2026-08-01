@@ -1,0 +1,14 @@
+<svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="42" fill="#0C0B14"/>
+  <!-- Price tag, tilted, with a downward arrow through it: the app is about
+       a price falling, not merely about a price. -->
+  <g transform="rotate(-18 96 96)">
+    <path d="M62 46h44a14 14 0 0 1 9.9 4.1l36 36a14 14 0 0 1 0 19.8l-36 36a14 14 0 0 1-19.8 0l-36-36A14 14 0 0 1 56 96V52a6 6 0 0 1 6-6z"
+          fill="none" stroke="#A78BFA" stroke-width="11" stroke-linejoin="round"/>
+    <circle cx="82" cy="72" r="9" fill="#A78BFA"/>
+  </g>
+  <g stroke="#46B27E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M108 88v42"/>
+    <path d="M90 114l18 18 18-18"/>
+  </g>
+</svg>
