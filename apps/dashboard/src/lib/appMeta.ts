@@ -37,10 +37,9 @@ export interface PlannedApp {
  *  its META row — the tile picks up colour and icon like any other, and the
  *  test below fails if the META row is forgotten. */
 export const COMING_SOON: PlannedApp[] = [
-  // Glovebox shipped — build-all picks it up from its index.html <title>, so
-  // listing it here too would render the tile twice.
-  { slug: 'price-watch', name: 'Price Watch' },
-  // Front Row shipped — build-all picks it up from its index.html <title>.
+  // Nothing planned right now. Glovebox, Front Row and Price Watch have all
+  // shipped — build-all picks each up from its index.html <title>, so listing
+  // one here as well would render its tile twice.
 ];
 
 /** Unknown slugs still get a usable tile: a newly deployed app should look
