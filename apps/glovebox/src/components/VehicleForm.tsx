@@ -3,7 +3,7 @@ import { Trash2, X } from 'lucide-react';
 import {
   DEFAULT_DISC_LEADS, DEFAULT_SERVICE_LEADS, G, LEAD_OPTIONS, type Vehicle,
 } from '../lib/config';
-import { countdownLabel, daysUntil, fmtDate, projectServiceDue } from '../lib/due';
+import { countdownLabel, daysUntil, fmtDate, projectServiceDue, sastDay } from '../lib/due';
 import { Field, LeadPicker, Row, inputStyle } from './Field';
 
 const num = (s: string): number | null => {
@@ -36,6 +36,16 @@ export function VehicleForm({ initial, onSave, onDelete, onClose }: {
 }) {
   const [d, setD] = useState<VehicleDraft>(initial);
   const set = (patch: Partial<VehicleDraft>) => setD(prev => ({ ...prev, ...patch }));
+
+  /** An odometer reading is useless to the projection without the date it was
+   *  taken, and the date field is easy to walk past — leaving a fully filled-in
+   *  vehicle whose km interval silently never applies. Typing a reading assumes
+   *  it is today's; it stays editable for a reading copied off an old invoice. */
+  const setOdometer = (odometer: number | null) => {
+    set(odometer === null
+      ? { odometer }
+      : { odometer, odometerAt: d.odometerAt ?? sastDay() });
+  };
 
   // Live preview of the projection, so the effect of an odometer reading is
   // visible before saving rather than a surprise on the home screen.
@@ -97,7 +107,7 @@ export function VehicleForm({ initial, onSave, onDelete, onClose }: {
         <Field label="Odometer now (km)">
           <input type="number" inputMode="numeric" style={inputStyle}
             value={d.odometer ?? ''} placeholder="25000"
-            onChange={e => set({ odometer: num(e.target.value) })} />
+            onChange={e => setOdometer(num(e.target.value))} />
         </Field>
         <Field label="Reading taken on">
           <input type="date" style={inputStyle} value={d.odometerAt ?? ''}
