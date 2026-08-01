@@ -1,98 +1,110 @@
-import { useCallback, useEffect, useMemo, useState, CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
+import { K, MEAL_FILTERS, QUICK_MINUTES, type MealType, type Recipe, type ShoppingRow } from './lib/config';
 import {
-  Bell, BellOff, BookOpen, CalendarDays, ChevronLeft, ChevronRight,
-  CookingPot, ShoppingCart, type LucideIcon,
-} from 'lucide-react';
-import { K, type PlanSlot, type Recipe, type ShoppingRow, type Slot } from './lib/config';
+  buildShoppingList, filterRecipes, pickOfTheDay, shoppingProgress, timeLabel,
+  EMPTY_FILTER, type RecipeFilter,
+} from './lib/recipes';
 import {
-  addDays, buildShoppingList, fmtWeekRange, sastDay, weekStartOf,
-} from './lib/plan';
-import {
-  addExtra, fetchPlan, fetchRecipes, fetchShopping, removeExtra, setSlot, setTick,
+  addExtra, cookAdd, cookClear, cookRemove, fetchCookList, fetchRecipes,
+  fetchTicks, removeExtra, setTick,
 } from './lib/data';
 import { disablePrepReminder, enablePrepReminder, prepReminderStatus } from './lib/push';
-import { PlanBoard } from './components/PlanBoard';
-import { RecipePicker } from './components/RecipePicker';
+import { RecipeGrid } from './components/RecipeGrid';
+import { RecipeDetail } from './components/RecipeDetail';
 import { ShoppingList } from './components/ShoppingList';
 import { RecipesPage } from './components/RecipesPage';
 
-type Tab = 'plan' | 'shop' | 'recipes';
+type Tab = 'cook' | 'shop' | 'edit';
+
+function sastDay(now = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
+}
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('plan');
-  const [week, setWeek] = useState(() => weekStartOf(sastDay()));
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [slots, setSlots] = useState<PlanSlot[]>([]);
-  const [shopping, setShopping] = useState<ShoppingRow[]>([]);
-  const [picker, setPicker] = useState<{ day: number; slot: Slot } | null>(null);
+  const [cookIds, setCookIds] = useState<string[]>([]);
+  const [ticks, setTicks] = useState<ShoppingRow[]>([]);
+  const [tab, setTab] = useState<Tab>('cook');
+  const [filter, setFilter] = useState<RecipeFilter>(EMPTY_FILTER);
+  const [open, setOpen] = useState<Recipe | null>(null);
   const [bell, setBell] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const showToast = (msg: string) => {
+  const say = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 2600);
-  };
-
-  const recipeMap = useMemo(() => new Map(recipes.map(r => [r.id, r])), [recipes]);
-
-  const loadRecipes = useCallback(async () => setRecipes(await fetchRecipes()), []);
-  const loadWeek = useCallback(async (w: string) => {
-    const [p, s] = await Promise.all([fetchPlan(w), fetchShopping(w)]);
-    setSlots(p);
-    setShopping(s);
+    setTimeout(() => setToast(t => (t === msg ? null : t)), 2400);
   }, []);
 
-  useEffect(() => {
-    void loadRecipes();
-    void prepReminderStatus().then(setBell);
-  }, [loadRecipes]);
-  useEffect(() => { void loadWeek(week); }, [week, loadWeek]);
+  const load = useCallback(async () => {
+    const [r, c, t] = await Promise.all([fetchRecipes(), fetchCookList(), fetchTicks()]);
+    setRecipes(r);
+    setCookIds(c);
+    setTicks(t);
+    setLoading(false);
+  }, []);
 
-  const pickRecipe = async (recipe: Recipe, leftover: { day: number; slot: Slot } | null) => {
-    if (!picker) return;
-    setPicker(null);
-    const ok = await setSlot(week, picker.day, picker.slot, recipe.id, false);
-    let ok2 = true;
-    if (ok && leftover) {
-      ok2 = await setSlot(week, leftover.day, leftover.slot, recipe.id, true);
-    }
-    if (!ok || !ok2) showToast("Couldn't save that — try again.");
-    else showToast(leftover ? 'Planned, leftovers included.' : `${recipe.name} planned.`);
-    await loadWeek(week);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void prepReminderStatus().then(setBell); }, []);
+
+  const byId = useMemo(() => new Map(recipes.map(r => [r.id, r])), [recipes]);
+  const cookSet = useMemo(() => new Set(cookIds), [cookIds]);
+  const shown = useMemo(() => filterRecipes(recipes, filter), [recipes, filter]);
+  const sections = useMemo(
+    () => buildShoppingList(cookIds, byId, ticks),
+    [cookIds, byId, ticks],
+  );
+  const progress = useMemo(() => shoppingProgress(sections), [sections]);
+
+  // Same suggestion all day, so it reads as a suggestion rather than a slot
+  // machine. Only from what is actually browsable right now.
+  const suggestion = useMemo(
+    () => pickOfTheDay(shown, sastDay()),
+    [shown],
+  );
+
+  const chosen = cookIds.map(id => byId.get(id)).filter((r): r is Recipe => Boolean(r));
+
+  const toggleCook = async (r: Recipe) => {
+    const on = cookSet.has(r.id);
+    // Optimistic: the sheet button should flip the instant it is tapped.
+    setCookIds(prev => (on ? prev.filter(id => id !== r.id) : [...prev, r.id]));
+    const ok = on ? await cookRemove(r.id) : await cookAdd(r.id);
+    if (!ok) { say("Couldn't save that."); }
+    await load();
   };
 
-  const clearSlot = async (day: number, slot: Slot) => {
-    await setSlot(week, day, slot, null);
-    await loadWeek(week);
-  };
-
-  const tick = async (key: string, label: string, checked: boolean) => {
-    // Optimistic: flip locally, then sync.
-    setShopping(prev => {
-      const hit = prev.find(r => r.itemKey === key);
-      if (hit) return prev.map(r => (r.itemKey === key ? { ...r, checked } : r));
-      return [...prev, { itemKey: key, label, checked, custom: false }];
+  const onTick = async (key: string, label: string, checked: boolean) => {
+    setTicks(prev => {
+      const rest = prev.filter(p => p.itemKey !== key);
+      return [...rest, { itemKey: key, label, checked, custom: key.startsWith('x-') }];
     });
-    const ok = await setTick(week, key, label, checked);
-    if (!ok) { showToast("Couldn't sync that tick."); await loadWeek(week); }
+    await setTick(key, label, checked);
   };
 
-  const addShopExtra = async (label: string) => {
-    const key = await addExtra(week, label);
-    if (!key) { showToast("Couldn't add that."); return; }
-    await loadWeek(week);
+  const onAddExtra = async (label: string) => {
+    const key = await addExtra(label);
+    if (!key) { say("Couldn't add that."); return; }
+    await load();
   };
 
-  const removeShopExtra = async (key: string) => {
-    await removeExtra(week, key);
-    await loadWeek(week);
+  const onRemoveExtra = async (key: string) => {
+    setTicks(prev => prev.filter(p => p.itemKey !== key));
+    await removeExtra(key);
+  };
+
+  const onClear = async () => {
+    if (!(await cookClear())) { say("Couldn't clear the list."); return; }
+    say('List cleared.');
+    await load();
   };
 
   const toggleBell = async () => {
     if (bell) {
       const ok = await disablePrepReminder();
-      if (ok) { setBell(false); showToast('Sunday reminder off.'); }
-      else showToast("Couldn't update the reminder.");
+      if (ok) { setBell(false); say('Sunday reminder off.'); }
+      else say("Couldn't update the reminder.");
       return;
     }
     try {
@@ -101,173 +113,249 @@ export default function App() {
       }
     } catch { /* unsupported */ }
     const ok = await enablePrepReminder();
-    if (ok) { setBell(true); showToast('Sunday-morning prep reminder is on.'); }
-    else showToast('Allow notifications and try again.');
+    if (ok) { setBell(true); say('Sunday-morning reminder is on.'); }
+    else say('Allow notifications and try again.');
   };
 
-  const sections = useMemo(
-    () => buildShoppingList(slots, recipeMap, shopping),
-    [slots, recipeMap, shopping],
-  );
-  const thisWeek = weekStartOf(sastDay());
-  const plannedCount = slots.length;
-
   return (
-    <div style={{ background: K.bg, minHeight: '100vh', fontFamily: K.body, maxWidth: 520, margin: '0 auto' }}>
+    <div style={{
+      background: K.bg, minHeight: '100vh', fontFamily: K.body,
+      maxWidth: 620, margin: '0 auto', color: K.text,
+    }}>
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; background: ${K.bg}; }
-        button:focus-visible, input:focus-visible { outline: 2px solid ${K.terra}; outline-offset: 2px; }
+        button:focus-visible, input:focus-visible, select:focus-visible,
+        textarea:focus-visible { outline: 2px solid ${K.terra}; outline-offset: 2px; }
       `}</style>
 
       {toast && (
-        <div style={{
+        <div role="status" style={{
           position: 'fixed', top: 'calc(14px + env(safe-area-inset-top))', left: '50%',
-          transform: 'translateX(-50%)', zIndex: 999,
-          background: K.text, color: K.bg, padding: '11px 20px', borderRadius: 24,
-          fontSize: 13.5, fontWeight: 500, fontFamily: K.body,
-          boxShadow: '0 4px 24px rgba(59,46,32,0.35)',
-          whiteSpace: 'nowrap', pointerEvents: 'none',
+          transform: 'translateX(-50%)', zIndex: 200,
+          background: K.text, color: K.bg, padding: '10px 18px', borderRadius: 22,
+          fontSize: 13, boxShadow: '0 4px 20px rgba(0,0,0,0.25)', whiteSpace: 'nowrap',
+          pointerEvents: 'none',
         } as CSSProperties}>
           {toast}
         </div>
       )}
 
-      {picker && (
-        <RecipePicker
-          day={picker.day}
-          slot={picker.slot}
-          recipes={recipes}
-          slots={slots}
-          onSave={(r, leftover) => void pickRecipe(r, leftover)}
-          onClose={() => setPicker(null)}
+      <header style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: 'calc(16px + env(safe-area-inset-top)) 16px 10px',
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{
+            margin: 0, fontFamily: K.display, fontSize: 23, fontWeight: 600,
+            color: K.text, letterSpacing: '-0.01em',
+          }}>
+            Meal Prep
+          </h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: K.muted }}>
+            {recipes.length} recipes
+            {cookIds.length > 0 && <> · {cookIds.length} on the list</>}
+          </p>
+        </div>
+        <button
+          onClick={() => void toggleBell()}
+          aria-label={bell ? 'Sunday reminder is on' : 'Turn on the Sunday reminder'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: bell ? `${K.terra}18` : 'transparent',
+            color: bell ? K.terraDark : K.muted,
+            border: `1px solid ${bell ? K.terra : K.border}`,
+            borderRadius: 999, padding: '7px 12px', cursor: 'pointer',
+            fontSize: 12.5, fontWeight: 600,
+          }}
+        >
+          {bell ? <Bell size={14} /> : <BellOff size={14} />}
+          {bell ? 'On' : 'Off'}
+        </button>
+      </header>
+
+      <nav style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
+        {([
+          { key: 'cook', label: 'Recipes', icon: BookOpen },
+          { key: 'shop', label: progress.total > 0 ? `Shopping ${progress.done}/${progress.total}` : 'Shopping', icon: ShoppingBasket },
+          { key: 'edit', label: 'Manage', icon: Pencil },
+        ] as const).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: tab === t.key ? K.terra : K.surface,
+              color: tab === t.key ? '#fff' : K.sub,
+              border: `1px solid ${tab === t.key ? K.terra : K.border}`,
+              borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600,
+            }}
+          >
+            <t.icon size={14} /> {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <main style={{ padding: '0 14px 40px' }}>
+        {loading && (
+          <p style={{ color: K.muted, fontSize: 13.5, padding: '30px 4px' }}>Loading…</p>
+        )}
+
+        {!loading && tab === 'cook' && (
+          <>
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+              <Search size={15} color={K.muted} style={{
+                position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)',
+              }} />
+              <input
+                value={filter.search}
+                onChange={e => setFilter({ ...filter, search: e.target.value })}
+                placeholder="Search a dish, or what's in the fridge…"
+                style={{
+                  width: '100%', background: K.surface, color: K.text,
+                  border: `1px solid ${K.border}`, borderRadius: 12,
+                  padding: '11px 12px 11px 33px', fontSize: 14, fontFamily: K.body,
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {MEAL_FILTERS.map(m => (
+                <Chip
+                  key={m.key}
+                  on={filter.meal === m.key}
+                  onClick={() => setFilter({ ...filter, meal: m.key as MealType | 'all' })}
+                >
+                  {m.label}
+                </Chip>
+              ))}
+              <Chip
+                on={filter.quickOnly}
+                onClick={() => setFilter({ ...filter, quickOnly: !filter.quickOnly })}
+              >
+                Under {QUICK_MINUTES} min
+              </Chip>
+            </div>
+
+            {suggestion && filter.search.trim() === '' && (
+              <button
+                onClick={() => setOpen(suggestion)}
+                style={{
+                  width: '100%', textAlign: 'left', cursor: 'pointer',
+                  background: `${K.honey}14`, border: `1px solid ${K.honey}55`,
+                  borderRadius: 14, padding: '12px 14px', marginBottom: 14,
+                  display: 'flex', alignItems: 'center', gap: 11,
+                }}
+              >
+                <Sparkles size={17} color={K.honey} style={{ flexShrink: 0 }} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{
+                    display: 'block', fontSize: 11, textTransform: 'uppercase',
+                    letterSpacing: '0.08em', color: K.honey, fontWeight: 700,
+                  }}>
+                    Can't decide?
+                  </span>
+                  <span style={{
+                    display: 'block', fontFamily: K.display, fontSize: 15,
+                    fontWeight: 600, color: K.text, marginTop: 2,
+                  }}>
+                    {suggestion.emoji} {suggestion.name}
+                    {suggestion.totalMinutes !== null && (
+                      <span style={{ color: K.muted, fontWeight: 400, fontFamily: K.body, fontSize: 13 }}>
+                        {' · '}{timeLabel(suggestion.totalMinutes)}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </button>
+            )}
+
+            <RecipeGrid recipes={shown} cookIds={cookSet} onOpen={setOpen} />
+          </>
+        )}
+
+        {!loading && tab === 'shop' && (
+          <>
+            {chosen.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginBottom: 7,
+                }}>
+                  <span style={{
+                    fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em',
+                    color: K.muted, fontWeight: 700,
+                  }}>
+                    Cooking
+                  </span>
+                  <button onClick={() => void onClear()} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: 'transparent', border: 'none', color: K.muted,
+                    cursor: 'pointer', fontSize: 12, fontFamily: K.body,
+                  }}>
+                    <Trash2 size={12} /> Clear
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {chosen.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => setOpen(r)}
+                      style={{
+                        background: K.surface, border: `1px solid ${K.border}`,
+                        borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
+                        fontSize: 12.5, color: K.text, fontFamily: K.body,
+                      }}
+                    >
+                      {r.emoji} {r.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <ShoppingList
+              sections={sections}
+              onTick={(k, l, c) => void onTick(k, l, c)}
+              onAddExtra={l => void onAddExtra(l)}
+              onRemoveExtra={k => void onRemoveExtra(k)}
+            />
+          </>
+        )}
+
+        {!loading && tab === 'edit' && (
+          <RecipesPage recipes={recipes} onChanged={() => void load()} onToast={say} />
+        )}
+      </main>
+
+      {open && (
+        <RecipeDetail
+          recipe={open}
+          inList={cookSet.has(open.id)}
+          onCook={() => void toggleCook(open)}
+          onUncook={() => void toggleCook(open)}
+          onClose={() => setOpen(null)}
         />
       )}
-
-      {/* Header */}
-      <div style={{
-        padding: 'calc(18px + env(safe-area-inset-top)) 16px 0',
-        borderBottom: `1px solid ${K.border}`,
-        position: 'sticky', top: 0, zIndex: 10,
-        background: `${K.bg}F2`,
-        backdropFilter: 'blur(9px)', WebkitBackdropFilter: 'blur(9px)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontFamily: K.display, fontSize: 25, fontWeight: 700, color: K.terra, lineHeight: 1 }}>
-              Meal Prep
-            </div>
-            <div style={{ fontSize: 11.5, color: K.muted, marginTop: 3 }}>
-              What's cooking this week?
-            </div>
-          </div>
-          <button
-            onClick={() => void toggleBell()}
-            aria-label={bell ? 'Sunday reminder on' : 'Sunday reminder off'}
-            title="Sunday-morning prep reminder"
-            style={{
-              background: bell ? `${K.honey}1C` : 'transparent',
-              border: `1px solid ${bell ? K.honey : K.border}`,
-              borderRadius: 20, padding: '7px 13px', cursor: 'pointer',
-              fontSize: 12, lineHeight: 1, color: bell ? K.honey : K.muted,
-              fontWeight: 700, flexShrink: 0,
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-            {bell ? <><Bell size={14} strokeWidth={2.2} /> Sun</> : <BellOff size={14} strokeWidth={2.2} />}
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
-          {([
-            { key: 'plan' as Tab, label: 'Plan', Icon: CalendarDays as LucideIcon },
-            { key: 'shop' as Tab, label: 'Shop', Icon: ShoppingCart as LucideIcon },
-            { key: 'recipes' as Tab, label: 'Recipes', Icon: BookOpen as LucideIcon },
-          ]).map(t => {
-            const on = tab === t.key;
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                padding: '9px 16px 11px', cursor: 'pointer',
-                fontFamily: K.body, fontSize: 13.5, fontWeight: on ? 700 : 500,
-                background: 'transparent', border: 'none',
-                borderBottom: `2.5px solid ${on ? K.terra : 'transparent'}`,
-                color: on ? K.terra : K.sub,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}>
-                <t.Icon size={15} strokeWidth={on ? 2.4 : 2} /> {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Week nav (Plan + Shop share the selected week) */}
-      {tab !== 'recipes' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px 2px',
-        }}>
-          <button onClick={() => setWeek(addDays(week, -7))} aria-label="Previous week"
-            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, display: 'flex', alignItems: 'center' }}>
-            <ChevronLeft size={16} />
-          </button>
-          <button
-            onClick={() => setWeek(thisWeek)}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'center' }}>
-            <span style={{ display: 'block', fontFamily: K.display, fontSize: 15.5, fontWeight: 700, color: K.text }}>
-              {week === thisWeek ? 'This week' : week === addDays(thisWeek, 7) ? 'Next week' : fmtWeekRange(week)}
-            </span>
-            <span style={{ fontSize: 10.5, color: K.muted }}>
-              {week === thisWeek || week === addDays(thisWeek, 7) ? fmtWeekRange(week) : 'tap for this week'}
-              {plannedCount > 0 ? ` · ${plannedCount} meal${plannedCount > 1 ? 's' : ''}` : ''}
-            </span>
-          </button>
-          <button onClick={() => setWeek(addDays(week, 7))} aria-label="Next week"
-            style={{ background: 'transparent', border: `1px solid ${K.border}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', color: K.sub, display: 'flex', alignItems: 'center' }}>
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
-
-      {/* Body */}
-      <div style={{ padding: '12px 14px 48px' }}>
-        {tab === 'plan' && (
-          <PlanBoard
-            weekStart={week}
-            slots={slots}
-            recipes={recipeMap}
-            onPick={(day, slot) => setPicker({ day, slot })}
-            onClear={(day, slot) => void clearSlot(day, slot)}
-          />
-        )}
-        {tab === 'shop' && (
-          <ShoppingList
-            sections={sections}
-            onTick={(k, l, c) => void tick(k, l, c)}
-            onAddExtra={l => void addShopExtra(l)}
-            onRemoveExtra={k => void removeShopExtra(k)}
-          />
-        )}
-        {tab === 'recipes' && (
-          <RecipesPage
-            recipes={recipes}
-            onChanged={() => { void loadRecipes(); void loadWeek(week); }}
-            onToast={showToast}
-          />
-        )}
-
-        <div style={{
-          marginTop: 26, paddingTop: 14, borderTop: `1px solid ${K.border}`,
-          fontSize: 11, color: K.muted, lineHeight: 1.8,
-          display: 'flex', gap: 7,
-        }}>
-          <CookingPot size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 3 }} />
-          <span>
-            Plan lunches and dinners, and the shopping list writes itself.
-            Turn on the bell for a Sunday-morning prep nudge with the week's menu.
-          </span>
-        </div>
-      </div>
     </div>
+  );
+}
+
+function Chip({ on, onClick, children }: {
+  on: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: on ? `${K.terra}18` : K.surface,
+        color: on ? K.terraDark : K.sub,
+        border: `1px solid ${on ? K.terra : K.border}`,
+        borderRadius: 999, padding: '7px 13px', cursor: 'pointer',
+        fontSize: 12.5, fontWeight: 600, fontFamily: K.body,
+      }}
+    >
+      {children}
+    </button>
   );
 }

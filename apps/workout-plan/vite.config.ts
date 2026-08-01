@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'Workout Plan',
         short_name: 'Workout',
-        description: 'Your personal training coach — weekly plan, logging and progress',
+        description: 'Workout guide — routines, how-to photos, weight and parkrun tracking',
         theme_color: '#0E1013',
         background_color: '#0E1013',
         display: 'standalone',

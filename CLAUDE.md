@@ -142,6 +142,12 @@ notifications across the whole ecosystem once already.
   intercept `**/rest/v1/**` with Playwright to inject realistic rows.
 - Chromium is preinstalled at `/opt/pw-browsers`. Do not run
   `playwright install`.
+- The headless browser has **no** route to the outside world — it does not use
+  the agent proxy, so workout-plan's `raw.githubusercontent.com` exercise photos
+  fail to load. `curl` them to disk first and `page.route` them back in.
+- `fullPage: true` screenshots blank out `loading="lazy"` images and paint
+  `position: fixed` bars in the middle of the page. Take viewport-sized shots
+  and scroll instead.
 
 ## Things learned the hard way
 

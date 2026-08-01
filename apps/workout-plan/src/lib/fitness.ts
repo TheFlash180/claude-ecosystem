@@ -1,26 +1,10 @@
-// Pure training + nutrition math (unit-tested). No React, no network.
-import type { Goal, LoggedSet, Profile } from './config';
+// Pure nutrition + tracking math (unit-tested). No React, no network.
+import type { BodyweightEntry, Goal, Profile, RunEntry } from './config';
 
 // ---- dates (SAST calendar days) ----
 
 export function sastDay(now = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
-}
-
-export function addDays(ymd: string, n: number): string {
-  const d = new Date(ymd + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-/** 0 = Monday … 6 = Sunday. */
-export function dayIndex(ymd: string): number {
-  const d = new Date(ymd + 'T12:00:00Z');
-  return (d.getUTCDay() + 6) % 7;
-}
-
-export function weekStart(ymd: string): string {
-  return addDays(ymd, -dayIndex(ymd));
 }
 
 export function ageFromDob(dob: string, today = sastDay()): number {
@@ -64,17 +48,30 @@ export function nutritionTargets(
   return { maintenance, calories, protein, fat, carbs };
 }
 
-// ---- strength ----
+// ---- bodyweight ----
 
-/** Epley estimated 1-rep-max. Bodyweight sets (null weight) → 0. */
-export function est1RM(weightKg: number | null, reps: number): number {
-  if (!weightKg || reps <= 0) return 0;
-  return weightKg * (1 + reps / 30);
+export interface WeightTrend {
+  current: number | null;
+  /** Change from the first weigh-in — negative is down. */
+  delta: number | null;
+  /** Kilograms still to go, or null with no target. Negative once past it. */
+  toTarget: number | null;
 }
 
-/** Best est-1RM across a set of logged sets — the exercise "PB". */
-export function bestSet(sets: LoggedSet[]): number {
-  return sets.reduce((best, s) => Math.max(best, est1RM(s.weightKg, s.reps)), 0);
+/** `entries` is expected oldest-first, the order the query returns. */
+export function weightTrend(entries: BodyweightEntry[], targetKg: number | null): WeightTrend {
+  if (entries.length === 0) return { current: null, delta: null, toTarget: null };
+  const current = entries[entries.length - 1].weightKg;
+  const first = entries[0].weightKg;
+  return {
+    current,
+    delta: entries.length > 1 ? round1(current - first) : null,
+    toTarget: targetKg != null ? round1(current - targetKg) : null,
+  };
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 // ---- run times ----
@@ -99,11 +96,18 @@ export function parseRunTime(raw: string): number | null {
   return null;
 }
 
-// ---- streaks ----
+export interface RunStats {
+  pbSeconds: number | null;
+  latestSeconds: number | null;
+  /** True only when the most recent run *is* the PB and there is a run to
+   *  beat — a single logged run is not yet an achievement. */
+  latestIsPb: boolean;
+}
 
-/** Count of distinct session dates within the ISO week containing `today`. */
-export function sessionsThisWeek(sessionDates: string[], today = sastDay()): number {
-  const start = weekStart(today);
-  const end = addDays(start, 6);
-  return new Set(sessionDates.filter(d => d >= start && d <= end)).size;
+/** `runs` is expected newest-first, the order the query returns. */
+export function runStats(runs: RunEntry[]): RunStats {
+  if (runs.length === 0) return { pbSeconds: null, latestSeconds: null, latestIsPb: false };
+  const pbSeconds = Math.min(...runs.map(r => r.seconds));
+  const latestSeconds = runs[0].seconds;
+  return { pbSeconds, latestSeconds, latestIsPb: runs.length > 1 && latestSeconds === pbSeconds };
 }

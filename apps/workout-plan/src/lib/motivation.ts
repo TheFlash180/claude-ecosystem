@@ -1,7 +1,6 @@
-// Curated motivational lines. Pure — pick(context, seed) is deterministic
+// Curated motivational lines. Pure — motivate(context, seed) is deterministic
 // per (context, seed) so the same day shows a stable message.
-export type MotiveContext =
-  | 'open' | 'sessionStart' | 'sessionDone' | 'pb' | 'weightDown' | 'runDay' | 'restDay';
+export type MotiveContext = 'open' | 'weightDown' | 'runPb';
 
 const LINES: Record<MotiveContext, string[]> = {
   open: [
@@ -11,37 +10,15 @@ const LINES: Record<MotiveContext, string[]> = {
     "The plan works if you do. Let's move.",
     "Discipline beats motivation. But hey — here's both.",
   ],
-  sessionStart: [
-    "Own this one. Every rep counts.",
-    "20 minutes of work. You've got this.",
-    "Leave it all here — then get on with your day.",
-    "Chase the pump, not perfection.",
-  ],
-  sessionDone: [
-    "Session smashed. That's how it's built. 💥",
-    "Done and logged. One brick closer to the goal.",
-    "That's a deposit in the physique bank.",
-    "Nailed it. Recover, refuel, repeat.",
-  ],
-  pb: [
-    "NEW PB! You just beat your past self. 🏆",
-    "Personal best — progressive overload in action!",
-    "Stronger than last time. That's the whole game.",
-  ],
   weightDown: [
     "Scale's trending your way. Trust the process.",
     "Down a notch — lean and mean. Keep it steady.",
     "Progress you can see. Nice work.",
   ],
-  runDay: [
-    "parkrun morning — lace up and chase that clock! 🏃",
-    "5k of freedom. Run your own race.",
-    "Every Saturday you get a little faster.",
-  ],
-  restDay: [
-    "Rest is where the muscle is built. Take it.",
-    "Recovery day — a gentle walk and good food.",
-    "Nothing to prove today. Recharge.",
+  runPb: [
+    "NEW PB! You just beat your past self. 🏆",
+    "Fastest one yet — every Saturday you get a little quicker.",
+    "That's a personal best. Go and enjoy the coffee.",
   ],
 };
 

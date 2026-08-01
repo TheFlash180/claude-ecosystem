@@ -3,14 +3,16 @@
 --
 --   workout_profile            single-row stats (drives calorie/protein targets)
 --   workout_exercises          movement catalogue + demo photo + how-to
---   workout_routines           the weekly split (day 0=Mon; Wed has a gym main
---                              + a home fallback variant)
+--   workout_routines           the workout library — types, not weekdays
 --   workout_routine_exercises  target sets/reps per exercise in a routine
---   workout_sessions           completed sessions (streaks + motivation)
---   workout_sets               logged sets (weight × reps) for progressive overload
 --   workout_bodyweight         daily weigh-ins
 --   workout_runs               parkrun / run times (PB + trend)
 --   workout_settings           admin password (RLS, no read policy)
+--
+-- The app is a guide, not a training log: routines and exercises are read-only
+-- reference, and the only things it records are bodyweight and run times.
+-- (workout_sessions / workout_sets, which logged each set of each day, were
+-- dropped in the library rebuild — that logging went unused.)
 --
 -- Public-read RLS; writes via security-definer RPCs (open — single-user app).
 -- Exercise photos are the public-domain free-exercise-db (Unlicense), served
@@ -40,41 +42,23 @@ create table workout_exercises (
 
 create table workout_routines (
   id text primary key,
-  day int check (day between 0 and 6),        -- 0 = Monday
   title text not null,
-  kind text not null check (kind in ('home','gym','sport','run','rest')),
+  kind text not null check (kind in ('home','gym','run','mobility')),
   subtitle text not null default '',
-  variant text not null default 'main' check (variant in ('main','fallback')),
+  summary text not null default '',           -- the paragraph on the workout page
+  est_minutes int,
   sort_order int not null default 0
 );
 
+-- on update cascade: routine ids are readable slugs and get renamed.
 create table workout_routine_exercises (
   id uuid primary key default gen_random_uuid(),
-  routine_id text not null references workout_routines(id) on delete cascade,
+  routine_id text not null references workout_routines(id) on update cascade on delete cascade,
   exercise_id text not null references workout_exercises(id) on delete cascade,
   sort_order int not null default 0,
-  target_sets int not null default 3,
+  target_sets int not null default 3,         -- 1 = a single hold, shown without "1 ×"
   target_reps text not null default '10',
   note text not null default ''
-);
-
-create table workout_sessions (
-  id uuid primary key default gen_random_uuid(),
-  session_date date not null,
-  routine_id text references workout_routines(id) on delete set null,
-  completed_at timestamptz not null default now(),
-  unique (session_date, routine_id)
-);
-
-create table workout_sets (
-  id uuid primary key default gen_random_uuid(),
-  set_date date not null,
-  exercise_id text not null references workout_exercises(id) on delete cascade,
-  set_no int not null check (set_no between 1 and 20),
-  weight_kg numeric,                          -- null = a bodyweight movement
-  reps int check (reps >= 0),
-  created_at timestamptz not null default now(),
-  unique (set_date, exercise_id, set_no)
 );
 
 create table workout_bodyweight (
@@ -101,8 +85,6 @@ alter table workout_profile enable row level security;
 alter table workout_exercises enable row level security;
 alter table workout_routines enable row level security;
 alter table workout_routine_exercises enable row level security;
-alter table workout_sessions enable row level security;
-alter table workout_sets enable row level security;
 alter table workout_bodyweight enable row level security;
 alter table workout_runs enable row level security;
 alter table workout_settings enable row level security;
@@ -111,8 +93,6 @@ create policy "public read" on workout_profile for select to anon, authenticated
 create policy "public read" on workout_exercises for select to anon, authenticated using (true);
 create policy "public read" on workout_routines for select to anon, authenticated using (true);
 create policy "public read" on workout_routine_exercises for select to anon, authenticated using (true);
-create policy "public read" on workout_sessions for select to anon, authenticated using (true);
-create policy "public read" on workout_sets for select to anon, authenticated using (true);
 create policy "public read" on workout_bodyweight for select to anon, authenticated using (true);
 create policy "public read" on workout_runs for select to anon, authenticated using (true);
 -- workout_settings: no read policy (admin password stays server-side)
@@ -151,35 +131,6 @@ begin
   return true;
 end $$;
 
-create or replace function workout_log_set(
-  p_date date, p_exercise_id text, p_set_no int, p_weight numeric, p_reps int)
-returns boolean language plpgsql security definer set search_path = public as $$
-begin
-  if p_set_no not between 1 and 20 then return false; end if;
-  if not exists (select 1 from workout_exercises where id = p_exercise_id) then return false; end if;
-  if p_reps is null then
-    delete from workout_sets where set_date = p_date and exercise_id = p_exercise_id and set_no = p_set_no;
-    return true;
-  end if;
-  insert into workout_sets (set_date, exercise_id, set_no, weight_kg, reps)
-  values (p_date, p_exercise_id, p_set_no, p_weight, p_reps)
-  on conflict (set_date, exercise_id, set_no) do update set
-    weight_kg = excluded.weight_kg, reps = excluded.reps, created_at = now();
-  return true;
-end $$;
-
-create or replace function workout_complete_session(p_date date, p_routine_id text, p_done boolean)
-returns boolean language plpgsql security definer set search_path = public as $$
-begin
-  if coalesce(p_done, true) then
-    insert into workout_sessions (session_date, routine_id) values (p_date, p_routine_id)
-    on conflict (session_date, routine_id) do update set completed_at = now();
-  else
-    delete from workout_sessions where session_date = p_date and routine_id is not distinct from p_routine_id;
-  end if;
-  return true;
-end $$;
-
 create or replace function workout_log_bodyweight(p_date date, p_weight numeric)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
@@ -210,16 +161,12 @@ end $$;
 -- ------------------------------------------------------------------ grants
 revoke all on function workout_admin_check(text) from public, anon;
 revoke all on function workout_save_profile(date,numeric,text,text,numeric,numeric) from public, anon;
-revoke all on function workout_log_set(date,text,int,numeric,int) from public, anon;
-revoke all on function workout_complete_session(date,text,boolean) from public, anon;
 revoke all on function workout_log_bodyweight(date,numeric) from public, anon;
 revoke all on function workout_log_run(date,int,text,text) from public, anon;
 revoke all on function workout_delete_run(date) from public, anon;
 
 grant execute on function workout_admin_check(text) to anon;
 grant execute on function workout_save_profile(date,numeric,text,text,numeric,numeric) to anon;
-grant execute on function workout_log_set(date,text,int,numeric,int) to anon;
-grant execute on function workout_complete_session(date,text,boolean) to anon;
 grant execute on function workout_log_bodyweight(date,numeric) to anon;
 grant execute on function workout_log_run(date,int,text,text) to anon;
 grant execute on function workout_delete_run(date) to anon;

@@ -5,8 +5,8 @@ import {
 } from '../lib/config';
 import { adminCheck, deleteRecipe, upsertRecipe, type RecipeDraft } from '../lib/data';
 
-// Recipe book: browse, add and edit are open to the household; deleting
-// needs the shared admin password (checked in Postgres, kept for the session).
+// Recipe editing: add and edit are open to the household; deleting needs the
+// shared admin password (checked in Postgres, kept for the session).
 
 const PW_KEY = 'mealprep-admin-pw';
 
@@ -31,13 +31,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const emptyDraft = (): RecipeDraft => ({
   id: null, name: '', emoji: '🍽️', mealType: 'dinner', serves: 4,
   ingredients: [{ n: '', q: '', u: '', c: 'pantry' }], notes: '',
+  steps: [], totalMinutes: null,
 });
 
 const toDraft = (r: Recipe): RecipeDraft => ({
   id: r.id, name: r.name, emoji: r.emoji, mealType: r.mealType, serves: r.serves,
   ingredients: r.ingredients.length ? r.ingredients.map(i => ({ ...i })) : [{ n: '', q: '', u: '', c: 'pantry' }],
-  notes: r.notes ?? '',
+  notes: r.notes ?? '', steps: [...r.steps], totalMinutes: r.totalMinutes,
 });
+
+/** The method is edited as one textarea, one step per line. A repeater with an
+ *  add button per step is more machinery than a numbered list deserves, and
+ *  pasting a method in from somewhere else should just work. */
+const stepsToText = (steps: string[]) => steps.join('\n');
+const textToSteps = (text: string) =>
+  text.split('\n').map(l => l.trim()).filter(Boolean);
 
 export function RecipesPage({ recipes, onChanged, onToast }: {
   recipes: Recipe[];
@@ -81,7 +89,7 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
     setBusy(false);
     setAskDelete(null);
     if (!ok) { onToast("Couldn't delete that recipe."); return; }
-    onToast('Recipe removed — its planned slots cleared too.');
+    onToast('Recipe removed.');
     onChanged();
   };
 
@@ -119,6 +127,14 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
           <input style={inputStyle} type="number" min={1} max={20} value={draft.serves}
             onChange={e => setDraft({ ...draft, serves: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })} />
         </Field>
+        <Field label="Minutes">
+          <input style={inputStyle} type="number" min={0} max={600} placeholder="45"
+            value={draft.totalMinutes ?? ''}
+            onChange={e => setDraft({
+              ...draft,
+              totalMinutes: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0),
+            })} />
+        </Field>
       </div>
 
       <span style={{ display: 'block', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: K.muted, margin: '4px 0 5px' }}>
@@ -149,6 +165,13 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
         style={{ ...inputStyle, cursor: 'pointer', color: K.sage, fontWeight: 600, marginBottom: 8 }}>
         + ingredient
       </button>
+
+      <Field label="Method (one step per line)">
+        <textarea style={{ ...inputStyle, minHeight: 130, resize: 'vertical', lineHeight: 1.5 }}
+          value={stepsToText(draft.steps)}
+          placeholder={'Fry the onion until soft.\nAdd the mince and brown it properly.\nSimmer 25 minutes.'}
+          onChange={e => setDraft({ ...draft, steps: textToSteps(e.target.value) })} />
+      </Field>
 
       <Field label="Prep notes">
         <textarea style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} value={draft.notes}
@@ -262,7 +285,7 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
               Delete “{askDelete.name}”?
             </div>
             <div style={{ fontSize: 12.5, color: K.sub, lineHeight: 1.55, marginBottom: 12 }}>
-              It disappears from every planned week too. Deleting needs the
+              It disappears from the cook list too. Deleting needs the
               admin password.
             </div>
             {/* A form + username field lets the password manager fill this.
