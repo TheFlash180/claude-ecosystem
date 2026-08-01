@@ -33,12 +33,18 @@ const WRAPS = recipe({
 });
 const EGGS = recipe({ id: 'eggs', name: 'Baked eggs', mealType: 'any', totalMinutes: 30 });
 const MYSTERY = recipe({ id: 'mystery', name: 'Ouma se sop', totalMinutes: null });
+const PAP = recipe({ id: 'pap', name: 'Krummelpap', mealType: 'side', totalMinutes: 45 });
+const MALVA = recipe({ id: 'malva', name: 'Malva pudding', mealType: 'dessert', totalMinutes: 60 });
+const TOAST = recipe({
+  id: 'toast', name: 'Avo & feta toast', mealType: 'snack', totalMinutes: 8,
+  ingredients: [{ n: 'Avocado', q: 1, u: '', c: 'veg' }],
+});
 
-const ALL = [BOLO, COTTAGE, WRAPS, EGGS, MYSTERY];
+const ALL = [BOLO, COTTAGE, WRAPS, EGGS, MYSTERY, PAP, MALVA, TOAST];
 
 describe('filterRecipes', () => {
   it('returns everything by default', () => {
-    expect(filterRecipes(ALL, EMPTY_FILTER)).toHaveLength(5);
+    expect(filterRecipes(ALL, EMPTY_FILTER)).toHaveLength(8);
   });
 
   it('includes "any" recipes in both lunch and dinner', () => {
@@ -51,12 +57,34 @@ describe('filterRecipes', () => {
     expect(lunch).not.toContain('bolo');
   });
 
-  it('treats an unknown time as not quick', () => {
-    // Better to leave a recipe out of "quick" than to promise a 2-hour stew
-    // is a weeknight meal.
-    const quick = filterRecipes(ALL, { ...EMPTY_FILTER, quickOnly: true }).map(r => r.id);
-    expect(quick).toEqual(['wraps', 'eggs']);
+  it('keeps sides, snacks and puddings off the lunch and dinner shelves', () => {
+    // A pudding is not a light dinner, and "any" must not leak the other way
+    // either — asking for puddings should not surface baked eggs.
+    const dinner = filterRecipes(ALL, { ...EMPTY_FILTER, meal: 'dinner' }).map(r => r.id);
+    expect(dinner).not.toContain('malva');
+    expect(dinner).not.toContain('pap');
+    expect(filterRecipes(ALL, { ...EMPTY_FILTER, meal: 'dessert' }).map(r => r.id)).toEqual(['malva']);
+    expect(filterRecipes(ALL, { ...EMPTY_FILTER, meal: 'side' }).map(r => r.id)).toEqual(['pap']);
+    expect(filterRecipes(ALL, { ...EMPTY_FILTER, meal: 'snack' }).map(r => r.id)).toEqual(['toast']);
+  });
+
+  it('treats an unknown time as too slow for any limit', () => {
+    // Better to leave a recipe out than to promise a 2-hour stew is a
+    // weeknight meal.
+    const quick = filterRecipes(ALL, { ...EMPTY_FILTER, maxMinutes: 30 }).map(r => r.id);
+    expect(quick).toEqual(['wraps', 'eggs', 'toast']);
     expect(quick).not.toContain('mystery');
+  });
+
+  it('separates "we are hungry now" from "it is a weeknight"', () => {
+    // 15 minutes is the filter for someone who does not want to cook at all.
+    const fast = filterRecipes(ALL, { ...EMPTY_FILTER, maxMinutes: 15 }).map(r => r.id);
+    expect(fast).toEqual(['wraps', 'toast']);
+    expect(fast).not.toContain('eggs');   // 30 min is not "now"
+  });
+
+  it('includes a recipe exactly on the boundary', () => {
+    expect(filterRecipes([EGGS], { ...EMPTY_FILTER, maxMinutes: 30 })).toHaveLength(1);
   });
 
   it('searches ingredients, not just the name', () => {
@@ -70,7 +98,7 @@ describe('filterRecipes', () => {
   });
 
   it('combines filters', () => {
-    const hits = filterRecipes(ALL, { meal: 'lunch', quickOnly: true, search: 'tuna' });
+    const hits = filterRecipes(ALL, { meal: 'lunch', maxMinutes: 30, search: 'tuna' });
     expect(hits.map(r => r.id)).toEqual(['wraps']);
   });
 });

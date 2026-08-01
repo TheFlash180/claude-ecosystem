@@ -1,7 +1,7 @@
 // Pure recipe + shopping-list logic. No React, no Supabase, so it runs under
 // node in tests.
 import {
-  CATEGORY_META, QUICK_MINUTES,
+  CATEGORY_META,
   type Category, type Ingredient, type MealType, type Recipe, type ShoppingRow,
 } from './config';
 
@@ -9,11 +9,12 @@ import {
 
 export interface RecipeFilter {
   meal: MealType | 'all';
-  quickOnly: boolean;
+  /** Upper bound in minutes, or null for no limit. */
+  maxMinutes: number | null;
   search: string;
 }
 
-export const EMPTY_FILTER: RecipeFilter = { meal: 'all', quickOnly: false, search: '' };
+export const EMPTY_FILTER: RecipeFilter = { meal: 'all', maxMinutes: null, search: '' };
 
 function matchesSearch(r: Recipe, needle: string): boolean {
   const q = needle.trim().toLowerCase();
@@ -25,19 +26,24 @@ function matchesSearch(r: Recipe, needle: string): boolean {
 }
 
 /** A recipe marked "any" belongs in both the lunch and dinner lists — it is
- *  not a third category to filter to. */
+ *  not a third category to filter to. Sides, snacks and puddings are their own
+ *  shelves, so "any" does not leak into them. */
 function matchesMeal(r: Recipe, meal: MealType | 'all'): boolean {
   if (meal === 'all') return true;
-  return r.mealType === meal || r.mealType === 'any';
+  if (meal === 'lunch' || meal === 'dinner') return r.mealType === meal || r.mealType === 'any';
+  return r.mealType === meal;
+}
+
+function matchesTime(r: Recipe, maxMinutes: number | null): boolean {
+  if (maxMinutes === null) return true;
+  // An unknown time is not "quick" — claiming a 2-hour stew is a weeknight
+  // meal is worse than leaving it out of the filter.
+  return r.totalMinutes !== null && r.totalMinutes <= maxMinutes;
 }
 
 export function filterRecipes(recipes: Recipe[], f: RecipeFilter): Recipe[] {
   return recipes.filter(r =>
-    matchesMeal(r, f.meal)
-    // An unknown time is not "quick" — claiming a 2-hour stew is a weeknight
-    // meal is worse than leaving it out of the filter.
-    && (!f.quickOnly || (r.totalMinutes !== null && r.totalMinutes <= QUICK_MINUTES))
-    && matchesSearch(r, f.search));
+    matchesMeal(r, f.meal) && matchesTime(r, f.maxMinutes) && matchesSearch(r, f.search));
 }
 
 export function timeLabel(minutes: number | null): string {
