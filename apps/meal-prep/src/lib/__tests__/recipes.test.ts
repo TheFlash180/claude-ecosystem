@@ -3,12 +3,16 @@ import {
   buildShoppingList, filterRecipes, itemKeyOf, pickOfTheDay,
   shoppingProgress, timeLabel, EMPTY_FILTER,
 } from '../recipes';
-import type { Recipe, ShoppingRow } from '../config';
+import type { CookEntry, Recipe, ShoppingRow } from '../config';
+
+function cook(recipeId: string, servings: number | null = null): CookEntry {
+  return { recipeId, servings };
+}
 
 function recipe(p: Partial<Recipe> & { id: string; name: string }): Recipe {
   return {
     emoji: '🍽', mealType: 'dinner', serves: 4, ingredients: [], steps: [],
-    totalMinutes: 45, ...p,
+    totalMinutes: 45, scalable: true, ...p,
   };
 }
 
@@ -140,20 +144,20 @@ describe('buildShoppingList', () => {
   const byId = new Map(ALL.map(r => [r.id, r]));
 
   it('merges the same ingredient across recipes and formats the unit up', () => {
-    const s = buildShoppingList(['bolo', 'cottage'], byId, []);
+    const s = buildShoppingList([cook('bolo'), cook('cottage')], byId, []);
     const meat = s.find(x => x.category === 'meat')!;
     // 500 g + 600 g reads better as 1.1 kg than as 1100 g.
     expect(meat.items[0].label).toBe('Beef mince · 1.1 kg');
   });
 
   it('counts the same recipe twice when it is chosen twice', () => {
-    const s = buildShoppingList(['bolo', 'bolo'], byId, []);
+    const s = buildShoppingList([cook('bolo'), cook('bolo')], byId, []);
     const meat = s.find(x => x.category === 'meat')!;
     expect(meat.items[0].label).toBe('Beef mince · 1 kg');
   });
 
   it('leaves an unmeasurable quantity unquantified rather than calling it zero', () => {
-    const s = buildShoppingList(['bolo'], byId, []);
+    const s = buildShoppingList([cook('bolo')], byId, []);
     const veg = s.find(x => x.category === 'veg')!;
     expect(veg.items.map(i => i.label)).toContain('Parsley');
   });
@@ -163,18 +167,36 @@ describe('buildShoppingList', () => {
       { itemKey: itemKeyOf({ n: 'Beef mince', q: 0, u: 'g', c: 'meat' }), label: '', checked: true, custom: false },
       { itemKey: 'x-1', label: 'Dishwasher tablets', checked: false, custom: true },
     ];
-    const s = buildShoppingList(['bolo'], byId, state);
+    const s = buildShoppingList([cook('bolo')], byId, state);
     expect(s.find(x => x.category === 'meat')!.items[0].checked).toBe(true);
     expect(s.find(x => x.category === 'other')!.items[0].label).toBe('Dishwasher tablets');
   });
 
   it('skips a recipe that has since been deleted', () => {
-    const s = buildShoppingList(['bolo', 'gone-forever'], byId, []);
+    const s = buildShoppingList([cook('bolo'), cook('gone-forever')], byId, []);
     expect(s.some(x => x.category === 'meat')).toBe(true);
   });
 
   it('produces nothing from an empty selection', () => {
     expect(buildShoppingList([], byId, [])).toEqual([]);
+  });
+
+  it('buys for the serving size the recipe was added at', () => {
+    // Choosing "cook for 8" on the recipe sheet has to reach the shopping
+    // list, or you get home with half the mince you need.
+    const s = buildShoppingList([cook('bolo', 8)], byId, []);
+    expect(s.find(x => x.category === 'meat')!.items[0].label).toBe('Beef mince · 1 kg');
+  });
+
+  it('falls back to the recipe serves when no size was chosen', () => {
+    const s = buildShoppingList([cook('bolo', null)], byId, []);
+    expect(s.find(x => x.category === 'meat')!.items[0].label).toBe('Beef mince · 500 g');
+  });
+
+  it('adds up two sizes of the same ingredient', () => {
+    const s = buildShoppingList([cook('bolo', 2), cook('cottage', 8)], byId, []);
+    // 250 g for two + 1200 g for eight.
+    expect(s.find(x => x.category === 'meat')!.items[0].label).toBe('Beef mince · 1.45 kg');
   });
 });
 
@@ -184,7 +206,7 @@ describe('shoppingProgress', () => {
     const state: ShoppingRow[] = [
       { itemKey: itemKeyOf({ n: 'Onion', q: 1, u: '', c: 'veg' }), label: '', checked: true, custom: false },
     ];
-    const s = buildShoppingList(['bolo'], byId, state);
+    const s = buildShoppingList([cook('bolo')], byId, state);
     expect(shoppingProgress(s)).toEqual({ done: 1, total: 3 });
   });
 

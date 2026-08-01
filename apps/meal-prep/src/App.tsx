@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
-import { K, MEAL_FILTERS, TIME_FILTERS, type MealType, type Recipe, type ShoppingRow } from './lib/config';
+import {
+  K, MAX_SERVES, MEAL_FILTERS, MIN_SERVES, TIME_FILTERS,
+  type CookEntry, type MealType, type Recipe, type ShoppingRow,
+} from './lib/config';
 import {
   buildShoppingList, filterRecipes, pickOfTheDay, shoppingProgress, timeLabel,
   EMPTY_FILTER, type RecipeFilter,
@@ -23,11 +26,14 @@ function sastDay(now = new Date()): string {
 
 export default function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [cookIds, setCookIds] = useState<string[]>([]);
+  const [cookList, setCookList] = useState<CookEntry[]>([]);
   const [ticks, setTicks] = useState<ShoppingRow[]>([]);
   const [tab, setTab] = useState<Tab>('cook');
   const [filter, setFilter] = useState<RecipeFilter>(EMPTY_FILTER);
   const [open, setOpen] = useState<Recipe | null>(null);
+  // Serving size for the open sheet. Resets each time a recipe is opened, so
+  // last night's "cook for 12" does not follow you into the next recipe.
+  const [servings, setServings] = useState(4);
   const [bell, setBell] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +46,7 @@ export default function App() {
   const load = useCallback(async () => {
     const [r, c, t] = await Promise.all([fetchRecipes(), fetchCookList(), fetchTicks()]);
     setRecipes(r);
-    setCookIds(c);
+    setCookList(c);
     setTicks(t);
     setLoading(false);
   }, []);
@@ -49,11 +55,11 @@ export default function App() {
   useEffect(() => { void prepReminderStatus().then(setBell); }, []);
 
   const byId = useMemo(() => new Map(recipes.map(r => [r.id, r])), [recipes]);
-  const cookSet = useMemo(() => new Set(cookIds), [cookIds]);
+  const cookSet = useMemo(() => new Set(cookList.map(c => c.recipeId)), [cookList]);
   const shown = useMemo(() => filterRecipes(recipes, filter), [recipes, filter]);
   const sections = useMemo(
-    () => buildShoppingList(cookIds, byId, ticks),
-    [cookIds, byId, ticks],
+    () => buildShoppingList(cookList, byId, ticks),
+    [cookList, byId, ticks],
   );
   const progress = useMemo(() => shoppingProgress(sections), [sections]);
 
@@ -64,13 +70,26 @@ export default function App() {
     [shown],
   );
 
-  const chosen = cookIds.map(id => byId.get(id)).filter((r): r is Recipe => Boolean(r));
+  const chosen = cookList
+    .map(c => byId.get(c.recipeId))
+    .filter((r): r is Recipe => Boolean(r));
 
-  const toggleCook = async (r: Recipe) => {
+  /** Open a recipe at the size it is already on the list for, if it is. */
+  const openRecipe = (r: Recipe) => {
+    const entry = cookList.find(c => c.recipeId === r.id);
+    setServings(entry?.servings ?? r.serves);
+    setOpen(r);
+  };
+
+  const toggleCook = async (r: Recipe, forServings: number) => {
     const on = cookSet.has(r.id);
     // Optimistic: the sheet button should flip the instant it is tapped.
-    setCookIds(prev => (on ? prev.filter(id => id !== r.id) : [...prev, r.id]));
-    const ok = on ? await cookRemove(r.id) : await cookAdd(r.id);
+    setCookList(prev => (on
+      ? prev.filter(c => c.recipeId !== r.id)
+      : [...prev, { recipeId: r.id, servings: forServings }]));
+    const ok = on
+      ? await cookRemove(r.id)
+      : await cookAdd(r.id, r.scalable ? forServings : null);
     if (!ok) { say("Couldn't save that."); }
     await load();
   };
@@ -154,7 +173,7 @@ export default function App() {
           </h1>
           <p style={{ margin: '2px 0 0', fontSize: 12.5, color: K.muted }}>
             {recipes.length} recipes
-            {cookIds.length > 0 && <> · {cookIds.length} on the list</>}
+            {cookList.length > 0 && <> · {cookList.length} on the list</>}
           </p>
         </div>
         <button
@@ -246,7 +265,7 @@ export default function App() {
 
             {suggestion && filter.search.trim() === '' && (
               <button
-                onClick={() => setOpen(suggestion)}
+                onClick={() => openRecipe(suggestion)}
                 style={{
                   width: '100%', textAlign: 'left', cursor: 'pointer',
                   background: `${K.honey}14`, border: `1px solid ${K.honey}55`,
@@ -277,7 +296,7 @@ export default function App() {
               </button>
             )}
 
-            <RecipeGrid recipes={shown} cookIds={cookSet} onOpen={setOpen} />
+            <RecipeGrid recipes={shown} cookIds={cookSet} onOpen={openRecipe} />
           </>
         )}
 
@@ -307,7 +326,7 @@ export default function App() {
                   {chosen.map(r => (
                     <button
                       key={r.id}
-                      onClick={() => setOpen(r)}
+                      onClick={() => openRecipe(r)}
                       style={{
                         background: K.surface, border: `1px solid ${K.border}`,
                         borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
@@ -338,8 +357,10 @@ export default function App() {
         <RecipeDetail
           recipe={open}
           inList={cookSet.has(open.id)}
-          onCook={() => void toggleCook(open)}
-          onUncook={() => void toggleCook(open)}
+          servings={servings}
+          onServings={n => setServings(Math.max(MIN_SERVES, Math.min(MAX_SERVES, n)))}
+          onCook={() => void toggleCook(open, servings)}
+          onUncook={() => void toggleCook(open, servings)}
           onClose={() => setOpen(null)}
         />
       )}

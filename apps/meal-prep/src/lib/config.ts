@@ -18,6 +18,9 @@ export interface Ingredient {
   q: number | string;  // quantity ('' when it's just "some")
   u: string;      // unit ('' = count)
   c: Category;    // shopping aisle
+  /** Fixed: does not move with the serving size. The litre of oil you deep-fry
+   *  in and the bag of charcoal are about the equipment, not the eating. */
+  f?: boolean;
 }
 
 export interface Recipe {
@@ -32,8 +35,21 @@ export interface Recipe {
   steps: string[];
   /** Rough hands-on + cooking time, for the "what is quick" filter. */
   totalMinutes: number | null;
+  /** False where the quantities are not really quantities — the pap guide is a
+   *  ratio explainer, a mug cake is one mug and a fixed microwave time. */
+  scalable: boolean;
   notes?: string;
 }
+
+/** What is on the cook list, and how many people it is being cooked for. */
+export interface CookEntry {
+  recipeId: string;
+  /** null = the recipe's own serving size. */
+  servings: number | null;
+}
+
+export const MIN_SERVES = 1;
+export const MAX_SERVES = 20;
 
 export interface ShoppingRow {
   itemKey: string;

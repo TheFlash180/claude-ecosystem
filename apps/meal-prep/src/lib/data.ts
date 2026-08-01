@@ -3,7 +3,7 @@
 // recipe and the other seeing it on the shopping list is the point. Only
 // recipe deletes need the admin password.
 import { sb } from './supabase';
-import type { Ingredient, MealType, Recipe, ShoppingRow } from './config';
+import type { CookEntry, Ingredient, MealType, Recipe, ShoppingRow } from './config';
 
 interface DbRecipeRow {
   id: string;
@@ -14,6 +14,7 @@ interface DbRecipeRow {
   ingredients: Ingredient[];
   steps: string[];
   total_minutes: number | null;
+  scalable: boolean;
   notes: string | null;
 }
 
@@ -22,7 +23,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
   if (!client) return [];
   const { data, error } = await client
     .from('mealprep_recipes')
-    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, notes')
+    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, scalable, notes')
     .order('name');
   if (error || !data) return [];
   return (data as DbRecipeRow[]).map(r => ({
@@ -34,20 +35,21 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
     steps: Array.isArray(r.steps) ? r.steps : [],
     totalMinutes: r.total_minutes,
+    scalable: r.scalable !== false,
     notes: r.notes ?? undefined,
   }));
 }
 
-/** Recipe ids currently on the cook list, oldest first. */
-export async function fetchCookList(): Promise<string[]> {
+/** What is on the cook list, oldest first, with the serving size chosen. */
+export async function fetchCookList(): Promise<CookEntry[]> {
   const client = sb();
   if (!client) return [];
   const { data, error } = await client
     .from('mealprep_cook_list')
-    .select('recipe_id')
+    .select('recipe_id, servings')
     .order('added_at');
   if (error || !data) return [];
-  return data.map(r => r.recipe_id as string);
+  return data.map(r => ({ recipeId: r.recipe_id as string, servings: r.servings as number | null }));
 }
 
 export async function fetchTicks(): Promise<ShoppingRow[]> {
@@ -65,10 +67,12 @@ export async function fetchTicks(): Promise<ShoppingRow[]> {
   }));
 }
 
-export async function cookAdd(recipeId: string): Promise<boolean> {
+export async function cookAdd(recipeId: string, servings: number | null): Promise<boolean> {
   const client = sb();
   if (!client) return false;
-  const { data, error } = await client.rpc('mealprep_cook_add', { p_recipe_id: recipeId });
+  const { data, error } = await client.rpc('mealprep_cook_add', {
+    p_recipe_id: recipeId, p_servings: servings,
+  });
   return !error && data === true;
 }
 

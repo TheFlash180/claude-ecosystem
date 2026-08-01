@@ -1,21 +1,28 @@
-import { Check, Clock, Plus, Users, X } from 'lucide-react';
-import { K, type Recipe } from '../lib/config';
+import { Check, Clock, Minus, Plus, Users, X } from 'lucide-react';
+import { K, MAX_SERVES, MIN_SERVES, type Recipe } from '../lib/config';
 import { timeLabel } from '../lib/recipes';
+import { formatQty, scaleRecipe } from '../lib/scale';
 
 function qtyLabel(q: number | string, u: string): string {
-  const s = typeof q === 'number' ? String(q) : q.trim();
+  const s = typeof q === 'number' ? formatQty(q) : q.trim();
   if (s === '' || s === '0') return u.trim();
   return u.trim() ? `${s} ${u.trim()}` : s;
 }
 
-export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
+export function RecipeDetail({
+  recipe, onClose, onCook, onUncook, inList, servings, onServings,
+}: {
   recipe: Recipe;
   onClose: () => void;
   onCook: () => void;
   onUncook: () => void;
   inList: boolean;
+  servings: number;
+  onServings: (n: number) => void;
 }) {
   const time = timeLabel(recipe.totalMinutes);
+  const scaled = scaleRecipe(recipe, servings);
+  const isScaled = recipe.scalable && scaled.servings !== recipe.serves;
 
   return (
     <div
@@ -50,16 +57,57 @@ export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
               {recipe.name}
             </h2>
             <div style={{
-              display: 'flex', gap: 12, marginTop: 6,
+              display: 'flex', gap: 12, marginTop: 6, alignItems: 'center', flexWrap: 'wrap',
               fontSize: 12.5, color: K.sub, fontFamily: K.body,
             }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Users size={13} /> Serves {recipe.serves}
-              </span>
+              {recipe.scalable ? (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 2,
+                  border: `1px solid ${isScaled ? K.terra : K.border}`,
+                  borderRadius: 20, padding: '1px 3px',
+                }}>
+                  <Step
+                    label="One fewer serving"
+                    disabled={servings <= MIN_SERVES}
+                    onClick={() => onServings(servings - 1)}
+                  >
+                    <Minus size={13} />
+                  </Step>
+                  <span style={{
+                    minWidth: 70, textAlign: 'center', fontWeight: 600,
+                    color: isScaled ? K.terraDark : K.text,
+                  }}>
+                    Serves {servings}
+                  </span>
+                  <Step
+                    label="One more serving"
+                    disabled={servings >= MAX_SERVES}
+                    onClick={() => onServings(servings + 1)}
+                  >
+                    <Plus size={13} />
+                  </Step>
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Users size={13} /> Serves {recipe.serves}
+                </span>
+              )}
               {time && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <Clock size={13} /> {time}
                 </span>
+              )}
+              {isScaled && (
+                <button
+                  onClick={() => onServings(recipe.serves)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    color: K.muted, fontFamily: K.body, fontSize: 12,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  reset to {recipe.serves}
+                </button>
               )}
             </div>
           </div>
@@ -81,9 +129,21 @@ export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
             </p>
           )}
 
+          {isScaled && (
+            <p style={{
+              margin: '0 0 14px', padding: '9px 11px', borderRadius: 10,
+              background: `${K.honey}14`, border: `1px solid ${K.honey}44`,
+              fontFamily: K.body, fontSize: 12.5, color: K.sub, lineHeight: 1.5,
+            }}>
+              Scaled for {servings} from {recipe.serves}. Cooking times, oven
+              temperatures and dish sizes have <strong>not</strong> changed — go
+              by how it looks rather than the clock.
+            </p>
+          )}
+
           <h3 style={sectionTitle}>Ingredients</h3>
           <ul style={{ margin: '0 0 20px', padding: 0, listStyle: 'none' }}>
-            {recipe.ingredients.map((i, n) => (
+            {scaled.ingredients.map((i, n) => (
               <li key={`${i.n}-${n}`} style={{
                 display: 'flex', justifyContent: 'space-between', gap: 12,
                 padding: '7px 0', borderBottom: `1px solid ${K.border}66`,
@@ -93,7 +153,7 @@ export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
                 <span style={{ color: K.sub, whiteSpace: 'nowrap' }}>{qtyLabel(i.q, i.u)}</span>
               </li>
             ))}
-            {recipe.ingredients.length === 0 && (
+            {scaled.ingredients.length === 0 && (
               <li style={{ fontFamily: K.body, fontSize: 13.5, color: K.muted }}>
                 No ingredients listed yet.
               </li>
@@ -101,9 +161,9 @@ export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
           </ul>
 
           <h3 style={sectionTitle}>Method</h3>
-          {recipe.steps.length > 0 ? (
+          {scaled.steps.length > 0 ? (
             <ol style={{ margin: 0, padding: 0, listStyle: 'none', counterReset: 'step' }}>
-              {recipe.steps.map((s, n) => (
+              {scaled.steps.map((s, n) => (
                 <li key={n} style={{ display: 'flex', gap: 11, marginBottom: 14 }}>
                   <span style={{
                     flexShrink: 0, width: 24, height: 24, borderRadius: 12,
@@ -142,11 +202,31 @@ export function RecipeDetail({ recipe, onClose, onCook, onUncook, inList }: {
             }}
           >
             {inList ? <><Check size={16} /> On the list — tap to remove</>
-                    : <><Plus size={16} /> We're making this</>}
+                    : <><Plus size={16} /> We're making this{isScaled ? ` for ${servings}` : ''}</>}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function Step({ label, disabled, onClick, children }: {
+  label: string; disabled: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      style={{
+        display: 'grid', placeItems: 'center', width: 26, height: 26,
+        borderRadius: 13, border: 'none', background: 'transparent',
+        cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? K.border : K.terraDark,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
