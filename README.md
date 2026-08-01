@@ -6,7 +6,9 @@ Monorepo for the personal automation ecosystem. Every app in `apps/` builds as a
 
 ```
 apps/            One folder per app (dashboard, sport-watch, baby-logger, ...)
-packages/shared  Shared code: Supabase client, theme tokens, AppShell
+packages/shared  Supabase client, device token + push helpers, theme.css,
+                 and AppShell (which only the dashboard still uses — every
+                 other app builds its own chrome)
 tooling/         build-all.mjs (CI build) and new-app.mjs (scaffold)
 .github/         Deploy workflow + Supabase keep-alive cron
 ```
@@ -31,6 +33,23 @@ That shared project is a real coupling to be aware of:
 - **baby-registry-pwa owns** `categories`/`items`/`retailers`/`claims`/
   `registry_settings` and their security-definer RPCs.
 - The `ping` table only exists for the keep-alive cron.
+
+What each one is:
+
+- **dashboard** — the hub at the site root; a tile per app, including the two
+  external ones.
+- **sport-watch** — F1 and rugby fixtures with push reminders and a calendar feed.
+- **marvel-watch** — Marvel release dates from TMDB, with reminders.
+- **meal-prep** — a recipe book: 61 recipes across lunch, dinner, sides, snacks
+  and puddings, each with a full method, a serving-size scaler, and a cook list
+  that builds a shared shopping list. (It is no longer a weekly planner.)
+- **workout-plan** — a workout guide: routines to browse and 33 movements with
+  demo photos and how-to text, plus bodyweight and parkrun tracking. (It no
+  longer logs individual sets.)
+- **baby-logger** — feeds, sleeps, nappies and weights, offline-first.
+- **glovebox** — vehicle documents, service and licence-renewal reminders.
+- **front-row** — what is on at Montecasino and nearby, with watches.
+- **price-watch** — Takealot price tracking with drop alerts.
 
 Everything else is owned by exactly one in-repo app, which prefixes its tables
 with its own name. Each app's `supabase/` folder holds the **copy of record**

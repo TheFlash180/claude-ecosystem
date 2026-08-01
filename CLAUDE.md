@@ -5,10 +5,20 @@ is free-tier: GitHub Pages for hosting, one shared Supabase project for data.
 
 ## Read this first: things that look like bugs and are not
 
-**Supabase's advisors report ~21 "RLS enabled, no policy" warnings and ~130
-"anon-executable security definer function" warnings. Both are the design.
-Do not "fix" them.** Adding policies to those tables, or revoking anon execute
-on those functions, breaks every app in the repo.
+**Supabase's advisors report ~154 findings and essentially all of them are the
+design. Do not "fix" them.** As of August 2026:
+
+| Count | Lint | Why it is there |
+|---|---|---|
+| 127 | `anon_/authenticated_security_definer_function_executable` | The definer RPCs **are** the write path. Revoking execute breaks every app. |
+| 21 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
+| 5 | `rls_policy_always_true` | fintrack's `using (true)` on `transactions`, `budgets`, `profiles`, `fintrack_settings`, `fintrack_accounts`. Deliberate — see the fintrack-pro CLAUDE.md. |
+| 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
+
+Adding policies to those tables, revoking anon execute on those functions, or
+tightening the fintrack policies to per-owner isolation each break a working
+app. If the count moves well away from those numbers, something new happened —
+that is worth a look.
 
 The apps predate accounts. They are **device-scoped, not user-scoped**:
 
@@ -38,9 +48,24 @@ other app at `/<repo>/<app>/`. **An app's display name comes from its
 `index.html` `<title>`** — that is how it appears on the hub tile. There is no
 registry to update; adding a folder under `apps/` is enough.
 
-Newer apps (glovebox, front-row, price-watch) do not use `AppShell` — they
-build their own chrome with an app-specific palette. Follow whichever pattern
-the app you are editing already uses.
+**Only the dashboard uses `AppShell`.** Every other app builds its own chrome
+around an app-specific palette exported from its `lib/config.ts` (`K` in
+meal-prep, `W` in workout-plan, and so on). What the apps actually share is
+`getSupabase`, `deviceToken` and `ensurePushSubscription` — do not go looking
+for a common layout component.
+
+### What the apps are, where the name misleads
+
+Most are what they sound like. Two are not:
+
+- **Meal Prep** is a *recipe book*, not a planner. The weekly grid was used
+  twice in four months and is gone. 61 recipes across lunch / dinner / sides /
+  snacks / puddings, each with a full method, and a cook list that feeds a
+  shared shopping list.
+- **Workout Plan** is a *guide*, not a training log. Per-set logging was used
+  for one week and is gone with its tables. Routines are workout types you
+  browse, not weekdays. The only things it records are bodyweight and parkrun
+  times.
 
 ## The shared Supabase project
 
@@ -119,6 +144,26 @@ Playwright and `omitBackground: true`.
 **Push subscriptions are one row per device**, collapsed with
 `on conflict (device_token_hash) do update`. Getting this wrong caused duplicate
 notifications across the whole ecosystem once already.
+
+**Meal Prep recipe steps are scaled by regex, so how you write a quantity
+matters.** `src/lib/scale.ts` rescales a number in the prose only when a unit
+of food follows it (`cups`, `tsp`, `g`, `ml`, `tins`, `eggs`, …). That
+whitelist is what keeps `25 minutes`, `180°C` and `3 cm` safe. Consequences
+when writing or editing a step:
+
+- Put the number next to its unit. `2 extra tablespoons` does not scale —
+  `2 tablespoons` does.
+- Use a unit the list knows, or no number at all. `8 dips` did not scale and
+  had to be reworded.
+- Never write a per-item amount as a number. "Pour in 60 ml of batter" per
+  pancake would double the size of each pancake instead of making more.
+- `mealprep_recipes.scalable = false` turns the whole thing off, for recipes
+  where the quantity is not really a quantity. An ingredient with `"f": true`
+  is exempt on its own — the oil you deep-fry in, the bag of charcoal.
+
+`apps/meal-prep/supabase/seed.sql` is a **real export of all 61 recipes** and
+is the copy of record for the content. Regenerate it if you change recipes; it
+was verified byte-identical to the live table by checksum.
 
 ## Working practice
 
