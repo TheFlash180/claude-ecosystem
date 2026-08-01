@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { mergePending, QUEUE_EVENT } from '../lib/eventQueue';
 import type { Baby, UserProfile, FeedEvent, SleepEvent, NappyEvent, WeightEvent, TimelineEvent } from '../types';
 import QuickLog from './QuickLog';
 import Timeline from './Timeline';
@@ -34,6 +35,9 @@ export default function PostBirthView({ baby, displayName, userId, onBabyUpdate,
 
   const activeSleep = sleeps.find((s) => !s.ended_at) ?? null;
 
+  // Anything still sitting in the offline queue is merged in on top of what
+  // the server returned, so a feed or sleep logged in a dead spot is on screen
+  // the moment it is tapped rather than only after the next sync.
   const loadData = useCallback(async () => {
     const sb = supabase();
     const [f, s, n, w, p] = await Promise.all([
@@ -43,14 +47,35 @@ export default function PostBirthView({ baby, displayName, userId, onBabyUpdate,
       sb.from('weight_events').select('*').eq('baby_id', baby.id).order('measured_at', { ascending: false }).limit(PAGE_SIZE * timelinePage),
       sb.from('profiles').select('*'),
     ]);
-    if (f.data) setFeeds(f.data);
-    if (s.data) setSleeps(s.data);
-    if (n.data) setNappies(n.data);
-    if (w.data) setWeights(w.data);
+    // Falling back to `prev` rather than `[]` when the query fails: offline it
+    // returns null, and emptying the list would blank out the whole history
+    // just when there is no way to fetch it again. Re-merging over the previous
+    // merged list is safe — rows are keyed by id, so nothing doubles up.
+    setFeeds(prev => mergePending<FeedEvent>(f.data ?? prev, 'feed_events'));
+    setSleeps(prev => mergePending<SleepEvent>(s.data ?? prev, 'sleep_events'));
+    setNappies(prev => mergePending<NappyEvent>(n.data ?? prev, 'nappy_events'));
+    setWeights(prev => mergePending<WeightEvent>(w.data ?? prev, 'weight_events'));
     if (p.data) setProfiles(p.data);
   }, [baby.id, timelinePage]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // The queue changing means a row was just added offline, or a flush landed.
+  // Either way what is on screen is now stale. Coalesced, because a flush
+  // fires one event per row and each reload is five queries — twenty queued
+  // feeds would otherwise mean a hundred requests on reconnect.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onQueueChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { void loadData(); }, 250);
+    };
+    window.addEventListener(QUEUE_EVENT, onQueueChange);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(QUEUE_EVENT, onQueueChange);
+    };
+  }, [loadData]);
 
   function buildTimeline(): TimelineEvent[] {
     const all: TimelineEvent[] = [
