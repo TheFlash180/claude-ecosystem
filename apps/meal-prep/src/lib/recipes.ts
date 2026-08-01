@@ -1,44 +1,60 @@
-// Pure week/date + shopping-list logic (unit-tested).
+// Pure recipe + shopping-list logic. No React, no Supabase, so it runs under
+// node in tests.
 import {
-  CATEGORY_META, type Category, type Ingredient, type PlanSlot,
-  type Recipe, type ShoppingRow, type Slot,
+  CATEGORY_META, QUICK_MINUTES,
+  type Category, type Ingredient, type MealType, type Recipe, type ShoppingRow,
 } from './config';
 
-// ---- SAST calendar days ----
+// ---- browsing ----
 
-export function sastDay(now = new Date()): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
+export interface RecipeFilter {
+  meal: MealType | 'all';
+  quickOnly: boolean;
+  search: string;
 }
 
-export function addDays(ymd: string, n: number): string {
-  const d = new Date(ymd + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+export const EMPTY_FILTER: RecipeFilter = { meal: 'all', quickOnly: false, search: '' };
+
+function matchesSearch(r: Recipe, needle: string): boolean {
+  const q = needle.trim().toLowerCase();
+  if (q === '') return true;
+  if (r.name.toLowerCase().includes(q)) return true;
+  // Searching by what is in the fridge is the main way this gets used —
+  // "mince", "chicken" — so ingredients count as much as the title.
+  return r.ingredients.some(i => (i.n ?? '').toLowerCase().includes(q));
 }
 
-/** Monday of the week containing ymd. */
-export function weekStartOf(ymd: string): string {
-  const d = new Date(ymd + 'T12:00:00Z');
-  const dow = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  return addDays(ymd, -dow);
+/** A recipe marked "any" belongs in both the lunch and dinner lists — it is
+ *  not a third category to filter to. */
+function matchesMeal(r: Recipe, meal: MealType | 'all'): boolean {
+  if (meal === 'all') return true;
+  return r.mealType === meal || r.mealType === 'any';
 }
 
-/** The date of day N (0 = Monday) in the week starting weekStart. */
-export function dayDate(weekStart: string, day: number): string {
-  return addDays(weekStart, day);
+export function filterRecipes(recipes: Recipe[], f: RecipeFilter): Recipe[] {
+  return recipes.filter(r =>
+    matchesMeal(r, f.meal)
+    // An unknown time is not "quick" — claiming a 2-hour stew is a weeknight
+    // meal is worse than leaving it out of the filter.
+    && (!f.quickOnly || (r.totalMinutes !== null && r.totalMinutes <= QUICK_MINUTES))
+    && matchesSearch(r, f.search));
 }
 
-export function fmtDay(ymd: string): string {
-  return new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-ZA', {
-    weekday: 'short', day: 'numeric', month: 'short',
-  });
+export function timeLabel(minutes: number | null): string {
+  if (minutes === null || !Number.isFinite(minutes)) return '';
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
 }
 
-export function fmtWeekRange(weekStart: string): string {
-  const opts = { day: 'numeric', month: 'short' } as const;
-  const a = new Date(weekStart + 'T12:00:00Z').toLocaleDateString('en-ZA', opts);
-  const b = new Date(addDays(weekStart, 6) + 'T12:00:00Z').toLocaleDateString('en-ZA', opts);
-  return `${a} – ${b}`;
+/** Deterministic pick for "surprise me", so the same day gives the same
+ *  suggestion rather than reshuffling on every render. */
+export function pickOfTheDay(recipes: Recipe[], seed: string): Recipe | null {
+  if (recipes.length === 0) return null;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return recipes[h % recipes.length];
 }
 
 // ---- shopping list ----
@@ -74,21 +90,22 @@ function fmtQty(q: number, u: string): string {
 }
 
 /**
- * Consolidate the week's planned recipes into one list. Every slot counts —
- * a leftover slot means you cooked double, so you also bought double.
- * Ticks (from mealprep_shopping) mark items checked; custom extras append
- * to the "other" section.
+ * Consolidate the chosen recipes into one list, grouped by aisle.
+ *
+ * The same recipe chosen twice counts twice — cooking it two nights means
+ * buying for two nights. Quantities that are not numbers ("a handful") make
+ * the whole line uncountable rather than silently reading as zero.
  */
 export function buildShoppingList(
-  slots: PlanSlot[],
+  recipeIds: string[],
   recipes: Map<string, Recipe>,
   state: ShoppingRow[],
 ): ShoppingSection[] {
   interface Agg { name: string; unit: string; qty: number; countable: boolean; category: Category }
   const agg = new Map<string, Agg>();
 
-  for (const s of slots) {
-    const r = recipes.get(s.recipeId);
+  for (const id of recipeIds) {
+    const r = recipes.get(id);
     if (!r) continue;
     for (const ing of r.ingredients) {
       if (!ing?.n) continue;
@@ -134,18 +151,11 @@ export function buildShoppingList(
   return sections;
 }
 
-/** Empty slots strictly after (day, slot) in the same week — "cook double"
- *  leftover candidates, nearest first. */
-export function leftoverCandidates(
-  slots: PlanSlot[], day: number, slot: Slot,
-): { day: number; slot: Slot }[] {
-  const taken = new Set(slots.map(s => `${s.day}|${s.slot}`));
-  const out: { day: number; slot: Slot }[] = [];
-  for (let d = 0; d < 7; d++) {
-    for (const sl of ['lunch', 'dinner'] as Slot[]) {
-      const after = d > day || (d === day && slot === 'lunch' && sl === 'dinner');
-      if (after && !taken.has(`${d}|${sl}`)) out.push({ day: d, slot: sl });
-    }
+export function shoppingProgress(sections: ShoppingSection[]): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const s of sections) {
+    for (const i of s.items) { total++; if (i.checked) done++; }
   }
-  return out;
+  return { done, total };
 }

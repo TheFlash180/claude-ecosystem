@@ -294,3 +294,41 @@ select cron.schedule(
   ) AS request_id;
   $$
 );
+
+-- ---------------------------------------------------------------- recipe book
+-- Meal Prep stopped being a weekly planner: the grid was used twice in four
+-- months while the recipes were used constantly. The question is now "we
+-- cannot decide what to cook", which needs the method, not a calendar.
+alter table mealprep_recipes
+  add column if not exists steps jsonb not null default '[]'::jsonb,
+  add column if not exists total_minutes integer;
+
+-- What we are cooking, household-shared. One person adding a recipe and the
+-- other seeing it on the shopping list is the entire point, so no device token.
+create table if not exists mealprep_cook_list (
+  recipe_id text primary key references mealprep_recipes(id) on delete cascade,
+  added_at timestamptz not null default now()
+);
+
+-- Tick state keyed by item rather than by week, so it does not silently reset
+-- when the calendar rolls over mid-shop.
+create table if not exists mealprep_ticks (
+  item_key text primary key,
+  label text not null,
+  checked boolean not null default false,
+  custom boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+alter table mealprep_cook_list enable row level security;
+alter table mealprep_ticks     enable row level security;
+create policy "public read" on mealprep_cook_list for select to anon, authenticated using (true);
+create policy "public read" on mealprep_ticks     for select to anon, authenticated using (true);
+
+-- RPCs: mealprep_cook_add / _remove / _clear, mealprep_tick,
+-- mealprep_extra_add / _remove, and mealprep_upsert_recipe gaining p_steps and
+-- p_total_minutes. Applied as migrations mealprep_recipe_method,
+-- mealprep_cook_list and mealprep_upsert_with_steps.
+--
+-- mealprep_plan and mealprep_shopping are left in place but unused; the app no
+-- longer reads or writes them.

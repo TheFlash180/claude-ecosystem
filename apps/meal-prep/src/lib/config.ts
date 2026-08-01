@@ -1,5 +1,10 @@
 // Meal Prep: types + visual identity. Deliberately NOT a Watch app —
 // warm kitchen tones on cream, Fraunces serif display. Light theme.
+//
+// This is a recipe book, not a planner. The weekly grid was used twice in four
+// months while the recipes were used constantly, so the question the app now
+// answers is "we cannot decide what to make tonight" — which needs the method,
+// not a calendar.
 
 export type Slot = 'lunch' | 'dinner';
 export type MealType = Slot | 'any';
@@ -20,14 +25,12 @@ export interface Recipe {
   mealType: MealType;
   serves: number;
   ingredients: Ingredient[];
+  /** Ordered method. Plain strings on purpose — a numbered list is what you
+   *  read one-handed at the stove. */
+  steps: string[];
+  /** Rough hands-on + cooking time, for the "what is quick" filter. */
+  totalMinutes: number | null;
   notes?: string;
-}
-
-export interface PlanSlot {
-  day: number;         // 0 = Monday
-  slot: Slot;
-  recipeId: string;
-  isLeftover: boolean; // filled by "cook double"
 }
 
 export interface ShoppingRow {
@@ -37,15 +40,18 @@ export interface ShoppingRow {
   custom: boolean;
 }
 
-export const SLOTS: { key: Slot; label: string }[] = [
-  { key: 'lunch', label: 'Lunch' },
+export const MEAL_FILTERS: { key: MealType | 'all'; label: string }[] = [
+  { key: 'all', label: 'Everything' },
   { key: 'dinner', label: 'Dinner' },
+  { key: 'lunch', label: 'Lunch' },
 ];
 
-export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+/** Anything at or under this is offered as "quick". Chosen because it is
+ *  roughly the point where a weeknight meal stops feeling like a project. */
+export const QUICK_MINUTES = 30;
 
 // Aisle icons live in components/icons.tsx (lucide) — this stays UI-free
-// so the pure plan logic can run under node in tests.
+// so the pure list logic can run under node in tests.
 export const CATEGORY_META: { key: Category; label: string }[] = [
   { key: 'meat', label: 'Meat & fish' },
   { key: 'veg', label: 'Fruit & veg' },

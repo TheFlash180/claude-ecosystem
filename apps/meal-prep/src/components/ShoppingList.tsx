@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { PartyPopper, ShoppingBasket, X } from 'lucide-react';
 import { K } from '../lib/config';
-import type { ShoppingSection } from '../lib/plan';
+import type { ShoppingSection } from '../lib/recipes';
 import { CATEGORY_ICON } from './icons';
 
-// The week's consolidated shopping list, grouped by aisle. Ticks sync to the
-// cloud so both phones see the same list in the shop.
+// The consolidated shopping list for whatever is on the cook list, grouped by
+// aisle. Ticks sync to the cloud so both phones see the same list in the shop.
 
 export function ShoppingList({ sections, onTick, onAddExtra, onRemoveExtra }: {
   sections: ShoppingSection[];
@@ -50,8 +50,8 @@ export function ShoppingList({ sections, onTick, onAddExtra, onRemoveExtra }: {
         <div style={{ color: K.muted, fontSize: 13.5, textAlign: 'center', padding: '36px 20px', lineHeight: 1.6 }}>
           <ShoppingBasket size={26} strokeWidth={1.6} style={{ marginBottom: 8 }} />
           <br />
-          Nothing to buy yet — plan some meals on the Plan tab and the
-          ingredients gather here automatically.
+          Nothing to buy yet — pick a few recipes and their ingredients
+          gather here automatically.
         </div>
       )}
 
