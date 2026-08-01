@@ -7,7 +7,9 @@
 // not a calendar.
 
 export type Slot = 'lunch' | 'dinner';
-export type MealType = Slot | 'any';
+/** 'any' means "works for either lunch or dinner", not a third bucket.
+ *  'side', 'snack' and 'dessert' are their own shelves. */
+export type MealType = Slot | 'any' | 'side' | 'snack' | 'dessert';
 export type Category =
   | 'meat' | 'veg' | 'dairy' | 'bakery' | 'pantry' | 'spices' | 'frozen' | 'other';
 
@@ -44,11 +46,19 @@ export const MEAL_FILTERS: { key: MealType | 'all'; label: string }[] = [
   { key: 'all', label: 'Everything' },
   { key: 'dinner', label: 'Dinner' },
   { key: 'lunch', label: 'Lunch' },
+  { key: 'snack', label: 'Snacks' },
+  { key: 'dessert', label: 'Puddings' },
+  { key: 'side', label: 'Sides' },
 ];
 
-/** Anything at or under this is offered as "quick". Chosen because it is
- *  roughly the point where a weeknight meal stops feeling like a project. */
-export const QUICK_MINUTES = 30;
+/** Two speeds, because they answer different questions. 30 minutes is "can we
+ *  make this on a weeknight"; 15 is "we are hungry now and nobody feels like
+ *  cooking". */
+export const TIME_FILTERS: { key: number | null; label: string }[] = [
+  { key: null, label: 'Any time' },
+  { key: 15, label: 'Under 15 min' },
+  { key: 30, label: 'Under 30 min' },
+];
 
 // Aisle icons live in components/icons.tsx (lucide) — this stays UI-free
 // so the pure list logic can run under node in tests.

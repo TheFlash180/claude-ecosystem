@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
-import { K, MEAL_FILTERS, QUICK_MINUTES, type MealType, type Recipe, type ShoppingRow } from './lib/config';
+import { K, MEAL_FILTERS, TIME_FILTERS, type MealType, type Recipe, type ShoppingRow } from './lib/config';
 import {
   buildShoppingList, filterRecipes, pickOfTheDay, shoppingProgress, timeLabel,
   EMPTY_FILTER, type RecipeFilter,
@@ -220,7 +220,7 @@ export default function App() {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               {MEAL_FILTERS.map(m => (
                 <Chip
                   key={m.key}
@@ -230,12 +230,18 @@ export default function App() {
                   {m.label}
                 </Chip>
               ))}
-              <Chip
-                on={filter.quickOnly}
-                onClick={() => setFilter({ ...filter, quickOnly: !filter.quickOnly })}
-              >
-                Under {QUICK_MINUTES} min
-              </Chip>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {TIME_FILTERS.map(t => (
+                <Chip
+                  key={String(t.key)}
+                  on={filter.maxMinutes === t.key}
+                  onClick={() => setFilter({ ...filter, maxMinutes: t.key })}
+                >
+                  {t.label}
+                </Chip>
+              ))}
             </div>
 
             {suggestion && filter.search.trim() === '' && (

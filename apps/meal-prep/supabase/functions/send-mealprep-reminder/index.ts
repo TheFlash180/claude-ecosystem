@@ -1,8 +1,12 @@
 // Meal Prep: Sunday prep-day push (copy of record in the monorepo under
 // apps/meal-prep/supabase/functions/). Called by pg_cron Sundays 06:25 UTC
-// (08:25 SAST). Tells every enabled device what the week starting Monday
-// looks like and how big the shopping list is, then prunes weeks older
-// than 10 weeks. VAPID key from env or Vault (get_mealprep_vapid_private_key).
+// (08:25 SAST). Tells every enabled device what is on the cook list and how
+// much of the shopping is still outstanding.
+//
+// This used to read the weekly planner (mealprep_plan / mealprep_shopping).
+// Those went when the app became a recipe book, so it now reads the cook list
+// instead — there is no week any more, just "what are we making next".
+// VAPID key from env or Vault (get_mealprep_vapid_private_key).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -24,22 +28,10 @@ async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean
   return true;
 }
 
-function sastToday(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
-}
-
-/** Monday of the week containing ymd. */
-function weekStart(ymd: string): string {
-  const d = new Date(ymd + "T12:00:00Z");
-  const dow = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  d.setUTCDate(d.getUTCDate() - dow);
-  return d.toISOString().slice(0, 10);
-}
-
-function addDays(ymd: string, n: number): string {
-  const d = new Date(ymd + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+/** Same key the app uses to merge ingredients across recipes. */
+function itemKeyOf(name: string, unit: string): string {
+  const norm = name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return `${norm}|${(unit ?? "").trim().toLowerCase()}`;
 }
 
 Deno.serve(async () => {
@@ -52,49 +44,53 @@ Deno.serve(async () => {
     return new Response(JSON.stringify({ error: "VAPID key unavailable" }), { status: 500 });
   }
 
-  const today = sastToday();
-  // Fired on Sunday -> the week starting tomorrow. Fired mid-week (manual
-  // test) -> the current week.
-  const week = weekStart(addDays(today, 1));
-
-  const { data: slots, error: planErr } = await sb
-    .from("mealprep_plan")
-    .select("day, slot, is_leftover, mealprep_recipes(name, emoji, ingredients)")
-    .eq("week_start", week);
-  if (planErr) {
-    return new Response(JSON.stringify({ error: planErr.message }), { status: 500 });
+  const { data: list, error: listErr } = await sb
+    .from("mealprep_cook_list")
+    .select("recipe_id, added_at, mealprep_recipes(name, emoji, ingredients)")
+    .order("added_at");
+  if (listErr) {
+    return new Response(JSON.stringify({ error: listErr.message }), { status: 500 });
   }
 
-  // Headline: distinct cooked recipes (leftover slots ride along free).
+  // The same recipe chosen twice is two cooks but one set of ingredients.
   const counts = new Map<string, { emoji: string; cooks: number }>();
   const itemKeys = new Set<string>();
-  for (const s of slots ?? []) {
-    const r = (s as any).mealprep_recipes;
+  for (const row of list ?? []) {
+    const r = (row as any).mealprep_recipes;
     if (!r) continue;
-    const e = counts.get(r.name) ?? { emoji: r.emoji ?? "", cooks: 0 };
-    if (!s.is_leftover) e.cooks++;
-    counts.set(r.name, e);
+    const entry = counts.get(r.name) ?? { emoji: r.emoji ?? "", cooks: 0 };
+    entry.cooks++;
+    counts.set(r.name, entry);
     for (const ing of (r.ingredients ?? []) as { n?: string; u?: string }[]) {
-      if (ing?.n) itemKeys.add(`${ing.n}`.trim().toLowerCase() + "|" + (ing.u ?? ""));
+      if (ing?.n) itemKeys.add(itemKeyOf(ing.n, ing.u ?? ""));
     }
   }
-  const { count: extras } = await sb
-    .from("mealprep_shopping")
-    .select("id", { count: "exact", head: true })
-    .eq("week_start", week)
-    .eq("custom", true);
+
+  const { data: ticks } = await sb
+    .from("mealprep_ticks")
+    .select("item_key, checked, custom");
+
+  // Outstanding = recipe ingredients not yet ticked, plus unticked extras.
+  let outstanding = 0;
+  const checked = new Set(
+    (ticks ?? []).filter((t: any) => t.checked).map((t: any) => t.item_key as string),
+  );
+  for (const key of itemKeys) if (!checked.has(key)) outstanding++;
+  for (const t of (ticks ?? []) as any[]) if (t.custom && !t.checked) outstanding++;
 
   const names = [...counts.entries()];
   let body: string;
   if (names.length === 0) {
-    body = "Nothing planned yet for the week — take two minutes to fill the board \u{1F37D}\u{FE0F}";
+    body = "Nothing on the cook list — pick a few for the week \u{1F37D}\u{FE0F}";
   } else {
     const shown = names.slice(0, 4)
       .map(([n, v]) => `${v.emoji} ${n}${v.cooks > 1 ? ` ×${v.cooks}` : ""}`.trim())
       .join(", ");
     const more = names.length > 4 ? ` +${names.length - 4} more` : "";
-    const items = itemKeys.size + (extras ?? 0);
-    body = `This week: ${shown}${more} · ±${items} shopping items`;
+    const shopping = outstanding > 0
+      ? ` · ${outstanding} thing${outstanding === 1 ? "" : "s"} still to buy`
+      : " · shopping all ticked off";
+    body = `On the list: ${shown}${more}${shopping}`;
   }
 
   const { data: subs } = await sb
@@ -122,13 +118,8 @@ Deno.serve(async () => {
     await sb.from("mealprep_push_subs").delete().eq("id", id);
   }
 
-  // Prune stale weeks so the tables never grow unbounded.
-  const cutoff = addDays(week, -70);
-  await sb.from("mealprep_plan").delete().lt("week_start", cutoff);
-  await sb.from("mealprep_shopping").delete().lt("week_start", cutoff);
-
   return new Response(
-    JSON.stringify({ week, planned: names.length, sent, failed, body }),
+    JSON.stringify({ onList: names.length, outstanding, sent, failed, body }),
     { headers: { "Content-Type": "application/json" } },
   );
 });

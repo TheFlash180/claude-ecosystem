@@ -1,7 +1,15 @@
--- Meal Prep starter pack (copy of record — mirrors the live curated set).
+-- Meal Prep starter pack — the ORIGINAL 24 recipes, without their method.
+--
+-- ⚠️ This file is NOT the current book. The live set is 61 recipes with full
+-- step-by-step methods, times and the side/snack/dessert meal types. Those
+-- were written directly as migrations and are recoverable from the Supabase
+-- project (mcp__Supabase__list_migrations — mealprep_pap_family_and_sides,
+-- mealprep_potjie_and_mains, mealprep_under_15_minutes, mealprep_desserts,
+-- mealprep_snacks, mealprep_rewrite_originals_1 and _2), not from this file.
+-- Do not run this over the live table: it would strip every method back out.
+--
 -- Mild, balanced, high-protein and pregnancy-friendly: no chilli/curry/masala,
--- cooked fish only, no shellfish. The household edits these freely in the app,
--- so the live rows drift from this file; it exists for bootstrap/recovery.
+-- cooked fish only, no shellfish.
 -- Ingredient shape: [{n: name, q: qty, u: unit, c: aisle}] where aisle is
 -- one of meat/veg/dairy/bakery/pantry/spices/frozen/other.
 

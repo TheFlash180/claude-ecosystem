@@ -120,7 +120,10 @@ export function RecipesPage({ recipes, onChanged, onToast }: {
             onChange={e => setDraft({ ...draft, mealType: e.target.value as MealType })}>
             <option value="lunch">Lunch</option>
             <option value="dinner">Dinner</option>
-            <option value="any">Any</option>
+            <option value="any">Lunch or dinner</option>
+            <option value="snack">Snack</option>
+            <option value="dessert">Pudding</option>
+            <option value="side">Side</option>
           </select>
         </Field>
         <Field label="Serves">
