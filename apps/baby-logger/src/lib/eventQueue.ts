@@ -169,6 +169,19 @@ function enqueue(op: QueuedOp) {
   saveQueue(q);
 }
 
+/** Drop the op at the head of the queue and return what is left.
+ *
+ *  Always re-reads rather than slicing the caller's copy: an event logged
+ *  while the flush was in flight is appended to the stored queue, and writing
+ *  a stale copy back over it would throw that event away. Both exits from the
+ *  flush loop need this — they used to differ, and the permanent-rejection
+ *  path silently dropped whatever had been logged mid-flush. */
+function dropHead(): QueuedOp[] {
+  const next = loadQueue().slice(1);
+  saveQueue(next);
+  return next;
+}
+
 /** Only one flush at a time. Two overlapping flushes both read the same head
  *  of the queue and insert it twice — connectivity flapping is enough to
  *  trigger it, and a duplicated 3am feed is exactly the kind of quiet wrong
@@ -194,16 +207,11 @@ export async function flushQueue(): Promise<number> {
           : await sb.from(op.table).update(op.payload).eq('id', op.id ?? '');
       if (error) {
         if (isNetworkError(error)) break;
-        q = q.slice(1); // permanent rejection — drop and continue
-        saveQueue(q);
+        q = dropHead(); // permanent rejection — drop and continue
         continue;
       }
       flushed++;
-      // Re-read rather than trusting the local copy: a write that happened
-      // while this flush was in flight would otherwise be discarded by
-      // saving a stale queue back over it.
-      q = loadQueue().slice(1);
-      saveQueue(q);
+      q = dropHead();
     }
     return flushed;
   } finally {

@@ -199,7 +199,16 @@ was verified byte-identical to the live table by checksum.
 - A source that goes quiet looks identical to "nothing new". Every syncing app
   records adapter health (`*_sources`) and the UI shows a stale-source banner.
 - Notifiers only record a send **after** delivery succeeds, so a total failure
-  retries rather than being silently marked done.
+  retries rather than being silently marked done. **price-watch and front-row
+  add two deliberate exceptions**, both meaning "we chose not to send this"
+  rather than "we tried and failed": an alert past that run's per-device cap
+  (`MAX_PER_DEVICE = 6`), and a device with no push subscription at all. Both
+  mark as notified. The second is the one with a consequence — movement that
+  happens while notifications are off is burned, so enabling push later starts
+  from silence instead of replaying a backlog.
+  glovebox does the opposite with the same situation (`continue` without
+  marking, so it retries next run). Neither is wrong; just check which kind you
+  are editing before copying a notifier.
 - A watch/track only reports things that appeared **after it was created**.
   Without that, adding one replays the back catalogue as notifications.
 - Quicket carries almost nothing at Montecasino; Front Row's useful source is
