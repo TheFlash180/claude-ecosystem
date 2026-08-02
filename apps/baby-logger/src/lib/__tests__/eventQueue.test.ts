@@ -17,6 +17,9 @@ let failNetwork: number;
 /** Tables the fake server rejects outright (constraint violation, bad column
  *  — anything that will never succeed no matter how long we retry). */
 let rejectTables: Set<string>;
+/** Runs inside a write, before it returns — the window in which someone taps
+ *  "log a feed" while a flush is already in flight. */
+let duringWrite: (() => void) | null;
 
 function tableOf(t: string) {
   if (!serverRows.has(t)) serverRows.set(t, new Map());
@@ -28,6 +31,7 @@ vi.mock('../supabase', () => ({
     from(table: string) {
       return {
         async insert(row: Record<string, unknown>) {
+          duringWrite?.();
           if (rejectTables.has(table)) return { error: { message: 'column "x" does not exist' } };
           if (!online || failNetwork > 0) { failNetwork--; return { error: { message: 'Failed to fetch' } }; }
           applied.push({ table, kind: 'insert', row });
@@ -60,6 +64,7 @@ beforeEach(async () => {
   serverRows = new Map();
   failNetwork = 0;
   rejectTables = new Set();
+  duringWrite = null;
 
   vi.stubGlobal('localStorage', {
     getItem: (k: string) => store[k] ?? null,
@@ -249,6 +254,35 @@ describe('flushQueue', () => {
     expect(queueLength()).toBe(0);
     expect(applied).toHaveLength(1);
     expect(applied[0].row.started_at).toBe('2');
+  });
+
+  it('keeps an event logged mid-flush when the row ahead of it is rejected', async () => {
+    online = false;
+    const { saveEvent, flushQueue, queueLength } = await load();
+    await saveEvent('bad_table', { started_at: '1' });
+
+    online = true;
+    rejectTables.add('bad_table');
+
+    // A 3am feed logged while the flush is awaiting the server. It lands at
+    // the tail of the stored queue, which the flush is not holding a copy of.
+    duringWrite = () => {
+      duringWrite = null; // once, not on the retry of every later write
+      const q = JSON.parse(store['baby-logger:event-queue']);
+      q.push({
+        kind: 'insert',
+        table: 'feed_events',
+        payload: { id: 'mid-flush', started_at: '2' },
+        queuedAt: 'now',
+      });
+      store['baby-logger:event-queue'] = JSON.stringify(q);
+    };
+
+    // Dropping the rejected head must not take the new event with it: the
+    // rejection path used to save its own stale copy of the queue back.
+    await flushQueue();
+    expect(queueLength()).toBe(0);
+    expect(applied.map((a) => a.row.started_at)).toEqual(['2']);
   });
 
   it('does not discard a row that failed only because the network died', async () => {

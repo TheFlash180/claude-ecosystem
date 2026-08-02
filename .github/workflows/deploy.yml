@@ -3,6 +3,10 @@ name: Build and Deploy to Pages
 on:
   push:
     branches: [main]
+  # Deploy is push-to-main only, so a broken build used to be caught only
+  # after merge. Running the same build+test on the PR catches it before.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,8 +14,10 @@ permissions:
   pages: write
   id-token: write
 
+# Keyed on the ref so a PR run can never cancel an in-flight main deploy;
+# pushes to main still supersede each other as before.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -45,6 +51,8 @@ jobs:
 
   deploy:
     needs: build
+    # A PR gets the checks, never the live site.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
