@@ -67,14 +67,23 @@ function alertFor(i: AlertInput): AlertKind {
 }
 
 function rand(v: number): string {
-  // Same hand-rolled formatting as formatRand() in src/lib/price.ts, and for
-  // the same reason: toLocaleString("en-ZA") groups differently on Deno, Node
-  // and in the browser, and a push that disagrees with the card it refers to
-  // looks like a bug. Plain space rather than U+00A0 here — some Android
-  // notification shades render the non-breaking one as a box.
-  const whole = Math.round(Math.abs(v));
+  // Mirrors formatRand() in src/lib/price.ts, and for the same reason:
+  // toLocaleString("en-ZA") groups differently on Deno, Node and in the
+  // browser, and a push that disagrees with the card it refers to looks like
+  // a bug. Keep the two in step.
+  //
+  // Exactly ONE deliberate difference: a plain space for grouping rather than
+  // U+00A0, because some Android notification shades render the non-breaking
+  // one as a box. Everything else — including showing cents only when they
+  // exist — has to match, or the push says "R1 750" about a card reading
+  // "R1 749,99" and the app looks like it is rounding your money away.
+  const negative = v < 0;
+  const abs = Math.abs(v);
+  const cents = Math.round(abs * 100) % 100;
+  const whole = cents === 0 ? Math.round(abs) : Math.floor(abs);
   const grouped = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return `${v < 0 ? "-" : ""}R${grouped}`;
+  const tail = cents === 0 ? "" : "," + String(cents).padStart(2, "0");
+  return `${negative ? "-" : ""}R${grouped}${tail}`;
 }
 
 function message(kind: Exclude<AlertKind, null>, title: string, cur: number, prev: number | null) {

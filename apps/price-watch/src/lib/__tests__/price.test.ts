@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import {
   alertFor, assess, change, formatRand, lastChange, parseTakealotId,
@@ -267,5 +268,41 @@ describe('parseTakealotId', () => {
     expect(parseTakealotId('samsung ssd')).toBeNull();
     expect(parseTakealotId('')).toBeNull();
     expect(parseTakealotId('https://www.takealot.com/')).toBeNull();
+  });
+});
+
+describe('the notifier formats money the same way the app does', () => {
+  // The edge function cannot import from src/, so notify-pricewatch carries
+  // its own copy of formatRand. The file says to keep the two in step; this
+  // reads the deployed copy of record out of the source and checks that it
+  // does, because a push disagreeing with the card it refers to reads as the
+  // app lying about a price.
+  const src = readFileSync(
+    new URL('../../../supabase/functions/notify-pricewatch/index.ts', import.meta.url),
+    'utf8',
+  );
+  const body = src.match(/function rand\(v: number\): string \{[\s\S]*?\n\}/)?.[0];
+
+  it('still has a rand() to compare against', () => {
+    expect(body).toBeTruthy();
+  });
+
+  // Strip the TS annotations so the function can be evaluated here.
+  const notifierRand = new Function(
+    `${body!.replace(/: number/g, '').replace(/: string/g, '')}; return rand;`,
+  )() as (v: number) => string;
+
+  it.each([0, 5, 99.99, 100, 749.5, 1749.99, 1750, 12345.67, 999999.99, 1000000])(
+    'agrees with formatRand for %p',
+    (v) => {
+      // The one deliberate difference: the notifier groups with a plain space
+      // because some Android shades render U+00A0 as a box.
+      expect(notifierRand(v)).toBe(formatRand(v).replace(/ /g, ' '));
+    },
+  );
+
+  it('shows cents when they exist rather than rounding them away', () => {
+    expect(notifierRand(1749.99)).toBe('R1 749,99');
+    expect(notifierRand(1750)).toBe('R1 750');
   });
 });
