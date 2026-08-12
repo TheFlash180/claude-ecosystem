@@ -1,13 +1,13 @@
 // Reads via public-read selects; writes via definer RPCs.
 import { sb } from './supabase';
-import type { BodyweightEntry, Exercise, Profile, Routine, RunEntry } from './config';
+import type { BodyweightEntry, Exercise, Profile, Program, Routine, RunEntry } from './config';
 
 export async function fetchProfile(): Promise<Profile | null> {
   const client = sb();
   if (!client) return null;
   const { data, error } = await client
     .from('workout_profile')
-    .select('dob, height_cm, sex, goal, target_weight_kg, activity_factor')
+    .select('dob, height_cm, sex, goal, target_weight_kg, activity_factor, program_id, program_started_on')
     .eq('id', 1)
     .maybeSingle();
   if (error || !data) return null;
@@ -18,7 +18,45 @@ export async function fetchProfile(): Promise<Profile | null> {
     goal: data.goal,
     targetWeightKg: data.target_weight_kg,
     activityFactor: data.activity_factor,
+    programId: data.program_id ?? null,
+    programStartedOn: data.program_started_on ?? null,
   };
+}
+
+export async function fetchPrograms(): Promise<Program[]> {
+  const client = sb();
+  if (!client) return [];
+  const { data } = await client
+    .from('workout_programs')
+    .select(
+      'id, title, subtitle, summary, weeks, sort_order,' +
+      'workout_program_days(day_index, label, home_routine_id, gym_routine_id, note),' +
+      'workout_program_phases(from_week, to_week, title, guidance)',
+    )
+    .order('sort_order');
+  return (data ?? []).map((p: any) => ({
+    id: p.id,
+    title: p.title,
+    subtitle: p.subtitle ?? '',
+    summary: p.summary ?? '',
+    weeks: p.weeks,
+    days: (p.workout_program_days ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.day_index - b.day_index)
+      .map((d: any) => ({
+        dayIndex: d.day_index,
+        label: d.label,
+        homeRoutineId: d.home_routine_id ?? null,
+        gymRoutineId: d.gym_routine_id ?? null,
+        note: d.note ?? '',
+      })),
+    phases: (p.workout_program_phases ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.from_week - b.from_week)
+      .map((f: any) => ({
+        fromWeek: f.from_week, toWeek: f.to_week, title: f.title, guidance: f.guidance ?? '',
+      })),
+  }));
 }
 
 export async function fetchExercises(): Promise<Map<string, Exercise>> {
@@ -43,11 +81,12 @@ export async function fetchRoutines(): Promise<Routine[]> {
   if (!client) return [];
   const { data } = await client
     .from('workout_routines')
-    .select('id, title, kind, subtitle, summary, est_minutes, sort_order, workout_routine_exercises(exercise_id, sort_order, target_sets, target_reps, note)')
+    .select('id, title, kind, subtitle, summary, est_minutes, sort_order, program_id, workout_routine_exercises(exercise_id, sort_order, target_sets, target_reps, note)')
     .order('sort_order');
   return (data ?? []).map((r: any) => ({
     id: r.id, title: r.title, kind: r.kind, subtitle: r.subtitle,
     summary: r.summary ?? '', estMinutes: r.est_minutes,
+    programId: r.program_id ?? null,
     exercises: (r.workout_routine_exercises ?? [])
       .sort((a: any, b: any) => a.sort_order - b.sort_order)
       .map((x: any) => ({ exerciseId: x.exercise_id, sets: x.target_sets, reps: x.target_reps, note: x.note })),
@@ -97,3 +136,8 @@ export const logRun = (date: string, seconds: number, location: string, note: st
 
 export const deleteRun = (date: string) =>
   rpc('workout_delete_run', { p_date: date });
+
+/** Start a programme (null start = today in SAST, decided server-side), or
+ *  pass a null id to stop the one running. */
+export const setProgram = (programId: string | null, startedOn: string | null = null) =>
+  rpc('workout_set_program', { p_program_id: programId, p_started_on: startedOn });

@@ -15,6 +15,7 @@ interface DbRecipeRow {
   steps: string[];
   total_minutes: number | null;
   scalable: boolean;
+  tags: string[] | null;
   notes: string | null;
 }
 
@@ -23,7 +24,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
   if (!client) return [];
   const { data, error } = await client
     .from('mealprep_recipes')
-    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, scalable, notes')
+    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, scalable, tags, notes')
     .order('name');
   if (error || !data) return [];
   return (data as DbRecipeRow[]).map(r => ({
@@ -36,6 +37,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     steps: Array.isArray(r.steps) ? r.steps : [],
     totalMinutes: r.total_minutes,
     scalable: r.scalable !== false,
+    tags: Array.isArray(r.tags) ? r.tags : [],
     notes: r.notes ?? undefined,
   }));
 }

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
 import {
-  K, MAX_SERVES, MEAL_FILTERS, MIN_SERVES, TIME_FILTERS,
+  K, MAX_SERVES, MEAL_FILTERS, MIN_SERVES, TAG_META, TIME_FILTERS,
   type CookEntry, type MealType, type Recipe, type ShoppingRow,
 } from './lib/config';
 import {
   buildShoppingList, filterRecipes, pickOfTheDay, shoppingProgress, timeLabel,
-  EMPTY_FILTER, type RecipeFilter,
+  toggleTag, EMPTY_FILTER, type RecipeFilter,
 } from './lib/recipes';
 import {
   addExtra, cookAdd, cookClear, cookRemove, fetchCookList, fetchRecipes,
@@ -251,12 +251,24 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               {TIME_FILTERS.map(t => (
                 <Chip
                   key={String(t.key)}
                   on={filter.maxMinutes === t.key}
                   onClick={() => setFilter({ ...filter, maxMinutes: t.key })}
+                >
+                  {t.label}
+                </Chip>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {TAG_META.map(t => (
+                <Chip
+                  key={t.tag}
+                  on={filter.tags.includes(t.tag)}
+                  onClick={() => setFilter({ ...filter, tags: toggleTag(filter.tags, t.tag) })}
                 >
                   {t.label}
                 </Chip>

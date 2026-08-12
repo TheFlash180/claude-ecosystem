@@ -34,6 +34,9 @@ create table mealprep_recipes (
   -- a fixed microwave time. An ingredient carrying "f": true is fixed too —
   -- the litre of oil you deep-fry in does not double because dinner did.
   scalable boolean not null default true,
+  -- Free-form labels behind the filter chips. 'high-protein' means a real
+  -- protein serving in the dish itself, not cheese melted over carbohydrate.
+  tags text[] not null default '{}',
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

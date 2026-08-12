@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildShoppingList, filterRecipes, itemKeyOf, pickOfTheDay,
   shoppingProgress, timeLabel, EMPTY_FILTER,
+  toggleTag,
 } from '../recipes';
 import type { CookEntry, Recipe, ShoppingRow } from '../config';
 
@@ -12,7 +13,7 @@ function cook(recipeId: string, servings: number | null = null): CookEntry {
 function recipe(p: Partial<Recipe> & { id: string; name: string }): Recipe {
   return {
     emoji: '🍽', mealType: 'dinner', serves: 4, ingredients: [], steps: [],
-    totalMinutes: 45, scalable: true, ...p,
+    totalMinutes: 45, scalable: true, tags: [], ...p,
   };
 }
 
@@ -102,7 +103,7 @@ describe('filterRecipes', () => {
   });
 
   it('combines filters', () => {
-    const hits = filterRecipes(ALL, { meal: 'lunch', maxMinutes: 30, search: 'tuna' });
+    const hits = filterRecipes(ALL, { meal: 'lunch', maxMinutes: 30, search: 'tuna', tags: [] });
     expect(hits.map(r => r.id)).toEqual(['wraps']);
   });
 });
@@ -212,5 +213,38 @@ describe('shoppingProgress', () => {
 
   it('is zero of zero for an empty list', () => {
     expect(shoppingProgress([])).toEqual({ done: 0, total: 0 });
+  });
+});
+
+describe('tag chips', () => {
+  const TAGGED = [
+    recipe({ id: 'chicken', name: 'Grilled chicken', mealType: 'dinner', totalMinutes: 30, tags: ['high-protein'] }),
+    recipe({ id: 'mac', name: 'Macaroni & cheese', mealType: 'dinner', totalMinutes: 40, tags: [] }),
+    recipe({ id: 'eggs', name: 'Baked eggs', mealType: 'any', totalMinutes: 20, tags: ['high-protein'] }),
+  ];
+
+  it('narrows to recipes carrying the tag', () => {
+    const hits = filterRecipes(TAGGED, { ...EMPTY_FILTER, tags: ['high-protein'] });
+    expect(hits.map(r => r.id)).toEqual(['chicken', 'eggs']);
+  });
+
+  it('leaves the list alone with no tag selected', () => {
+    expect(filterRecipes(TAGGED, EMPTY_FILTER)).toHaveLength(3);
+  });
+
+  it('stacks with the other filters rather than replacing them', () => {
+    const hits = filterRecipes(TAGGED, { ...EMPTY_FILTER, tags: ['high-protein'], maxMinutes: 25 });
+    expect(hits.map(r => r.id)).toEqual(['eggs']);
+  });
+
+  it('requires every selected tag, so chips only ever narrow', () => {
+    const hits = filterRecipes(TAGGED, { ...EMPTY_FILTER, tags: ['high-protein', 'nope'] });
+    expect(hits).toHaveLength(0);
+  });
+
+  it('toggleTag adds then removes', () => {
+    expect(toggleTag([], 'high-protein')).toEqual(['high-protein']);
+    expect(toggleTag(['high-protein'], 'high-protein')).toEqual([]);
+    expect(toggleTag(['a'], 'b')).toEqual(['a', 'b']);
   });
 });

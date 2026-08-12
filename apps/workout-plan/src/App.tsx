@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { BarChart3, Dumbbell, LayoutGrid, Settings } from 'lucide-react';
+import { BarChart3, CalendarRange, Dumbbell, LayoutGrid, Settings } from 'lucide-react';
 import {
   KIND_META, KIND_ORDER, W,
-  type Exercise, type Profile, type Routine, type RoutineKind,
+  type Exercise, type Profile, type Program, type Routine, type RoutineKind,
 } from './lib/config';
 import {
-  deleteRun, fetchBodyweights, fetchExercises, fetchProfile, fetchRoutines,
-  fetchRuns, logBodyweight, logRun, saveProfile,
+  deleteRun, fetchBodyweights, fetchExercises, fetchProfile, fetchPrograms, fetchRoutines,
+  fetchRuns, logBodyweight, logRun, saveProfile, setProgram,
 } from './lib/data';
 import { nutritionTargets, runStats, sastDay, weightTrend } from './lib/fitness';
 import { filterRoutines, EMPTY_EXERCISE_FILTER, type ExerciseFilter } from './lib/library';
+import { findProgram, libraryRoutines, programRoutines } from './lib/program';
+import { ProgramView } from './components/ProgramView';
 import { daySeed, motivate } from './lib/motivation';
 import { ExerciseDetail } from './components/ExerciseDetail';
 import { ExerciseLibrary } from './components/ExerciseLibrary';
@@ -19,7 +21,7 @@ import { WorkoutCard } from './components/WorkoutCard';
 import { WorkoutView } from './components/WorkoutView';
 import { BodyweightSheet, ProfileSheet, RunSheet } from './components/Sheets';
 
-type Tab = 'workouts' | 'exercises' | 'progress';
+type Tab = 'workouts' | 'plan' | 'exercises' | 'progress';
 const MEAL_PREP_URL = '../meal-prep/';
 
 export default function App() {
@@ -29,6 +31,8 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [where, setWhere] = useState<'home' | 'gym'>('home');
   const [weights, setWeights] = useState<{ date: string; weightKg: number }[]>([]);
   const [runs, setRuns] = useState<{ date: string; seconds: number; location: string; note: string }[]>([]);
 
@@ -44,10 +48,12 @@ export default function App() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const load = useCallback(async () => {
-    const [p, ex, rt, bw, rn] = await Promise.all([
+    const [p, ex, rt, bw, rn, pg] = await Promise.all([
       fetchProfile(), fetchExercises(), fetchRoutines(), fetchBodyweights(), fetchRuns(),
+      fetchPrograms(),
     ]);
     setProfile(p); setExercises(ex); setRoutines(rt); setWeights(bw); setRuns(rn);
+    setPrograms(pg);
     setLoading(false);
   }, []);
 
@@ -60,7 +66,36 @@ export default function App() {
   );
   const openRoutine = routines.find(r => r.id === openRoutineId) ?? null;
   const exerciseList = useMemo(() => [...exercises.values()], [exercises]);
-  const shown = useMemo(() => filterRoutines(routines, kindFilter), [routines, kindFilter]);
+  // Programme sessions are deliberately not in the library — the Workouts tab
+  // shows exactly what it always showed.
+  const shown = useMemo(
+    () => filterRoutines(libraryRoutines(routines), kindFilter),
+    [routines, kindFilter],
+  );
+  const activeProgram = useMemo(
+    () => findProgram(programs, profile?.programId ?? null) ?? programs[0] ?? null,
+    [programs, profile],
+  );
+  const planRoutines = useMemo(
+    () => (activeProgram ? programRoutines(routines, activeProgram.id) : new Map<string, Routine>()),
+    [routines, activeProgram],
+  );
+
+  const onStartProgram = async () => {
+    if (!activeProgram) return;
+    const ok = await setProgram(activeProgram.id, today);
+    if (!ok) { showToast('Could not start the programme.'); return; }
+    setProfile(p => (p ? { ...p, programId: activeProgram.id, programStartedOn: today } : p));
+    showToast(`${activeProgram.title} started — week 1.`);
+  };
+
+  const onStopProgram = async () => {
+    if (!window.confirm('Stop the programme? Your weigh-ins and runs are kept.')) return;
+    const ok = await setProgram(null, null);
+    if (!ok) { showToast('Could not stop the programme.'); return; }
+    setProfile(p => (p ? { ...p, programId: null, programStartedOn: null } : p));
+    showToast('Programme stopped.');
+  };
 
   const onSaveProfile = async (p: Profile) => {
     const ok = await saveProfile(p);
@@ -181,6 +216,32 @@ export default function App() {
               )}
             </>
           )
+        ) : tab === 'plan' ? (
+          openRoutine ? (
+            <WorkoutView
+              routine={openRoutine} exercises={exercises}
+              onBack={() => setOpenRoutineId(null)}
+              onOpenExercise={setDetail}
+              onLogRun={() => setSheet('run')}
+            />
+          ) : activeProgram ? (
+            <ProgramView
+              program={activeProgram}
+              startedOn={profile?.programId === activeProgram.id ? profile.programStartedOn : null}
+              routines={planRoutines}
+              exercises={exercises}
+              where={where}
+              onWhere={setWhere}
+              onOpenRoutine={setOpenRoutineId}
+              onStart={() => void onStartProgram()}
+              onStop={() => void onStopProgram()}
+              today={today}
+            />
+          ) : (
+            <div style={{ fontSize: 13, color: W.muted, textAlign: 'center', padding: '28px 0' }}>
+              No programme available.
+            </div>
+          )
         ) : tab === 'exercises' ? (
           <ExerciseLibrary exercises={exerciseList} filter={exFilter} onFilter={setExFilter} onOpen={setDetail} />
         ) : (
@@ -201,12 +262,13 @@ export default function App() {
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40, display: 'flex', justifyContent: 'center', gap: 4, padding: '8px 10px calc(8px + env(safe-area-inset-bottom))', background: `${W.bg}F2`, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderTop: `1px solid ${W.border}` }}>
         {([
           { key: 'workouts' as Tab, label: 'Workouts', Icon: LayoutGrid },
+          { key: 'plan' as Tab, label: 'Plan', Icon: CalendarRange },
           { key: 'exercises' as Tab, label: 'Exercises', Icon: Dumbbell },
           { key: 'progress' as Tab, label: 'Progress', Icon: BarChart3 },
         ]).map(t => {
           const on = tab === t.key;
           return (
-            <button key={t.key} onClick={() => { setTab(t.key); if (t.key === 'workouts') setOpenRoutineId(null); }} style={{ flex: 1, maxWidth: 150, background: on ? `${W.volt}18` : 'transparent', border: 'none', borderRadius: 12, padding: '8px 4px', cursor: 'pointer', color: on ? W.volt : W.muted, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, fontFamily: W.body, fontSize: 11, fontWeight: 700 }}>
+            <button key={t.key} onClick={() => { setTab(t.key); setOpenRoutineId(null); }} style={{ flex: 1, maxWidth: 150, background: on ? `${W.volt}18` : 'transparent', border: 'none', borderRadius: 12, padding: '8px 4px', cursor: 'pointer', color: on ? W.volt : W.muted, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, fontFamily: W.body, fontSize: 11, fontWeight: 700 }}>
               <t.Icon size={19} strokeWidth={on ? 2.4 : 2} /> {t.label}
             </button>
           );

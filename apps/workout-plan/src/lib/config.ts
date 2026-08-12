@@ -31,6 +31,38 @@ export interface Routine {
   summary: string;
   estMinutes: number | null;
   exercises: RoutineExercise[];
+  /** Non-null when the routine belongs to a programme, which keeps it out of
+   *  the browsable library — the Workouts tab shows only programId === null. */
+  programId: string | null;
+}
+
+/** One session of a programme's weekly split. `gymRoutineId` is null for a
+ *  session that is the same either way, and the UI then shows no toggle. */
+export interface ProgramDay {
+  dayIndex: number;
+  label: string;
+  homeRoutineId: string | null;
+  gymRoutineId: string | null;
+  note: string;
+}
+
+/** A block of weeks that share the same instruction — what changes between
+ *  week 1 and week 12. */
+export interface ProgramPhase {
+  fromWeek: number;
+  toWeek: number;
+  title: string;
+  guidance: string;
+}
+
+export interface Program {
+  id: string;
+  title: string;
+  subtitle: string;
+  summary: string;
+  weeks: number;
+  days: ProgramDay[];
+  phases: ProgramPhase[];
 }
 
 export interface Profile {
@@ -40,6 +72,11 @@ export interface Profile {
   goal: Goal;
   targetWeightKg: number | null;
   activityFactor: number;
+  /** The running programme, if any, and the day it started. The current week
+   *  is derived from the start date — never stored — so there is nothing to
+   *  advance by hand. */
+  programId: string | null;
+  programStartedOn: string | null;
 }
 
 export interface BodyweightEntry { date: string; weightKg: number; }

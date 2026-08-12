@@ -156,7 +156,7 @@ describe('scaleText', () => {
 function recipe(p: Partial<Recipe> & { id: string }): Recipe {
   return {
     name: 'Krummelpap', emoji: '🌾', mealType: 'side', serves: 6, totalMinutes: 45,
-    scalable: true,
+    scalable: true, tags: [],
     ingredients: [{ n: 'Maize meal', q: 4, u: 'cups', c: 'pantry' }],
     steps: ['Bring 3 cups of water to the boil.', 'Steam for 20 minutes.'],
     ...p,

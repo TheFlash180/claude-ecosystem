@@ -14,9 +14,11 @@ export interface RecipeFilter {
   /** Upper bound in minutes, or null for no limit. */
   maxMinutes: number | null;
   search: string;
+  /** Every tag here must be present — chips narrow, they do not widen. */
+  tags: string[];
 }
 
-export const EMPTY_FILTER: RecipeFilter = { meal: 'all', maxMinutes: null, search: '' };
+export const EMPTY_FILTER: RecipeFilter = { meal: 'all', maxMinutes: null, search: '', tags: [] };
 
 function matchesSearch(r: Recipe, needle: string): boolean {
   const q = needle.trim().toLowerCase();
@@ -43,9 +45,21 @@ function matchesTime(r: Recipe, maxMinutes: number | null): boolean {
   return r.totalMinutes !== null && r.totalMinutes <= maxMinutes;
 }
 
+/** Every selected tag must be present. Chips narrow the list rather than
+ *  widening it, so picking two never returns more than picking one. */
+function matchesTags(r: Recipe, tags: string[]): boolean {
+  return tags.every(t => r.tags.includes(t));
+}
+
 export function filterRecipes(recipes: Recipe[], f: RecipeFilter): Recipe[] {
   return recipes.filter(r =>
-    matchesMeal(r, f.meal) && matchesTime(r, f.maxMinutes) && matchesSearch(r, f.search));
+    matchesMeal(r, f.meal) && matchesTime(r, f.maxMinutes)
+    && matchesTags(r, f.tags) && matchesSearch(r, f.search));
+}
+
+/** Add or remove a tag from the filter — what a chip tap does. */
+export function toggleTag(tags: string[], tag: string): string[] {
+  return tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
 }
 
 export function timeLabel(minutes: number | null): string {

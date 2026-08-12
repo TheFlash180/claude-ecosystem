@@ -67,6 +67,15 @@ Most are what they sound like. Two are not:
   browse, not weekdays. The only things it records are bodyweight and parkrun
   times.
 
+  The **Plan tab** adds a multi-week programme (`workout_programs` +
+  `_days` + `_phases`) without reopening that door: the current week is
+  **derived from `workout_profile.program_started_on`**, never stored and never
+  ticked off. Start it once and it tells you where you are — there is nothing
+  to keep up to date, which is exactly what the set logging failed at. A
+  programme's own sessions carry `workout_routines.program_id`, and the
+  Workouts tab filters on `program_id is null`, so adding a programme leaves
+  that library showing precisely what it always showed.
+
 ## The shared Supabase project
 
 Project ref: `objkdeagyltvgcuxsnxu` (region eu-central-1).
@@ -164,6 +173,14 @@ when writing or editing a step:
 `apps/meal-prep/supabase/seed.sql` is a **real export of all 61 recipes** and
 is the copy of record for the content. Regenerate it if you change recipes; it
 was verified byte-identical to the live table by checksum.
+
+**Recipe tags drive the filter chips** (`mealprep_recipes.tags text[]`). They
+live at the *end* of `seed.sql` as an explicit `update … where id in (…)`
+rather than folded into the big insert, so re-tagging is a one-line diff and
+the reasoning stays readable. `high-protein` means a real protein serving in
+the dish itself — mac & cheese and nachos are deliberately out — and it
+excludes all four seafood recipes, which is the household preference and also
+exactly what a naive lean-protein filter would surface first.
 
 ## Working practice
 

@@ -42,10 +42,13 @@ What each one is:
 - **marvel-watch** — Marvel release dates from TMDB, with reminders.
 - **meal-prep** — a recipe book: 61 recipes across lunch, dinner, sides, snacks
   and puddings, each with a full method, a serving-size scaler, and a cook list
-  that builds a shared shopping list. (It is no longer a weekly planner.)
+  that builds a shared shopping list. Filter chips narrow by meal, time and tag
+  (`high protein`). (It is no longer a weekly planner.)
 - **workout-plan** — a workout guide: routines to browse and 33 movements with
-  demo photos and how-to text, plus bodyweight and parkrun tracking. (It no
-  longer logs individual sets.)
+  demo photos and how-to text, plus bodyweight and parkrun tracking. The Plan
+  tab runs a multi-week programme (home or gym build of every session) whose
+  current week is derived from its start date. (It no longer logs individual
+  sets, and the programme deliberately does not reintroduce that.)
 - **baby-logger** — feeds, sleeps, nappies and weights, offline-first.
 - **glovebox** — vehicle documents, service and licence-renewal reminders.
 - **front-row** — what is on at Montecasino and nearby, with watches.

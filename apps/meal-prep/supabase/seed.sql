@@ -91,3 +91,29 @@ on conflict (id) do update set
 --   update mealprep_settings
 --   set value = extensions.crypt('your-password', extensions.gen_salt('bf', 10))
 --   where key = 'admin_password';
+
+-- ---------------------------------------------------------------- tags
+-- Kept as an explicit list rather than folded into the insert above, so the
+-- reasoning stays readable and re-tagging is a one-line diff.
+--
+-- 'high-protein' = a real protein serving in the dish itself, not cheese
+-- melted over carbohydrate: mac & cheese, nachos, garlic bread and crumpets
+-- are deliberately out. It also excludes all four seafood recipes (salmon,
+-- hake, both tuna) — the household does not eat it, and those are exactly
+-- what a naive lean-protein filter surfaces first.
+update mealprep_recipes set tags = array['high-protein'] where id in (
+  -- dinner
+  'beef-stew','beef-lasagne','beef-potjie','beef-stroganoff','bobotie',
+  'chicken-a-la-king','chicken-schnitzel','cottage-pie','chicken-broccoli-bake',
+  'frikkadelle','grilled-chicken-sweet-potato','sweet-sour-stirfry',
+  'lentil-shepherds-pie','mild-chicken-curry','minute-steak-onions','pap-en-wors',
+  'pork-chops-apple','roast-chicken','spag-bol','vetkoek-mince',
+  -- lunch
+  'quesadilla','chicken-rice-bowl','chicken-mayo-pasta','chicken-mayo-toastie',
+  'chicken-salad-bowl',
+  -- any
+  'baked-eggs-spinach','boerie-roll','cheese-ham-omelette','scrambled-eggs-toast',
+  'noodles-egg-veg',
+  -- snack
+  'yoghurt-granola-cup','peanut-butter-oat-balls','hummus-veg-sticks'
+);

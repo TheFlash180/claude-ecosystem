@@ -38,8 +38,16 @@ export interface Recipe {
   /** False where the quantities are not really quantities — the pap guide is a
    *  ratio explainer, a mug cake is one mug and a fixed microwave time. */
   scalable: boolean;
+  /** Free-form labels for the filter chips. 'high-protein' marks a real
+   *  protein serving in the dish itself, not cheese melted over carbohydrate. */
+  tags: string[];
   notes?: string;
 }
+
+/** The tag filter chips, in display order. */
+export const TAG_META: { tag: string; label: string }[] = [
+  { tag: 'high-protein', label: 'High protein' },
+];
 
 /** What is on the cook list, and how many people it is being cooked for. */
 export interface CookEntry {

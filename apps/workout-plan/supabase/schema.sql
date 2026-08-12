@@ -1,6 +1,9 @@
 -- Workout Plan: full server-side schema (copy of record — already applied to
 -- the shared Supabase project as migration workout_plan_schema).
 --
+--   workout_programs           multi-week plans laid over the routine library
+--   workout_program_days       the weekly split: one row per session
+--   workout_program_phases     progression blocks (weeks 1-4, 5-8, 9-12)
 --   workout_profile            single-row stats (drives calorie/protein targets)
 --   workout_exercises          movement catalogue + demo photo + how-to
 --   workout_routines           the workout library — types, not weekdays
@@ -18,6 +21,16 @@
 -- Exercise photos are the public-domain free-exercise-db (Unlicense), served
 -- from raw.githubusercontent.com and cached by the PWA for offline use.
 
+-- Declared first: workout_profile and workout_routines both point at it.
+create table workout_programs (
+  id text primary key,
+  title text not null,
+  subtitle text not null default '',
+  summary text not null default '',
+  weeks int not null default 12 check (weeks > 0),
+  sort_order int not null default 0
+);
+
 create table workout_profile (
   id int primary key default 1 check (id = 1),
   dob date,
@@ -26,6 +39,11 @@ create table workout_profile (
   goal text not null default 'recomp' check (goal in ('recomp','cut','build')),
   target_weight_kg numeric,
   activity_factor numeric not null default 1.5,
+  -- Which programme is running, and since when. The current week is DERIVED
+  -- from the start date rather than stored, so there is nothing to keep up to
+  -- date week by week — the upkeep that killed the old set logging.
+  program_id text references workout_programs(id) on update cascade on delete set null,
+  program_started_on date,
   updated_at timestamptz not null default now()
 );
 
@@ -47,7 +65,11 @@ create table workout_routines (
   subtitle text not null default '',
   summary text not null default '',           -- the paragraph on the workout page
   est_minutes int,
-  sort_order int not null default 0
+  sort_order int not null default 0,
+  -- A routine belonging to a programme is not part of the browsable library:
+  -- the Workouts tab filters on program_id is null, so adding a programme
+  -- leaves that tab showing exactly what it always showed.
+  program_id text references workout_programs(id) on update cascade on delete set null
 );
 
 -- on update cascade: routine ids are readable slugs and get renamed.
@@ -59,6 +81,32 @@ create table workout_routine_exercises (
   target_sets int not null default 3,         -- 1 = a single hold, shown without "1 ×"
   target_reps text not null default '10',
   note text not null default ''
+);
+
+-- One row per session in a programme's weekly split. home_/gym_routine_id are
+-- the two builds of the same session; a session that is setting-agnostic (the
+-- conditioning day) fills only one and the UI shows no toggle.
+create table workout_program_days (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references workout_programs(id) on update cascade on delete cascade,
+  day_index int not null,
+  label text not null,
+  home_routine_id text references workout_routines(id) on update cascade on delete set null,
+  gym_routine_id text references workout_routines(id) on update cascade on delete set null,
+  note text not null default '',
+  unique (program_id, day_index)
+);
+
+-- Progression blocks: what actually changes between week 1 and week 12.
+create table workout_program_phases (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references workout_programs(id) on update cascade on delete cascade,
+  from_week int not null check (from_week >= 1),
+  to_week int not null,
+  title text not null,
+  guidance text not null default '',
+  check (to_week >= from_week),
+  unique (program_id, from_week)
 );
 
 create table workout_bodyweight (
@@ -81,6 +129,9 @@ create table workout_settings (
 );
 
 -- ------------------------------------------------------------------ RLS
+alter table workout_programs enable row level security;
+alter table workout_program_days enable row level security;
+alter table workout_program_phases enable row level security;
 alter table workout_profile enable row level security;
 alter table workout_exercises enable row level security;
 alter table workout_routines enable row level security;
@@ -89,6 +140,9 @@ alter table workout_bodyweight enable row level security;
 alter table workout_runs enable row level security;
 alter table workout_settings enable row level security;
 
+create policy "public read" on workout_programs for select to anon, authenticated using (true);
+create policy "public read" on workout_program_days for select to anon, authenticated using (true);
+create policy "public read" on workout_program_phases for select to anon, authenticated using (true);
 create policy "public read" on workout_profile for select to anon, authenticated using (true);
 create policy "public read" on workout_exercises for select to anon, authenticated using (true);
 create policy "public read" on workout_routines for select to anon, authenticated using (true);
@@ -151,6 +205,31 @@ begin
   return true;
 end $$;
 
+-- Start, change or clear the running programme. Passing a null programme
+-- clears the start date with it, so a stopped programme cannot leave a stale
+-- "week 7 of 12" behind. Defaults the start to today in SAST, matching how
+-- every other date in this ecosystem is decided.
+create or replace function workout_set_program(p_program_id text, p_started_on date)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if p_program_id is not null
+     and not exists (select 1 from workout_programs where id = p_program_id) then
+    return false;
+  end if;
+  insert into workout_profile (id, program_id, program_started_on, updated_at)
+  values (
+    1,
+    p_program_id,
+    case when p_program_id is null then null
+         else coalesce(p_started_on, (now() at time zone 'Africa/Johannesburg')::date) end,
+    now())
+  on conflict (id) do update set
+    program_id = excluded.program_id,
+    program_started_on = excluded.program_started_on,
+    updated_at = now();
+  return true;
+end $$;
+
 create or replace function workout_delete_run(p_date date)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
@@ -164,9 +243,11 @@ revoke all on function workout_save_profile(date,numeric,text,text,numeric,numer
 revoke all on function workout_log_bodyweight(date,numeric) from public, anon;
 revoke all on function workout_log_run(date,int,text,text) from public, anon;
 revoke all on function workout_delete_run(date) from public, anon;
+revoke all on function workout_set_program(text,date) from public, anon;
 
 grant execute on function workout_admin_check(text) to anon;
 grant execute on function workout_save_profile(date,numeric,text,text,numeric,numeric) to anon;
 grant execute on function workout_log_bodyweight(date,numeric) to anon;
 grant execute on function workout_log_run(date,int,text,text) to anon;
 grant execute on function workout_delete_run(date) to anon;
+grant execute on function workout_set_program(text,date) to anon;

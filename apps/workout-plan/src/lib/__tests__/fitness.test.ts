@@ -16,6 +16,7 @@ describe('nutrition', () => {
   const profile: Profile = {
     dob: '1999-06-18', heightCm: 163, sex: 'male',
     goal: 'recomp', targetWeightKg: 58, activityFactor: 1.5,
+    programId: null, programStartedOn: null,
   };
 
   it('Mifflin-St Jeor BMR for Rickus ≈ 1506', () => {
