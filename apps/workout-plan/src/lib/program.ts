@@ -5,7 +5,7 @@
 // stored. Nothing has to be advanced, ticked off or kept up to date, which is
 // the upkeep that killed the old per-set logging (built, used for a week,
 // deleted). Start it once and it tells you where you are from then on.
-import type { Program, ProgramDay, ProgramPhase, Routine, Setting } from './config';
+import type { Benchmark, Program, ProgramDay, ProgramPhase, Routine, Setting } from './config';
 import { sastDay } from './fitness';
 
 /** Whole days from `from` to `to`, both yyyy-mm-dd. Both parse as UTC
@@ -108,4 +108,64 @@ export function progressFraction(progress: ProgramProgress | null): number {
   // during a week instead of jumping every seventh day.
   const days = (progress.week - 1) * 7 + progress.dayOfWeek;
   return Math.min(1, days / (progress.weeks * 7));
+}
+
+// ---- benchmark scores ----
+
+/** "11 + 7" — the way an AMRAP score is written. Whole rounds alone when the
+ *  last round was not started. */
+export function scoreLabel(b: { rounds: number; extraReps: number }): string {
+  return b.extraReps > 0 ? `${b.rounds} + ${b.extraReps}` : String(b.rounds);
+}
+
+/** Rank two attempts at the SAME workout: more rounds wins, then more reps
+ *  into the next round. Comparing across different workouts is meaningless —
+ *  a round of Cindy is not a round of anything else. */
+function better(a: Benchmark, b: Benchmark): boolean {
+  return a.rounds !== b.rounds ? a.rounds > b.rounds : a.extraReps > b.extraReps;
+}
+
+export interface BenchmarkStats {
+  /** Best attempt, or null with none logged. */
+  pb: Benchmark | null;
+  /** Most recent attempt. */
+  latest: Benchmark | null;
+  /** True only when the newest attempt IS the best AND there was something to
+   *  beat — a first score is a starting point, not a personal best. */
+  latestIsPb: boolean;
+  attempts: number;
+  /** Oldest first, for a sparkline. */
+  history: Benchmark[];
+}
+
+/** Everything about one workout's scores. `all` may hold every workout's. */
+export function benchmarkStats(all: Benchmark[], routineId: string): BenchmarkStats {
+  const mine = all.filter(b => b.routineId === routineId);
+  if (mine.length === 0) {
+    return { pb: null, latest: null, latestIsPb: false, attempts: 0, history: [] };
+  }
+  const byDate = [...mine].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = byDate[byDate.length - 1];
+  let pb = byDate[0];
+  for (const b of byDate) if (better(b, pb)) pb = b;
+  return {
+    pb,
+    latest,
+    latestIsPb: byDate.length > 1 && !better(pb, latest),
+    attempts: byDate.length,
+    history: byDate,
+  };
+}
+
+/** Total reps in one round, for turning a score into a rep count. Uses the
+ *  routine's own per-round reps, so it is right for any AMRAP, not just Cindy.
+ *  Returns null when any rep target is not a plain number ("max", "8 each"). */
+export function repsPerRound(routine: Routine): number | null {
+  let total = 0;
+  for (const e of routine.exercises) {
+    const n = Number(e.reps.trim());
+    if (!Number.isFinite(n) || n <= 0) return null;
+    total += n;
+  }
+  return total > 0 ? total : null;
 }

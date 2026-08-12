@@ -26,7 +26,7 @@ function plan(exerciseId: string, sets: number, reps: string, note = ''): Routin
 function routine(p: Partial<Routine> & { id: string }): Routine {
   return {
     title: 'Push Day', kind: 'home', subtitle: '', summary: '', estMinutes: 35,
-    exercises: [], programId: null, ...p,
+    exercises: [], programId: null, scored: false, ...p,
   };
 }
 

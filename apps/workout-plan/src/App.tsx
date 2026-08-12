@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { BarChart3, CalendarRange, Dumbbell, LayoutGrid, Settings } from 'lucide-react';
 import {
   KIND_META, KIND_ORDER, W,
-  type Exercise, type Profile, type Program, type Routine, type RoutineKind,
+  type Benchmark, type Exercise, type Profile, type Program, type Routine, type RoutineKind,
 } from './lib/config';
 import {
-  deleteRun, fetchBodyweights, fetchExercises, fetchProfile, fetchPrograms, fetchRoutines,
-  fetchRuns, logBodyweight, logRun, saveProfile, setProgram,
+  deleteRun, fetchBenchmarks, fetchBodyweights, fetchExercises, fetchProfile, fetchPrograms,
+  fetchRoutines, fetchRuns, logBenchmark, logBodyweight, logRun, saveProfile, setProgram,
 } from './lib/data';
 import { nutritionTargets, runStats, sastDay, weightTrend } from './lib/fitness';
 import { filterRoutines, EMPTY_EXERCISE_FILTER, type ExerciseFilter } from './lib/library';
@@ -19,7 +19,7 @@ import { EatCard } from './components/EatCard';
 import { Progress } from './components/Progress';
 import { WorkoutCard } from './components/WorkoutCard';
 import { WorkoutView } from './components/WorkoutView';
-import { BodyweightSheet, ProfileSheet, RunSheet } from './components/Sheets';
+import { BenchmarkSheet, BodyweightSheet, ProfileSheet, RunSheet } from './components/Sheets';
 
 type Tab = 'workouts' | 'plan' | 'exercises' | 'progress';
 const MEAL_PREP_URL = '../meal-prep/';
@@ -32,6 +32,10 @@ export default function App() {
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
+  // Which programme the Plan tab is showing. Defaults to the running one.
+  const [viewProgramId, setViewProgramId] = useState<string | null>(null);
+  const [scoring, setScoring] = useState<string | null>(null);
   const [where, setWhere] = useState<'home' | 'gym'>('home');
   const [weights, setWeights] = useState<{ date: string; weightKg: number }[]>([]);
   const [runs, setRuns] = useState<{ date: string; seconds: number; location: string; note: string }[]>([]);
@@ -48,12 +52,12 @@ export default function App() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const load = useCallback(async () => {
-    const [p, ex, rt, bw, rn, pg] = await Promise.all([
+    const [p, ex, rt, bw, rn, pg, bm] = await Promise.all([
       fetchProfile(), fetchExercises(), fetchRoutines(), fetchBodyweights(), fetchRuns(),
-      fetchPrograms(),
+      fetchPrograms(), fetchBenchmarks(),
     ]);
     setProfile(p); setExercises(ex); setRoutines(rt); setWeights(bw); setRuns(rn);
-    setPrograms(pg);
+    setPrograms(pg); setBenchmarks(bm);
     setLoading(false);
   }, []);
 
@@ -72,14 +76,26 @@ export default function App() {
     () => filterRoutines(libraryRoutines(routines), kindFilter),
     [routines, kindFilter],
   );
+  // What the Plan tab shows: an explicit pick, else the running programme,
+  // else the first one — so the tab is never blank.
   const activeProgram = useMemo(
-    () => findProgram(programs, profile?.programId ?? null) ?? programs[0] ?? null,
-    [programs, profile],
+    () => findProgram(programs, viewProgramId)
+      ?? findProgram(programs, profile?.programId ?? null)
+      ?? programs[0] ?? null,
+    [programs, profile, viewProgramId],
   );
   const planRoutines = useMemo(
     () => (activeProgram ? programRoutines(routines, activeProgram.id) : new Map<string, Routine>()),
     [routines, activeProgram],
   );
+
+  const onSaveScore = async (routineId: string, date: string, rounds: number, reps: number, note: string) => {
+    const ok = await logBenchmark(routineId, date, rounds, reps, note);
+    setScoring(null);
+    if (!ok) { showToast('Could not save that score.'); return; }
+    setBenchmarks(await fetchBenchmarks());
+    showToast(`Logged ${reps > 0 ? `${rounds} + ${reps}` : rounds}.`);
+  };
 
   const onStartProgram = async () => {
     if (!activeProgram) return;
@@ -160,6 +176,13 @@ export default function App() {
       {sheet === 'profile' && profile && <ProfileSheet profile={profile} onSave={onSaveProfile} onClose={() => setSheet(null)} />}
       {sheet === 'weight' && <BodyweightSheet current={currentWeight} onSave={onSaveWeight} onClose={() => setSheet(null)} />}
       {sheet === 'run' && <RunSheet onSave={onSaveRun} onClose={() => setSheet(null)} />}
+      {scoring && (
+        <BenchmarkSheet
+          title={routines.find(r => r.id === scoring)?.title ?? 'Workout'}
+          onSave={(date, rounds, reps, note) => void onSaveScore(scoring, date, rounds, reps, note)}
+          onClose={() => setScoring(null)}
+        />
+      )}
 
       {/* Header */}
       <div style={{ padding: 'calc(18px + env(safe-area-inset-top)) 16px 12px', borderBottom: `1px solid ${W.border}`, position: 'sticky', top: 0, zIndex: 10, background: `${W.bg}F2`, backdropFilter: 'blur(9px)', WebkitBackdropFilter: 'blur(9px)' }}>
@@ -227,6 +250,10 @@ export default function App() {
           ) : activeProgram ? (
             <ProgramView
               program={activeProgram}
+              programs={programs}
+              onPickProgram={setViewProgramId}
+              benchmarks={benchmarks}
+              onLogScore={setScoring}
               startedOn={profile?.programId === activeProgram.id ? profile.programStartedOn : null}
               routines={planRoutines}
               exercises={exercises}

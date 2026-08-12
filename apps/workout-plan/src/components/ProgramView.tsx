@@ -1,9 +1,10 @@
 import { Calendar, Check, Clock, Home, Layers, Play, Square } from 'lucide-react';
-import { W, type Exercise, type Program, type Routine, type Setting } from '../lib/config';
+import { W, type Benchmark, type Exercise, type Program, type Routine, type Setting } from '../lib/config';
 import { minutesLabel, thumbnails } from '../lib/library';
 import { ExerciseImage } from './ExerciseImage';
 import {
-  hasBothSettings, phaseForWeek, programProgress, progressFraction, progressLabel, routineForDay,
+  benchmarkStats, hasBothSettings, phaseForWeek, programProgress, progressFraction,
+  progressLabel, routineForDay, scoreLabel,
 } from '../lib/program';
 
 type Where = Exclude<Setting, 'both'>;
@@ -11,9 +12,14 @@ type Where = Exclude<Setting, 'both'>;
 /** The programme tab: the weekly split, where you are in it, and what the
  *  current block asks for. Sessions open in the normal WorkoutView. */
 export function ProgramView({
-  program, startedOn, routines, exercises, where, onWhere, onOpenRoutine, onStart, onStop, today,
+  program, programs, onPickProgram, startedOn, routines, exercises, benchmarks,
+  where, onWhere, onOpenRoutine, onLogScore, onStart, onStop, today,
 }: {
   program: Program;
+  programs: Program[];
+  onPickProgram: (id: string) => void;
+  benchmarks: Benchmark[];
+  onLogScore: (routineId: string) => void;
   startedOn: string | null;
   routines: Map<string, Routine>;
   exercises: Map<string, Exercise>;
@@ -30,6 +36,24 @@ export function ProgramView({
 
   return (
     <div style={{ fontFamily: W.body }}>
+      {programs.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 13, flexWrap: 'wrap' }}>
+          {programs.map(p => {
+            const on = p.id === program.id;
+            return (
+              <button key={p.id} onClick={() => onPickProgram(p.id)} style={{
+                cursor: 'pointer', borderRadius: 20, padding: '6px 14px',
+                fontFamily: W.body, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                border: `1px solid ${on ? W.volt : W.border}`,
+                background: on ? `${W.volt}1A` : 'transparent',
+                color: on ? W.volt : W.sub,
+              }}>
+                {p.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div style={{ fontFamily: W.display, fontSize: 30, color: W.text, letterSpacing: '0.02em' }}>
         {program.title}
       </div>
@@ -96,7 +120,9 @@ export function ProgramView({
         </div>
       )}
 
-      {/* Home / gym */}
+      {/* Home / gym — not rendered at all when every session in this programme
+          is the same either way, as in Twenty. */}
+      {program.days.some(hasBothSettings) && (
       <div style={{ display: 'flex', gap: 6, marginTop: 14, marginBottom: 10 }}>
         {(['home', 'gym'] as const).map(w => {
           const on = where === w;
@@ -115,6 +141,7 @@ export function ProgramView({
           );
         })}
       </div>
+      )}
 
       {program.days.map(day => {
         const routineId = routineForDay(day, where);
@@ -123,16 +150,26 @@ export function ProgramView({
         const time = minutesLabel(routine?.estMinutes ?? null);
         const count = routine?.exercises.length ?? 0;
 
+        const stats = routine?.scored ? benchmarkStats(benchmarks, routine.id) : null;
+
         return (
-          <button
+          // A card, not a button: the scored rows carry their own Log-score
+          // control, and a button cannot be nested inside a button.
+          <div
             key={day.dayIndex}
+            style={{
+              marginBottom: 10, background: W.surface, border: `1px solid ${W.border}`,
+              borderLeft: `3px solid ${W.volt}`, borderRadius: 14,
+              fontFamily: W.body, opacity: routine ? 1 : 0.5, overflow: 'hidden',
+            }}
+          >
+          <button
             onClick={() => routineId && onOpenRoutine(routineId)}
             disabled={!routine}
             style={{
               width: '100%', textAlign: 'left', cursor: routine ? 'pointer' : 'default',
-              marginBottom: 10, background: W.surface, border: `1px solid ${W.border}`,
-              borderLeft: `3px solid ${W.volt}`, borderRadius: 14, padding: '13px 14px',
-              display: 'block', fontFamily: W.body, opacity: routine ? 1 : 0.5,
+              background: 'transparent', border: 'none', padding: '13px 14px',
+              display: 'block', fontFamily: W.body, color: 'inherit',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -177,12 +214,47 @@ export function ProgramView({
               </div>
             )}
           </button>
+
+          {routine && stats && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              padding: '10px 14px', borderTop: `1px solid ${W.border}`, background: W.raised,
+            }}>
+              <span style={{ fontSize: 11.5, color: W.sub, display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+                {stats.pb ? (
+                  <>
+                    <span style={{ fontFamily: W.display, fontSize: 17, color: W.volt, letterSpacing: '0.02em' }}>
+                      {scoreLabel(stats.pb)}
+                    </span>
+                    <span>best{stats.attempts > 1 ? ` of ${stats.attempts}` : ''}</span>
+                    {stats.latest && !stats.latestIsPb && (
+                      <span style={{ color: W.muted }}>· last {scoreLabel(stats.latest)}</span>
+                    )}
+                    {stats.latestIsPb && <span style={{ color: W.volt }}>· new PB</span>}
+                  </>
+                ) : (
+                  <span style={{ color: W.muted }}>No score yet — the round count is the point.</span>
+                )}
+              </span>
+              <button
+                onClick={() => onLogScore(routine.id)}
+                style={{
+                  flexShrink: 0, cursor: 'pointer', borderRadius: 9, padding: '6px 11px',
+                  fontFamily: W.body, fontSize: 12, fontWeight: 700,
+                  border: `1px solid ${W.volt}`, background: 'transparent', color: W.volt,
+                }}
+              >
+                Log score
+              </button>
+            </div>
+          )}
+          </div>
         );
       })}
 
       <div style={{ fontSize: 11.5, color: W.muted, lineHeight: 1.5, marginTop: 4 }}>
-        Four sessions, any four days that suit the week — the order matters more
-        than the dates. Leave a day between the two upper sessions where you can.
+        {program.days.length} sessions, any {program.days.length} days that suit the
+        week — the order matters more than the dates.
       </div>
     </div>
   );

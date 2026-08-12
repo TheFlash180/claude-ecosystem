@@ -106,3 +106,41 @@ export function RunSheet({ onSave, onClose }: {
     </Sheet>
   );
 }
+
+/** Log an AMRAP score. Rounds is the number; the reps box is optional because
+ *  most people stop mid-round and "11 + 7" is how that is written. */
+export function BenchmarkSheet({ title, onSave, onClose }: {
+  title: string;
+  onSave: (date: string, rounds: number, reps: number, note: string) => void;
+  onClose: () => void;
+}) {
+  const [date, setDate] = useState(sastDay());
+  const [rounds, setRounds] = useState('');
+  const [reps, setReps] = useState('');
+  const [note, setNote] = useState('');
+  const r = Number(rounds.trim());
+  const valid = rounds.trim() !== '' && Number.isInteger(r) && r >= 0;
+  const extra = Math.max(0, Math.floor(Number(reps.trim()) || 0));
+
+  return (
+    <Sheet title={`${title} — log a score`} onClose={onClose}>
+      <Row label="Date"><input type="date" style={field} value={date} onChange={e => setDate(e.target.value)} /></Row>
+      <Row label="Rounds completed">
+        <input inputMode="numeric" placeholder="11" autoFocus style={field}
+               value={rounds} onChange={e => setRounds(e.target.value)} />
+      </Row>
+      <Row label="Extra reps into the next round (optional)">
+        <input inputMode="numeric" placeholder="7" style={field}
+               value={reps} onChange={e => setReps(e.target.value)} />
+      </Row>
+      <Row label="Note (optional)">
+        <input style={field} placeholder="banded pull-ups" value={note}
+               onChange={e => setNote(e.target.value)} />
+      </Row>
+      <button style={primary} disabled={!valid}
+              onClick={() => { if (valid) onSave(date, r, extra, note.trim()); }}>
+        {valid ? `Save ${extra > 0 ? `${r} + ${extra}` : r}` : 'Enter your rounds'}
+      </button>
+    </Sheet>
+  );
+}

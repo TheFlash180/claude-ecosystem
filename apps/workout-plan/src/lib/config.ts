@@ -34,6 +34,18 @@ export interface Routine {
   /** Non-null when the routine belongs to a programme, which keeps it out of
    *  the browsable library — the Workouts tab shows only programId === null. */
   programId: string | null;
+  /** True for an AMRAP, where the round count is the point and beating it is
+   *  the progression. Drives whether Log a score appears at all. */
+  scored: boolean;
+}
+
+/** One attempt at a scored workout — "11 rounds + 7 reps" on a given day. */
+export interface Benchmark {
+  routineId: string;
+  date: string;
+  rounds: number;
+  extraReps: number;
+  note: string;
 }
 
 /** One session of a programme's weekly split. `gymRoutineId` is null for a

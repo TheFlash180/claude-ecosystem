@@ -9,13 +9,17 @@
 --   workout_routines           the workout library — types, not weekdays
 --   workout_routine_exercises  target sets/reps per exercise in a routine
 --   workout_bodyweight         daily weigh-ins
+--   workout_benchmarks         AMRAP scores (rounds + reps), PB per workout
 --   workout_runs               parkrun / run times (PB + trend)
 --   workout_settings           admin password (RLS, no read policy)
 --
 -- The app is a guide, not a training log: routines and exercises are read-only
--- reference, and the only things it records are bodyweight and run times.
+-- reference, and it records only whole-session results — bodyweight, run times
+-- and AMRAP scores. One number, entered when you feel like it.
 -- (workout_sessions / workout_sets, which logged each set of each day, were
--- dropped in the library rebuild — that logging went unused.)
+-- dropped in the library rebuild — that logging went unused. The distinction
+-- that matters is friction: every set of every session died, a parkrun time
+-- survived. A round count is the second shape, not the first.)
 --
 -- Public-read RLS; writes via security-definer RPCs (open — single-user app).
 -- Exercise photos are the public-domain free-exercise-db (Unlicense), served
@@ -69,7 +73,10 @@ create table workout_routines (
   -- A routine belonging to a programme is not part of the browsable library:
   -- the Workouts tab filters on program_id is null, so adding a programme
   -- leaves that tab showing exactly what it always showed.
-  program_id text references workout_programs(id) on update cascade on delete set null
+  program_id text references workout_programs(id) on update cascade on delete set null,
+  -- An AMRAP has a round count worth beating; a strength session does not, and
+  -- offering to "log a score" for one would be noise.
+  scored boolean not null default false
 );
 
 -- on update cascade: routine ids are readable slugs and get renamed.
@@ -115,6 +122,27 @@ create table workout_bodyweight (
   weight_kg numeric not null check (weight_kg > 0)
 );
 
+-- Benchmark scores: one row per attempt at a scored workout.
+--
+-- Deliberately the same shape as workout_runs, not the per-set logging that
+-- was built here once and deleted. The difference is friction: sets meant
+-- every set of every exercise every session; this is one number, entered when
+-- you feel like it, exactly like a parkrun time. An AMRAP with nowhere to put
+-- the round count is pointless, so this is what makes those workouts work.
+--
+-- rounds + extra_reps is how an AMRAP is actually scored ("11 rounds + 7").
+-- Ordering by (rounds, extra_reps) gives the PB within a workout.
+create table workout_benchmarks (
+  id uuid primary key default gen_random_uuid(),
+  routine_id text not null references workout_routines(id) on update cascade on delete cascade,
+  log_date date not null,
+  rounds int not null check (rounds >= 0),
+  extra_reps int not null default 0 check (extra_reps >= 0),
+  note text not null default '',
+  -- One score per workout per day: a re-entry corrects, it does not stack.
+  unique (routine_id, log_date)
+);
+
 create table workout_runs (
   id uuid primary key default gen_random_uuid(),
   run_date date not null unique,
@@ -137,6 +165,7 @@ alter table workout_exercises enable row level security;
 alter table workout_routines enable row level security;
 alter table workout_routine_exercises enable row level security;
 alter table workout_bodyweight enable row level security;
+alter table workout_benchmarks enable row level security;
 alter table workout_runs enable row level security;
 alter table workout_settings enable row level security;
 
@@ -148,6 +177,7 @@ create policy "public read" on workout_exercises for select to anon, authenticat
 create policy "public read" on workout_routines for select to anon, authenticated using (true);
 create policy "public read" on workout_routine_exercises for select to anon, authenticated using (true);
 create policy "public read" on workout_bodyweight for select to anon, authenticated using (true);
+create policy "public read" on workout_benchmarks for select to anon, authenticated using (true);
 create policy "public read" on workout_runs for select to anon, authenticated using (true);
 -- workout_settings: no read policy (admin password stays server-side)
 
@@ -230,6 +260,26 @@ begin
   return true;
 end $$;
 
+create or replace function workout_log_benchmark(
+  p_routine_id text, p_date date, p_rounds int, p_reps int, p_note text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if p_rounds is null or p_rounds < 0 then return false; end if;
+  if not exists (select 1 from workout_routines where id = p_routine_id) then return false; end if;
+  insert into workout_benchmarks (routine_id, log_date, rounds, extra_reps, note)
+  values (p_routine_id, p_date, p_rounds, greatest(coalesce(p_reps, 0), 0), coalesce(p_note, ''))
+  on conflict (routine_id, log_date) do update set
+    rounds = excluded.rounds, extra_reps = excluded.extra_reps, note = excluded.note;
+  return true;
+end $$;
+
+create or replace function workout_delete_benchmark(p_routine_id text, p_date date)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from workout_benchmarks where routine_id = p_routine_id and log_date = p_date;
+  return found;
+end $$;
+
 create or replace function workout_delete_run(p_date date)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
@@ -244,6 +294,8 @@ revoke all on function workout_log_bodyweight(date,numeric) from public, anon;
 revoke all on function workout_log_run(date,int,text,text) from public, anon;
 revoke all on function workout_delete_run(date) from public, anon;
 revoke all on function workout_set_program(text,date) from public, anon;
+revoke all on function workout_log_benchmark(text,date,int,int,text) from public, anon;
+revoke all on function workout_delete_benchmark(text,date) from public, anon;
 
 grant execute on function workout_admin_check(text) to anon;
 grant execute on function workout_save_profile(date,numeric,text,text,numeric,numeric) to anon;
@@ -251,3 +303,5 @@ grant execute on function workout_log_bodyweight(date,numeric) to anon;
 grant execute on function workout_log_run(date,int,text,text) to anon;
 grant execute on function workout_delete_run(date) to anon;
 grant execute on function workout_set_program(text,date) to anon;
+grant execute on function workout_log_benchmark(text,date,int,int,text) to anon;
+grant execute on function workout_delete_benchmark(text,date) to anon;

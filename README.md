@@ -44,11 +44,13 @@ What each one is:
   and puddings, each with a full method, a serving-size scaler, and a cook list
   that builds a shared shopping list. Filter chips narrow by meal, time and tag
   (`high protein`). (It is no longer a weekly planner.)
-- **workout-plan** — a workout guide: routines to browse and 33 movements with
+- **workout-plan** — a workout guide: routines to browse and 35 movements with
   demo photos and how-to text, plus bodyweight and parkrun tracking. The Plan
-  tab runs a multi-week programme (home or gym build of every session) whose
-  current week is derived from its start date. (It no longer logs individual
-  sets, and the programme deliberately does not reintroduce that.)
+  tab runs multi-week programmes — Hero Cut (12 weeks, home or gym build of
+  every session) and Twenty (four 20-minute sessions, three of them scored
+  AMRAPs) — whose current week is derived from the start date. It still does
+  not log individual sets; AMRAP scores are one number per session, the same
+  shape as a parkrun time.
 - **baby-logger** — feeds, sleeps, nappies and weights, offline-first.
 - **glovebox** — vehicle documents, service and licence-renewal reminders.
 - **front-row** — what is on at Montecasino and nearby, with watches.

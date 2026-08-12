@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  findProgram, hasBothSettings, libraryRoutines, phaseForWeek, programProgress,
-  programRoutines, progressFraction, progressLabel, routineForDay,
+  benchmarkStats, findProgram, hasBothSettings, libraryRoutines, phaseForWeek,
+  programProgress, programRoutines, progressFraction, progressLabel, repsPerRound,
+  routineForDay, scoreLabel,
 } from '../program';
-import type { Program, ProgramDay, ProgramPhase, Routine } from '../config';
+import type { Benchmark, Program, ProgramDay, ProgramPhase, Routine } from '../config';
 
 const PHASES: ProgramPhase[] = [
   { fromWeek: 1, toWeek: 4, title: 'Groundwork', guidance: 'g' },
@@ -17,7 +18,7 @@ const day = (over: Partial<ProgramDay> = {}): ProgramDay => ({
 
 const routine = (id: string, programId: string | null): Routine => ({
   id, title: id, kind: 'home', subtitle: '', summary: '', estMinutes: null,
-  exercises: [], programId,
+  exercises: [], programId, scored: false,
 });
 
 describe('programProgress', () => {
@@ -128,5 +129,78 @@ describe('labels', () => {
     expect(findProgram([prog], 'hero-cut')!.title).toBe('Hero Cut');
     expect(findProgram([prog], 'nope')).toBeNull();
     expect(findProgram([prog], null)).toBeNull();
+  });
+});
+
+describe('benchmark scores', () => {
+  const b = (date: string, rounds: number, extraReps = 0, routineId = 'cindy'): Benchmark =>
+    ({ routineId, date, rounds, extraReps, note: '' });
+
+  it('writes a score the way an AMRAP is scored', () => {
+    expect(scoreLabel({ rounds: 11, extraReps: 7 })).toBe('11 + 7');
+    expect(scoreLabel({ rounds: 12, extraReps: 0 })).toBe('12');
+  });
+
+  it('ranks on rounds first, then reps into the next round', () => {
+    const s = benchmarkStats([b('2026-08-01', 11, 7), b('2026-08-08', 11, 20)], 'cindy');
+    expect(scoreLabel(s.pb!)).toBe('11 + 20');
+    const t = benchmarkStats([b('2026-08-01', 11, 25), b('2026-08-08', 12, 0)], 'cindy');
+    expect(scoreLabel(t.pb!)).toBe('12');
+  });
+
+  it('a first score is a starting point, not a personal best', () => {
+    const s = benchmarkStats([b('2026-08-01', 11)], 'cindy');
+    expect(s.attempts).toBe(1);
+    expect(s.latestIsPb).toBe(false);
+  });
+
+  it('flags a genuine PB, and does not when the latest is down on it', () => {
+    const up = benchmarkStats([b('2026-08-01', 10), b('2026-08-08', 13)], 'cindy');
+    expect(up.latestIsPb).toBe(true);
+    const down = benchmarkStats([b('2026-08-01', 13), b('2026-08-08', 10)], 'cindy');
+    expect(down.latestIsPb).toBe(false);
+    expect(scoreLabel(down.pb!)).toBe('13');
+    expect(scoreLabel(down.latest!)).toBe('10');
+  });
+
+  it('matching the PB again still counts as a PB', () => {
+    const s = benchmarkStats([b('2026-08-01', 12, 5), b('2026-08-08', 12, 5)], 'cindy');
+    expect(s.latestIsPb).toBe(true);
+  });
+
+  it('never mixes one workout\'s scores into another', () => {
+    const all = [b('2026-08-01', 20, 0, 'other'), b('2026-08-02', 9, 0, 'cindy')];
+    const s = benchmarkStats(all, 'cindy');
+    expect(s.attempts).toBe(1);
+    expect(scoreLabel(s.pb!)).toBe('9');
+  });
+
+  it('is empty and safe with nothing logged', () => {
+    const s = benchmarkStats([], 'cindy');
+    expect(s.pb).toBeNull();
+    expect(s.latest).toBeNull();
+    expect(s.attempts).toBe(0);
+  });
+
+  it('history runs oldest first for a sparkline', () => {
+    const s = benchmarkStats([b('2026-08-08', 13), b('2026-08-01', 10)], 'cindy');
+    expect(s.history.map(h => h.rounds)).toEqual([10, 13]);
+  });
+});
+
+describe('repsPerRound', () => {
+  const withReps = (reps: string[]): Routine => ({
+    ...routine('r', 'twenty'),
+    exercises: reps.map((r, i) => ({ exerciseId: `e${i}`, sets: 1, reps: r, note: '' })),
+  });
+
+  it('adds up a round of Cindy', () => {
+    expect(repsPerRound(withReps(['5', '10', '15']))).toBe(30);
+  });
+
+  it('refuses rather than guessing when a target is not a plain number', () => {
+    expect(repsPerRound(withReps(['5', 'max', '15']))).toBeNull();
+    expect(repsPerRound(withReps(['8 each', '10']))).toBeNull();
+    expect(repsPerRound(withReps([]))).toBeNull();
   });
 });

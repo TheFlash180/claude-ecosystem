@@ -64,10 +64,10 @@ Most are what they sound like. Two are not:
   shared shopping list.
 - **Workout Plan** is a *guide*, not a training log. Per-set logging was used
   for one week and is gone with its tables. Routines are workout types you
-  browse, not weekdays. The only things it records are bodyweight and parkrun
-  times.
+  browse, not weekdays. It records only whole-session results — bodyweight,
+  parkrun times and AMRAP scores.
 
-  The **Plan tab** adds a multi-week programme (`workout_programs` +
+  The **Plan tab** adds multi-week programmes (`workout_programs` +
   `_days` + `_phases`) without reopening that door: the current week is
   **derived from `workout_profile.program_started_on`**, never stored and never
   ticked off. Start it once and it tells you where you are — there is nothing
@@ -75,6 +75,20 @@ Most are what they sound like. Two are not:
   programme's own sessions carry `workout_routines.program_id`, and the
   Workouts tab filters on `program_id is null`, so adding a programme leaves
   that library showing precisely what it always showed.
+
+  Two exist: **Hero Cut** (12 weeks, 4 sessions, each lifting day built for
+  home *and* gym) and **Twenty** (four 20-minute sessions, three of them
+  AMRAPs). A programme where no day differs by setting renders no home/gym
+  toggle at all.
+
+  **`workout_benchmarks` is the one piece of session logging, and it is
+  deliberate.** An AMRAP with nowhere to record the round count is pointless.
+  The distinction that matters is friction, not principle: `workout_sessions`
+  / `workout_sets` logged every set of every session and died; `workout_runs`
+  logs one number occasionally and survived. A score is the second shape —
+  `rounds` + `extra_reps`, one row per workout per day, re-entry corrects
+  rather than stacks. Only routines with `scored = true` offer it, so a
+  strength day never asks.
 
 ## The shared Supabase project
 
