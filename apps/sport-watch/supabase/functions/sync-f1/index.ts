@@ -10,6 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.jolpi.ca/ergast/f1";
+const SOURCE_KEY = "f1-jolpica";
 const UA = { "User-Agent": "sa-sport-watch/1.0 (personal PWA; daily sync)" };
 
 const FLAGS: Record<string, string> = {
@@ -48,15 +49,28 @@ Deno.serve(async () => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
+  // Health is recorded for the same reason every other adapter records it: a
+  // sync that quietly stops answering is indistinguishable from a calendar
+  // with no changes in it, and the app shows a stale banner off these rows.
+  const startedAt = new Date().toISOString();
+  const fail = async (message: string, status: number) => {
+    await sb.from("sport_sources").update({
+      last_run_at: startedAt, last_error: message,
+    }).eq("key", SOURCE_KEY);
+    return new Response(JSON.stringify({ error: message }), {
+      status, headers: { "Content-Type": "application/json" },
+    });
+  };
+
   const season = new Date().getUTCFullYear();
   const schedRes = await fetchWithRetry(`${API}/${season}.json?limit=100`);
   if (!schedRes.ok) {
-    return new Response(JSON.stringify({ error: `Jolpica schedule fetch failed: ${schedRes.status}` }), { status: 502 });
+    return await fail(`Jolpica schedule fetch failed: ${schedRes.status}`, 502);
   }
   const sched = await schedRes.json();
   const races: any[] = sched?.MRData?.RaceTable?.Races ?? [];
   if (races.length === 0) {
-    return new Response(JSON.stringify({ error: "empty schedule" }), { status: 502 });
+    return await fail("empty schedule", 502);
   }
 
   const { data: existingRows, error: exErr } = await sb
@@ -64,7 +78,7 @@ Deno.serve(async () => {
     .select("id, f1_round, f1_session, result, channel")
     .eq("f1_season", season);
   if (exErr) {
-    return new Response(JSON.stringify({ error: exErr.message }), { status: 500 });
+    return await fail(exErr.message, 500);
   }
   const existing = new Map<string, { id: string; result: string | null; channel: string | null }>();
   for (const r of existingRows ?? []) {
@@ -142,6 +156,16 @@ Deno.serve(async () => {
       }
     }
   }
+
+  // A result fetch that got rate-limited is a partial run, not a clean one, so
+  // last_ok_at only advances when nothing went wrong.
+  const health: Record<string, unknown> = {
+    last_run_at: startedAt,
+    last_error: resultErrors.length === 0 ? null : resultErrors.join("; "),
+    last_count: races.length,
+  };
+  if (resultErrors.length === 0) health.last_ok_at = startedAt;
+  await sb.from("sport_sources").update(health).eq("key", SOURCE_KEY);
 
   return new Response(
     JSON.stringify({ season, races: races.length, upserted, resultsFilled, resultErrors }),

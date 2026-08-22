@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
-import { Bell, CalendarDays, Settings } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, Settings } from "lucide-react";
 import { catOf, DEFAULT_CATEGORIES, matchTitle, S, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from "./lib/config";
 import { fetchEvents, sortEvents } from "./lib/events";
+import { staleSources, staleMessage, type Source } from "./lib/sources";
 import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
 import { pruneToExisting } from "./lib/reminders";
 import { loadIdSet, saveIdSet, loadLeads, saveLead } from "./lib/storage";
@@ -25,6 +26,10 @@ const ALERTED_KEY = "sa-sport-watch:alerted";
 const PAST_LIMIT = 5; // played events shown before "Show all"
 
 const loadNotified = () => loadIdSet(STORAGE_KEY);
+
+/** Amber, not red: a stale feed is a "check this" not a breakage. Matches the
+ *  conditional-note colour on the cards. */
+const WARN = "#C08A3E";
 const saveNotified = (s: Set<string>) => saveIdSet(STORAGE_KEY, s);
 
 // Android Chrome PWAs must show notifications through the service worker —
@@ -107,6 +112,7 @@ export default function App() {
   const [showAllPast, setShowAllPast] = useState(false);
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [sources, setSources] = useState<Source[]>([]);
   const pushReady = useRef(false);
 
   const leadFor = useCallback(
@@ -114,11 +120,14 @@ export default function App() {
     [leads],
   );
 
+  const stale = useMemo(() => staleSources(sources), [sources]);
+
   const loadEvents = useCallback(async () => {
     const data = await fetchEvents();
     setEvents(sortEvents(data.events));
     setCategories(data.categories);
     setCats(data.cats);
+    setSources(data.sources);
     setLoading(false);
   }, []);
 
@@ -375,6 +384,25 @@ export default function App() {
 
       {/* Body */}
       <div style={{ padding: "14px 14px 48px" }}>
+        {/* Fixtures are auto-synced, so a feed that has stopped answering has
+            to say so — silence is indistinguishable from "nothing changed",
+            and the times on these cards would quietly go stale. */}
+        {stale.length > 0 && (
+          <div style={{
+            display: "flex", gap: 9, alignItems: "flex-start",
+            background: `${WARN}12`, border: `1px solid ${WARN}44`,
+            borderRadius: 12, padding: "11px 12px", marginBottom: 12,
+            fontFamily: S.body, fontSize: 12, color: S.sub, lineHeight: 1.5,
+          }}>
+            <AlertTriangle size={15} strokeWidth={2.2} color={WARN}
+                           style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              <strong style={{ color: S.text }}>{staleMessage(stale)}</strong>{" "}
+              Kick-off times may have moved since these were last checked.
+            </span>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ color: S.sub, fontSize: 13, textAlign: "center", padding: 40 }}>
             Loading fixtures…
@@ -431,8 +459,8 @@ export default function App() {
           marginTop: 26, paddingTop: 14, borderTop: `1px solid ${S.border}`,
           fontFamily: S.body, fontSize: 11, color: S.muted, lineHeight: 1.8,
         }}>
-          Times in SAST. F1 fixtures & results refresh daily from the
-          official calendar; everything else is editable on the{" "}
+          Times in SAST. Springbok and F1 fixtures & results refresh daily from
+          the official calendars; everything else is editable on the{" "}
           <a href="#/admin" style={{ color: S.sub }}>owner page</a>.
           <br />
           <CalendarDays size={12} strokeWidth={2} style={{ verticalAlign: "-2px", marginRight: 4 }} />

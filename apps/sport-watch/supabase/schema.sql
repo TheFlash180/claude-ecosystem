@@ -6,9 +6,11 @@
 --   sport_settings         admin password (RLS, no policies)
 --   sport_push_subs        Web Push subscriptions (writes via RPCs only)
 --   sport_push_reminders   per-device reminders with per-reminder lead time
+--   sport_sources          per-feed health, so a dead sync is visible
 --
 -- Edge functions (see ./functions/):
 --   sync-f1                daily: Jolpica calendar + results -> sport_events
+--   sync-rugby             daily: World Rugby fixtures + results -> sport_events
 --   send-sport-reminders   every 15 min: due reminders -> Web Push
 --   sport-calendar         subscribable ICS feed of all events
 
@@ -54,13 +56,46 @@ create table sport_events (
   f1_season int,
   f1_round int,
   f1_session text check (f1_session in ('race','qualifying','sprint')),
+  -- Set once sync-rugby recognises this row as a World Rugby fixture. Its
+  -- presence is what makes a row feed-owned: the sync updates date, venue and
+  -- teams on rows that have one and never touches a rugby row that does not,
+  -- which is what keeps a hand-entered placeholder (the Nations Championship
+  -- finals slot) from being overwritten or duplicated.
+  wr_match_id text,
   updated_at timestamptz not null default now()
 );
 create unique index sport_events_f1_idx
   on sport_events (f1_season, f1_round, f1_session) where f1_season is not null;
+create unique index sport_events_wr_match_id_key
+  on sport_events (wr_match_id) where wr_match_id is not null;
 
 alter table sport_events enable row level security;
 create policy "public read" on sport_events for select to anon, authenticated using (true);
+
+-- ---------------------------------------------------------------- sources
+-- A feed that goes quiet looks exactly like "no fixture changes", so every
+-- sync records how its last run went and the app shows a stale banner.
+-- last_ok_at only advances on a clean run. Same shape as frontrow_sources.
+create table sport_sources (
+  key text primary key,
+  label text not null,
+  enabled boolean not null default true,
+  last_run_at timestamptz,
+  last_ok_at timestamptz,
+  last_error text,
+  last_count int
+);
+
+insert into sport_sources (key, label) values
+  ('rugby-worldrugby', 'World Rugby fixtures'),
+  ('f1-jolpica', 'F1 calendar')
+on conflict (key) do nothing;
+
+alter table sport_sources enable row level security;
+-- World data with nothing personal in it, and the client needs it to render
+-- the banner. Writes are service_role only (the edge functions), so there is
+-- deliberately no write policy.
+create policy "public read" on sport_sources for select to anon, authenticated using (true);
 
 -- ---------------------------------------------------------------- admin
 create table sport_settings (
@@ -390,6 +425,20 @@ select cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-f1',
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+
+-- Staggered a quarter-hour off the F1 sync so the two are never competing for
+-- the same free-tier function slot.
+select cron.schedule(
+  'sport-rugby-sync',
+  '52 5 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-rugby',
     headers := '{"Content-Type": "application/json"}'::jsonb,
     body := '{}'::jsonb
   ) AS request_id;
