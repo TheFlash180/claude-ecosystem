@@ -99,7 +99,7 @@ schema change lands in the same database as everything else.
 
 | App | Tables | Edge functions | pg_cron |
 |---|---|---|---|
-| sport-watch | `sport_*` | `sync-f1`, `send-sport-reminders`, `sport-calendar` | `sport-f1-sync`, `sport-push-reminders`, `sport-prune-reminders` |
+| sport-watch | `sport_*` | `sync-f1`, `sync-rugby`, `send-sport-reminders`, `sport-calendar` | `sport-f1-sync`, `sport-rugby-sync`, `sport-push-reminders`, `sport-prune-reminders` |
 | marvel-watch | `marvel_*` | `sync-marvel`, `send-marvel-reminders` | `marvel-tmdb-sync`, `marvel-push-reminders`, `marvel-prune-*` |
 | meal-prep | `mealprep_*` | `send-mealprep-reminder` | `mealprep-prep-reminder` |
 | workout-plan | `workout_*` | — | — |
@@ -242,6 +242,24 @@ exactly what a naive lean-protein filter would surface first.
   are editing before copying a notifier.
 - A watch/track only reports things that appeared **after it was created**.
   Without that, adding one replays the back catalogue as notifications.
+- **Kick-off times are the thing hand-entry gets wrong**, and wrongly by half
+  an hour rather than obviously — a Springbok home test is 17:10 for one series
+  and 17:40 for another, so a wrong one looks perfectly plausible on the card.
+  sport-watch's rugby fixtures now come from **World Rugby's own feed**
+  (`api.wr-rims-prod.pulselive.com/rugby/v3/match`, free, no key), which is
+  what springboks.rugby and world.rugby are built on. `teams=39` filters
+  server-side to the senior men's Springboks, so the U20s, the Springbok Women
+  and sevens never come back and no name matching is needed. Times arrive as a
+  true epoch in `time.millis` with the venue's `gmtOffset` alongside — never a
+  local wall-clock string.
+- **`wr_match_id` is what makes a rugby row feed-owned.** `sync-rugby` updates
+  date, venue and teams only on rows carrying one, and *claims* a hand-entered
+  row the first time it recognises the fixture (same two teams, within 48h)
+  instead of inserting a duplicate next to it. A rugby row without one is never
+  touched — that is what protects the Nations Championship finals placeholder,
+  which has no fixture until the pool standings settle. Same manual-field rule
+  as `sync-f1`: channel, note, watch_url, is_special, a non-empty result and
+  the competition label are set once and never overwritten.
 - Quicket carries almost nothing at Montecasino; Front Row's useful source is
   Montecasino's own WordPress REST API (`/wp-json/wp/v2/whatson`).
 - Takealot returns two shapes. `buybox_items_type: "summary"` is a **variant

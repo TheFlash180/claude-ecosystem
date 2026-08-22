@@ -3,6 +3,7 @@
 // category list are only an offline/failure fallback.
 import { sb } from './supabase';
 import { DEFAULT_CATEGORIES, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from './config';
+import type { Source } from './sources';
 import eventsData from '../data/events.json';
 
 interface DbEventRow {
@@ -22,6 +23,16 @@ interface DbEventRow {
   is_special: boolean;
   is_conditional: boolean;
   date_tbc: boolean;
+}
+
+interface DbSourceRow {
+  key: string;
+  label: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+  last_count: number | null;
 }
 
 interface DbCategoryRow {
@@ -52,6 +63,18 @@ function fromDb(r: DbEventRow): SportEvent {
     isSpecial: r.is_special,
     isConditional: r.is_conditional,
     dateTBC: r.date_tbc,
+  };
+}
+
+function sourceFromDb(r: DbSourceRow): Source {
+  return {
+    key: r.key,
+    label: r.label,
+    enabled: r.enabled,
+    lastRunAt: r.last_run_at,
+    lastOkAt: r.last_ok_at,
+    lastError: r.last_error,
+    lastCount: r.last_count,
   };
 }
 
@@ -100,15 +123,17 @@ export interface RegistryData {
   events: SportEvent[];
   categories: Category[];
   cats: CatMap;
+  sources: Source[];
   fromDb: boolean;
 }
 
 export async function fetchEvents(): Promise<RegistryData> {
   const client = sb();
   if (client) {
-    const [evRes, catRes] = await Promise.all([
+    const [evRes, catRes, srcRes] = await Promise.all([
       client.from('sport_events').select('*').order('event_date', { ascending: true, nullsFirst: false }),
       client.from('sport_categories').select('*').order('sort_order'),
+      client.from('sport_sources').select('*').order('key'),
     ]);
     if (!evRes.error && evRes.data && evRes.data.length > 0) {
       const categories = (!catRes.error && catRes.data && catRes.data.length > 0)
@@ -118,6 +143,11 @@ export async function fetchEvents(): Promise<RegistryData> {
         events: (evRes.data as DbEventRow[]).map(fromDb),
         categories,
         cats: toCatMap(categories),
+        // No sources row is not the same as a stale one: an older database
+        // without the table should show no banner, not a false alarm.
+        sources: (!srcRes.error && srcRes.data)
+          ? (srcRes.data as DbSourceRow[]).map(sourceFromDb)
+          : [],
         fromDb: true,
       };
     }
@@ -126,6 +156,9 @@ export async function fetchEvents(): Promise<RegistryData> {
     events: fallbackEvents(),
     categories: DEFAULT_CATEGORIES,
     cats: toCatMap(DEFAULT_CATEGORIES),
+    // Offline: the bundled fixtures are the known problem already, so there is
+    // nothing useful a source banner could add on top of that.
+    sources: [],
     fromDb: false,
   };
 }
