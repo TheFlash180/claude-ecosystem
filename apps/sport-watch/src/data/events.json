@@ -92,7 +92,7 @@
       "competition": "Rugby's Greatest Rivalry · Test 1",
       "home": "Springboks", "away": "All Blacks",
       "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
-      "date": "2026-08-22T15:40:00Z",
+      "date": "2026-08-22T15:10:00Z",
       "venue": "Ellis Park, Johannesburg"
     },
     {
@@ -100,7 +100,7 @@
       "competition": "Rugby's Greatest Rivalry · Test 2",
       "home": "Springboks", "away": "All Blacks",
       "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
-      "date": "2026-08-29T15:40:00Z",
+      "date": "2026-08-29T15:10:00Z",
       "venue": "Cape Town Stadium, Cape Town"
     },
     {
@@ -108,7 +108,7 @@
       "competition": "Rugby's Greatest Rivalry · Test 3",
       "home": "Springboks", "away": "All Blacks",
       "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
-      "date": "2026-09-05T15:40:00Z",
+      "date": "2026-09-05T15:10:00Z",
       "venue": "FNB Stadium, Johannesburg"
     },
     {
@@ -116,7 +116,7 @@
       "competition": "Rugby's Greatest Rivalry · Test 4",
       "home": "Springboks", "away": "All Blacks",
       "homeFlag": "🇿🇦", "awayFlag": "🇳🇿",
-      "date": "2026-09-12T23:00:00Z",
+      "date": "2026-09-12T21:00:00Z",
       "venue": "M&T Bank Stadium, Baltimore"
     },
     {
@@ -132,7 +132,7 @@
       "competition": "Nations Championship",
       "home": "France", "away": "Springboks",
       "homeFlag": "🇫🇷", "awayFlag": "🇿🇦",
-      "date": "2026-11-14T20:10:00Z",
+      "date": "2026-11-13T20:10:00Z",
       "venue": "TBC, France"
     },
     {
@@ -148,8 +148,9 @@
       "competition": "Nations Championship · Finals Weekend",
       "home": "Finals Weekend", "away": null,
       "homeFlag": "🏆", "awayFlag": null,
-      "date": "2026-11-28T14:00:00Z",
+      "date": "2026-11-29T16:40:00Z",
       "venue": "Twickenham, London",
+      "note": "Grand Final slot (Sun 29 Nov) — the Boks' actual final depends on where they finish",
       "isSpecial": true
     },
     {
