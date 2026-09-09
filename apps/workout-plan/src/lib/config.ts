@@ -112,6 +112,8 @@ export const W = {
   muted:   '#7C828C',
   volt:    '#C6F135',
   voltDim: '#8FAF1F',
+  warn:    '#FF6B35',   // a value the form will not accept
+
   ink:     '#0E1013',   // text on a volt fill
   display: "'Anton', 'Oswald', sans-serif",
   body:    "'Inter', sans-serif",

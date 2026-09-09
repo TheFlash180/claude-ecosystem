@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ageFromDob, bmr, formatRunTime, nutritionTargets, parseRunTime, runStats, weightTrend,
+  ageFromDob, bmr, comparePb, formatGap, formatRunTime, lastSaturday, nutritionTargets, pacePerKm,
+  parseRunTime, runSeconds, runStats, splitTimeText, weightTrend,
 } from '../fitness';
 import type { BodyweightEntry, Profile, RunEntry } from '../config';
 
@@ -83,9 +84,113 @@ describe('run times', () => {
   it('parses m:ss, m.ss and raw seconds', () => {
     expect(parseRunTime('24:53')).toBe(1493);
     expect(parseRunTime('24.53')).toBe(1493);
-    expect(parseRunTime('1493')).toBe(1493);
     expect(parseRunTime('24:99')).toBeNull(); // invalid seconds
     expect(parseRunTime('abc')).toBeNull();
+  });
+
+  it('reads bare digits as mmss, not as raw seconds', () => {
+    // A numeric keypad has no colon, so "2453" is what gets typed. Reading it
+    // as 2453 seconds stored 40:53 for a 24:53 parkrun, and nothing said so.
+    expect(parseRunTime('2453')).toBe(24 * 60 + 53);
+    expect(parseRunTime('959')).toBe(9 * 60 + 59);
+    // Rather than guess when the trailing pair cannot be seconds.
+    expect(parseRunTime('1493')).toBeNull();
+  });
+
+  it('takes a half-typed time literally instead of padding it out', () => {
+    // '24:5' used to pad on the right into 24:50.
+    expect(parseRunTime('24:5')).toBe(24 * 60 + 5);
+  });
+});
+
+describe('splitTimeText', () => {
+  it('fills both boxes from one pasted time', () => {
+    expect(splitTimeText('24:53')).toEqual({ minutes: '24', seconds: '53' });
+    expect(splitTimeText(' 24.53 ')).toEqual({ minutes: '24', seconds: '53' });
+    expect(splitTimeText('2453')).toEqual({ minutes: '24', seconds: '53' });
+    expect(splitTimeText('9:07')).toEqual({ minutes: '9', seconds: '07' });
+  });
+
+  it('rejects what it cannot split confidently', () => {
+    expect(splitTimeText('')).toBeNull();
+    expect(splitTimeText('24:60')).toBeNull();
+    expect(splitTimeText('12345')).toBeNull();
+    expect(splitTimeText('parkrun')).toBeNull();
+  });
+});
+
+describe('runSeconds', () => {
+  it('combines the two boxes', () => {
+    expect(runSeconds('24', '53')).toBe(1493);
+    expect(runSeconds('9', '07')).toBe(547);
+    expect(runSeconds('24', '00')).toBe(1440);
+  });
+
+  it('is null while the entry is incomplete or out of range', () => {
+    expect(runSeconds('24', '')).toBeNull();
+    expect(runSeconds('', '53')).toBeNull();
+    expect(runSeconds('24', '60')).toBeNull();
+    expect(runSeconds('100', '00')).toBeNull();
+    expect(runSeconds('2a', '53')).toBeNull();
+  });
+});
+
+describe('formatGap', () => {
+  it('stays in seconds under a minute and becomes m:ss past it', () => {
+    expect(formatGap(18)).toBe('18s');
+    expect(formatGap(-30)).toBe('30s');
+    expect(formatGap(89)).toBe('1:29');
+    expect(formatGap(-89)).toBe('1:29');
+  });
+});
+
+describe('pacePerKm', () => {
+  it('is the 5 km parkrun pace', () => {
+    expect(pacePerKm(1493)).toBe('4:59');
+    expect(pacePerKm(1500)).toBe('5:00');
+  });
+});
+
+describe('comparePb', () => {
+  const run = (date: string, seconds: number) => ({ date, seconds, location: 'parkrun', note: '' });
+
+  it('calls the first run a first run rather than a PB', () => {
+    const c = comparePb(1493, []);
+    expect(c).toEqual({ pbSeconds: null, deltaSeconds: null, isFirst: true, isPb: false });
+  });
+
+  it('reports how far off the PB a time is', () => {
+    const runs = [run('2026-09-05', 1500), run('2026-08-29', 1520)];
+    const c = comparePb(1530, runs);
+    expect(c.pbSeconds).toBe(1500);
+    expect(c.deltaSeconds).toBe(-30);
+    expect(c.isPb).toBe(false);
+  });
+
+  it('flags a new PB and how much faster it is', () => {
+    const c = comparePb(1480, [run('2026-09-05', 1500)]);
+    expect(c.isPb).toBe(true);
+    expect(c.deltaSeconds).toBe(20);
+  });
+
+  it('ignores the run already stored for the date being entered', () => {
+    // Correcting today's time compares against the other runs, not against the
+    // row it is about to replace — otherwise a fix always looks like a PB miss.
+    const runs = [run('2026-09-05', 1400), run('2026-08-29', 1500)];
+    const c = comparePb(1480, runs, '2026-09-05');
+    expect(c.pbSeconds).toBe(1500);
+    expect(c.isPb).toBe(true);
+  });
+});
+
+describe('lastSaturday', () => {
+  it('returns the Saturday just gone', () => {
+    expect(lastSaturday('2026-09-09')).toBe('2026-09-05'); // Wednesday
+    expect(lastSaturday('2026-09-06')).toBe('2026-09-05'); // Sunday
+  });
+
+  it('returns the day itself on a Saturday', () => {
+    expect(lastSaturday('2026-09-05')).toBe('2026-09-05');
   });
 });
 

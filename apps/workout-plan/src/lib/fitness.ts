@@ -82,18 +82,99 @@ export function formatRunTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** "24:53" or "1493" (seconds) or "24.53" → seconds. null if unparseable. */
-export function parseRunTime(raw: string): number | null {
+/** Longest minutes value the two-box entry accepts. A 5 km parkrun does not
+ *  take 100 minutes, and capping at two digits is what lets the minutes box
+ *  hand focus to the seconds box on its own. */
+export const MAX_RUN_MINUTES = 99;
+
+/** Split free text into the two boxes: "24:53", "24.53", "24 53" or a bare
+ *  "2453" all become { minutes: '24', seconds: '53' }.
+ *
+ *  A bare run of digits is read as mmss and never as raw seconds. A phone
+ *  keypad has no colon, so "2453" is what you get when someone types their
+ *  time — reading it as 2453 seconds silently stored 40:53 instead of 24:53.
+ *  Returns null rather than guessing when the trailing pair is not a valid
+ *  seconds value. */
+export function splitTimeText(raw: string): { minutes: string; seconds: string } | null {
   const t = raw.trim();
   if (!t) return null;
-  const m = t.match(/^(\d{1,3})[:.](\d{1,2})$/);
-  if (m) {
-    const secs = Number(m[2].padEnd(2, '0'));
-    if (secs >= 60) return null;
-    return Number(m[1]) * 60 + secs;
+
+  const sep = t.match(/^(\d{1,2})[:.\s](\d{1,2})$/);
+  if (sep) {
+    // "24:5" is 24:05, the literal reading. It used to be padded on the right
+    // into 24:50, which quietly turned a half-typed time into a wrong one.
+    const seconds = sep[2].padStart(2, '0');
+    if (Number(seconds) > 59) return null;
+    return { minutes: sep[1], seconds };
   }
-  if (/^\d+$/.test(t)) return Number(t);
+
+  if (/^\d{3,4}$/.test(t)) {
+    const seconds = t.slice(-2);
+    if (Number(seconds) > 59) return null;
+    return { minutes: String(Number(t.slice(0, -2))), seconds };
+  }
+
   return null;
+}
+
+/** "24:53", "24.53" or a bare "2453" → seconds. null if unparseable. */
+export function parseRunTime(raw: string): number | null {
+  const parts = splitTimeText(raw);
+  if (!parts) return null;
+  return Number(parts.minutes) * 60 + Number(parts.seconds);
+}
+
+/** The two entry boxes → total seconds. Null while either is empty or out of
+ *  range, which is what keeps the save button honest. */
+export function runSeconds(minutes: string, seconds: string): number | null {
+  if (!/^\d{1,2}$/.test(minutes) || !/^\d{1,2}$/.test(seconds)) return null;
+  const m = Number(minutes);
+  const s = Number(seconds);
+  if (m > MAX_RUN_MINUTES || s > 59) return null;
+  return m * 60 + s;
+}
+
+/** Pace as m:ss per kilometre. parkrun is always 5 km. */
+export function pacePerKm(seconds: number, km = 5): string {
+  const per = Math.round(seconds / km);
+  return `${Math.floor(per / 60)}:${String(per % 60).padStart(2, '0')}`;
+}
+
+/** A gap between two run times. Seconds on their own past a minute stop being
+ *  readable — "89s off" is a worse sentence than "1:29 off". */
+export function formatGap(seconds: number): string {
+  const abs = Math.abs(seconds);
+  return abs < 60 ? `${abs}s` : formatRunTime(abs);
+}
+
+export interface PbComparison {
+  pbSeconds: number | null;
+  /** Seconds faster than the PB. Negative means slower. Null on a first run. */
+  deltaSeconds: number | null;
+  isFirst: boolean;
+  isPb: boolean;
+}
+
+/** How a time being entered compares to what is already logged.
+ *
+ *  `excludeDate` drops the run already stored for the date being entered:
+ *  logging a correction to today's time should be compared against the other
+ *  runs, not against the row it is about to replace. */
+export function comparePb(seconds: number, runs: RunEntry[], excludeDate?: string): PbComparison {
+  const others = excludeDate ? runs.filter(r => r.date !== excludeDate) : runs;
+  if (others.length === 0) {
+    return { pbSeconds: null, deltaSeconds: null, isFirst: true, isPb: false };
+  }
+  const pbSeconds = Math.min(...others.map(r => r.seconds));
+  return { pbSeconds, deltaSeconds: pbSeconds - seconds, isFirst: false, isPb: seconds < pbSeconds };
+}
+
+/** The most recent Saturday on or before `today` — parkrun day. Returns today
+ *  when today is a Saturday. Midday anchor so no DST or rounding slip. */
+export function lastSaturday(today = sastDay()): string {
+  const d = new Date(`${today}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 1) % 7));
+  return d.toISOString().slice(0, 10);
 }
 
 export interface RunStats {
