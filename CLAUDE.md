@@ -131,7 +131,10 @@ Owned by the external repos, but in the same database:
   only safe because that trigger exists.** Do not weaken it.
 - **baby-registry-pwa** owns `categories`, `items`, `retailers`, `claims`,
   `registry_settings`.
-- `ping` exists only for the keep-alive cron.
+- `ping` exists only for the keep-alive cron, which is a **GitHub Actions**
+  schedule (`.github/workflows/supabase-keepalive.yml`, Mon and Thu), not a
+  pg_cron job — free-tier projects pause after ~7 days idle. Do not go
+  looking for it in `cron.job`.
 
 ### Copy of record
 
@@ -213,11 +216,14 @@ exactly what a naive lean-protein filter would surface first.
 
 ## Working practice
 
-- `npm run build` locally is exactly what CI runs. Run it before pushing.
+- `npm test && npm run build` locally is exactly what CI runs, in that order.
+  Run both before pushing.
 - Tests are vitest, colocated in `src/lib/__tests__/`. Pure logic lives in
   `src/lib/*.ts` with no React or Supabase imports so it is directly testable.
-- Deploy is `.github/workflows/deploy.yml`, on push to `main` only. **There are
-  no PR checks** — a broken build is only caught after merge.
+- `.github/workflows/deploy.yml` runs on pushes to `main` **and on pull
+  requests**. Its `build` job installs, tests and builds every app; its
+  `deploy` job is skipped on a PR, so a pull request gets the checks and never
+  the live site. A broken build is caught before merge, not after.
 - PRs are **squash-merged**, so the PR body becomes the commit message.
 - The site is `https://theflash180.github.io/claude-ecosystem/`.
 
