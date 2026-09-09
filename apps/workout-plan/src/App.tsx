@@ -175,7 +175,7 @@ export default function App() {
       {detail && <ExerciseDetail exercise={detail} onClose={() => setDetail(null)} />}
       {sheet === 'profile' && profile && <ProfileSheet profile={profile} onSave={onSaveProfile} onClose={() => setSheet(null)} />}
       {sheet === 'weight' && <BodyweightSheet current={currentWeight} onSave={onSaveWeight} onClose={() => setSheet(null)} />}
-      {sheet === 'run' && <RunSheet onSave={onSaveRun} onClose={() => setSheet(null)} />}
+      {sheet === 'run' && <RunSheet runs={runs} onSave={onSaveRun} onClose={() => setSheet(null)} />}
       {scoring && (
         <BenchmarkSheet
           title={routines.find(r => r.id === scoring)?.title ?? 'Workout'}

@@ -48,6 +48,21 @@ other app at `/<repo>/<app>/`. **An app's display name comes from its
 `index.html` `<title>`** — that is how it appears on the hub tile. There is no
 registry to update; adding a folder under `apps/` is enough.
 
+**The dashboard is a hub, not just a launcher.** Above the tiles it renders a
+**Today** section (`src/components/Today.tsx`, logic in `src/lib/today.ts`):
+the next fixture, where the running workout programme has got to, the cook
+list, a tracked product at its lowest, the next Marvel release, the registry
+count, and — only when signed in — the pregnancy countdown. Cards with nothing
+to say return null and do not render, so a quiet day is a short screen.
+
+**It reads that data with the anon key and adds no RPC and no policy.** Every
+source is already public-read world data. The one exception is `babies`, which
+is auth-gated: all apps are served from the same origin, so the client picks up
+whatever session baby-logger stored, and RLS decides. Signed out — which is
+what a stranger loading the public site is — the query returns nothing and the
+card is absent. **Do not "fix" this by adding a definer RPC for the baby data:
+that would publish a household's pregnancy on a public URL.**
+
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
 meal-prep, `W` in workout-plan, and so on). What the apps actually share is
@@ -260,6 +275,15 @@ exactly what a naive lean-protein filter would surface first.
   which has no fixture until the pool standings settle. Same manual-field rule
   as `sync-f1`: channel, note, watch_url, is_special, a non-empty result and
   the competition label are set once and never overwritten.
+- **A phone's numeric keypad has no colon on it.** workout-plan's parkrun entry
+  asked for "24:53" in one field behind `inputMode="numeric"`, so the time
+  could not actually be typed at the finish line — and the fallback, `2453`,
+  parsed as *2453 seconds* and silently stored 40:53. It is now two boxes,
+  minutes and seconds, with the minutes box handing over focus at two digits.
+  `splitTimeText` reads bare digits as mmss and returns null rather than
+  guessing. If you build another time or duration field, do the same: never
+  ask for a separator the keyboard cannot produce, and never quietly reinterpret
+  digits you did not get a separator for.
 - Quicket carries almost nothing at Montecasino; Front Row's useful source is
   Montecasino's own WordPress REST API (`/wp-json/wp/v2/whatson`).
 - Takealot returns two shapes. `buybox_items_type: "summary"` is a **variant
