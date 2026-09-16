@@ -52,6 +52,10 @@ export function priceOn(points: PricePoint[], when: Date | string): number | nul
 export interface PriceStats {
   current: number | null;
   lowest: number | null;
+  /** When the lowest price was first observed. The *first* time it was
+   *  reached, so a price that dips back to an old low keeps the original date
+   *  rather than claiming the record was set today. */
+  lowestAt: string | null;
   highest: number | null;
   /** Time-weighted: a price held for 300 days should dominate one held for a
    *  day, which a plain median over a sparse series gets badly wrong. */
@@ -68,7 +72,7 @@ const DAY = 86400000;
 export function stats(points: PricePoint[], now: Date = new Date()): PriceStats {
   const s = sortPoints(points);
   const empty: PriceStats = {
-    current: null, lowest: null, highest: null, typical: null,
+    current: null, lowest: null, lowestAt: null, highest: null, typical: null,
     observations: 0, spanDays: 0, daysAtCurrent: 0,
   };
   if (s.length === 0) return empty;
@@ -76,6 +80,11 @@ export function stats(points: PricePoint[], now: Date = new Date()): PriceStats 
   const nowMs = now.getTime();
   const prices = s.map(p => p.price);
   const current = prices[prices.length - 1];
+
+  // Walked rather than Math.min'd, because the date the low was set is part of
+  // the answer. Strictly-less keeps the first occurrence of a repeated low.
+  let lowIndex = 0;
+  for (let i = 1; i < s.length; i++) if (s[i].price < s[lowIndex].price) lowIndex = i;
 
   // Weight each price by how long it was in force, so "typical" describes what
   // you would actually have paid on a random day rather than what the retailer
@@ -104,7 +113,8 @@ export function stats(points: PricePoint[], now: Date = new Date()): PriceStats 
 
   return {
     current,
-    lowest: Math.min(...prices),
+    lowest: s[lowIndex].price,
+    lowestAt: s[lowIndex].at,
     highest: Math.max(...prices),
     typical,
     observations: s.length,
@@ -182,7 +192,13 @@ export function assess(points: PricePoint[], now: Date = new Date()): Assessment
     return {
       verdict: 'good',
       label: 'Good price',
-      detail: `${formatRand(current! - lowest!)} above the lowest seen (${formatRand(lowest)}).`,
+      // Deliberately not "R108 above the lowest seen": the card puts the low
+      // and the gap on their own row right above this, and saying it twice in
+      // consecutive lines reads as a bug. What that row cannot say is how this
+      // compares to what the thing normally costs.
+      detail: current! < typical!
+        ? `Cheaper than its usual ${formatRand(typical)}.`
+        : 'Close to the cheapest it has been.',
       fakeDiscount,
     };
   }
@@ -200,6 +216,88 @@ export function assess(points: PricePoint[], now: Date = new Date()): Assessment
     detail: `Usually around ${formatRand(typical)}.`,
     fakeDiscount,
   };
+}
+
+// ---- targets, read against the record ----
+
+/** Enough history for "the lowest seen" to mean anything. One reading is not
+ *  a low, it is the only number there is — offering it as a target would tell
+ *  you to wait for a price the product has already got. */
+const MIN_LOW_OBSERVATIONS = 2;
+
+/** A target that fires only *strictly* below `price`. Takealot prices are
+ *  whole rands in practice, so a rand under is the smallest meaningful step;
+ *  the ceil keeps it strictly below a price that carries cents (R269,99 gives
+ *  R269, not R268,99). */
+export function justUnder(price: number): number {
+  return Math.max(1, Math.ceil(price - 1));
+}
+
+export interface TargetSuggestion {
+  /** How it relates to the low — the chip's label. */
+  label: string;
+  value: number;
+}
+
+/** One-tap targets derived from the lowest price ever seen, so "alert me if it
+ *  ever beats its record" does not have to be worked out by hand.
+ *
+ *  Empty when there is not enough history for a low to mean anything. Values
+ *  that collapse onto each other are dropped: on a R40 item, 5% and 10% under
+ *  round to the same rand and two identical chips are just confusing. */
+export function targetSuggestions(st: PriceStats): TargetSuggestion[] {
+  if (st.lowest === null || st.observations < MIN_LOW_OBSERVATIONS) return [];
+  const low = st.lowest;
+  const candidates: TargetSuggestion[] = [
+    { label: 'Under the low', value: justUnder(low) },
+    { label: '5% under', value: Math.round(low * 0.95) },
+    { label: '10% under', value: Math.round(low * 0.9) },
+  ];
+
+  const seen = new Set<number>();
+  const unique: TargetSuggestion[] = [];
+  for (const c of candidates) {
+    if (c.value <= 0 || seen.has(c.value)) continue;
+    seen.add(c.value);
+    unique.push(c);
+  }
+  return unique;
+}
+
+/** What a target is actually asking for, said against the record.
+ *
+ *  The useful case is the last one: a target *above* the lowest seen is one
+ *  the product has already met, which is worth knowing before you wait for it.
+ */
+export function targetContext(target: number | null, st: PriceStats): string | null {
+  if (target === null) return null;
+  if (st.lowest === null || st.observations < MIN_LOW_OBSERVATIONS) {
+    return 'Not enough history yet to say how that compares.';
+  }
+  const gap = st.lowest - target;
+  if (gap > 0) return `${formatRand(gap)} under the lowest seen.`;
+  if (gap === 0) return `Exactly the lowest seen (${formatRand(st.lowest)}).`;
+  return `Above the ${formatRand(st.lowest)} low — it has already been this cheap.`;
+}
+
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/** "15 Sep", for a stat row.
+ *
+ *  SAST, because a price captured at 01:00 SAST belongs to that South African
+ *  day and not to the UTC one before it. The month name is hand-rolled for the
+ *  same reason the rands are: `toLocaleDateString('en-ZA', {month:'short'})`
+ *  gives "Sept" on Node and "Sep" in a browser, so a test and the card would
+ *  disagree about the same date. The day part comes from the en-CA ISO output,
+ *  which is stable everywhere. */
+export function shortDate(at: string): string {
+  const ymd = new Date(at).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
+  const month = Number(ymd.slice(5, 7));
+  const day = Number(ymd.slice(8, 10));
+  return `${day} ${MONTHS[month - 1]}`;
 }
 
 export interface Change {
@@ -264,6 +362,38 @@ export function sparkline(
   // Carry the final price across to "now" so the line reaches the right edge.
   out.push({ x: 1, y: out[out.length - 1].y });
   return out;
+}
+
+/** Where the lowest price sits in the sparkline's 0..1 box, so the chart can
+ *  mark it.
+ *
+ *  `y` is always 1 — the low is the bottom of the scale by construction — but
+ *  it is returned rather than assumed so the marker cannot drift out of step
+ *  if `sparkline` ever changes how it normalises. Null when there is nothing
+ *  to draw, matching `sparkline` returning []. */
+export function lowestMarker(
+  points: PricePoint[],
+  now: Date = new Date(),
+): { x: number; y: number } | null {
+  const s = sortPoints(points);
+  if (s.length < 2) return null;
+
+  const t0 = Date.parse(s[0].at);
+  const span = now.getTime() - t0;
+  if (span <= 0) return null;
+
+  let lowIndex = 0;
+  for (let i = 1; i < s.length; i++) if (s[i].price < s[lowIndex].price) lowIndex = i;
+
+  const prices = s.map(p => p.price);
+  const lo = Math.min(...prices);
+  const hi = Math.max(...prices);
+  const range = hi - lo;
+
+  return {
+    x: Math.min(1, (Date.parse(s[lowIndex].at) - t0) / span),
+    y: range === 0 ? 0.5 : 1 - (s[lowIndex].price - lo) / range,
+  };
 }
 
 /** What the notifier decides on. Kept here so the app and the edge function

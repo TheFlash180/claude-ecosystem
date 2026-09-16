@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import {
-  alertFor, assess, change, formatRand, lastChange, parseTakealotId,
-  priceOn, sparkline, stats,
+  alertFor, assess, change, formatRand, justUnder, lastChange, lowestMarker,
+  parseTakealotId, priceOn, shortDate, sparkline, stats, targetContext,
+  targetSuggestions,
 } from '../price';
 import type { PricePoint } from '../config';
 
@@ -105,6 +106,120 @@ describe('stats', () => {
 
   it('is empty, not thrown, for no data', () => {
     expect(stats([], NOW).current).toBeNull();
+  });
+});
+
+describe('stats: when the low was set', () => {
+  it('reports the date the lowest price was observed', () => {
+    const s = stats([pt(90, 1000), pt(30, 700), pt(5, 900)], NOW);
+    expect(s.lowest).toBe(700);
+    expect(s.lowestAt).toBe(daysAgo(30));
+  });
+
+  it('keeps the first date when the low is matched again later', () => {
+    // A price dipping back to an old record has not set a new one, and dating
+    // it today would claim a drop that did not happen.
+    const s = stats([pt(90, 700), pt(30, 900), pt(5, 700)], NOW);
+    expect(s.lowestAt).toBe(daysAgo(90));
+  });
+
+  it('has no date when there is no data', () => {
+    expect(stats([], NOW).lowestAt).toBeNull();
+  });
+});
+
+describe('justUnder', () => {
+  it('steps a whole rand below a whole-rand price', () => {
+    expect(justUnder(2099)).toBe(2098);
+  });
+
+  it('lands strictly below a price carrying cents', () => {
+    expect(justUnder(269.99)).toBe(269);
+    expect(269).toBeLessThan(269.99);
+  });
+
+  it('never suggests a target of zero or less', () => {
+    expect(justUnder(1)).toBe(1);
+    expect(justUnder(0.5)).toBe(1);
+  });
+});
+
+describe('targetSuggestions', () => {
+  it('offers one-tap targets below the record', () => {
+    const s = stats([pt(60, 2249), pt(20, 2099)], NOW);
+    expect(targetSuggestions(s)).toEqual([
+      { label: 'Under the low', value: 2098 },
+      { label: '5% under', value: 1994 },
+      { label: '10% under', value: 1889 },
+    ]);
+  });
+
+  it('offers nothing off a single reading', () => {
+    // One price is not a record, and a "beat the low" target built from it
+    // would be asking the product to beat a number it is already at.
+    expect(targetSuggestions(stats([pt(3, 750)], NOW))).toEqual([]);
+    expect(targetSuggestions(stats([], NOW))).toEqual([]);
+  });
+
+  it('collapses suggestions that round to the same rand', () => {
+    // On a cheap item 5% and 10% are pennies apart; two identical chips are
+    // just confusing.
+    const s = stats([pt(60, 12), pt(20, 10)], NOW);
+    const values = targetSuggestions(s).map(x => x.value);
+    expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe('targetContext', () => {
+  const s = stats([pt(60, 2249), pt(20, 2099)], NOW);
+
+  it('says how far under the record a target is', () => {
+    // The low itself is on the card's own row directly above this sentence,
+    // so the gap is the only part worth repeating.
+    expect(targetContext(1500, s)).toBe('R599 under the lowest seen.');
+  });
+
+  it('calls out a target the product has already beaten', () => {
+    // The useful warning: you are waiting for a price it has already hit.
+    expect(targetContext(2200, s)).toContain('already been this cheap');
+  });
+
+  it('recognises a target sitting exactly on the record', () => {
+    expect(targetContext(2099, s)).toBe('Exactly the lowest seen (R2\u00a0099).');
+  });
+
+  it('says nothing when there is no target', () => {
+    expect(targetContext(null, s)).toBeNull();
+  });
+
+  it('declines to compare without enough history', () => {
+    expect(targetContext(500, stats([pt(3, 750)], NOW))).toContain('Not enough history');
+  });
+});
+
+describe('lowestMarker', () => {
+  it('puts the marker on the floor of the scale, at the right moment', () => {
+    // Half-way along a 100-day span, and y=1 because the low defines the
+    // bottom of the chart's range.
+    const m = lowestMarker([pt(100, 1000), pt(50, 800), pt(10, 900)], NOW);
+    expect(m?.y).toBe(1);
+    expect(m?.x).toBeCloseTo(0.5, 2);
+  });
+
+  it('draws nothing when the sparkline draws nothing', () => {
+    expect(lowestMarker([pt(3, 750)], NOW)).toBeNull();
+    expect(lowestMarker([], NOW)).toBeNull();
+  });
+
+  it('pins a flat series to the middle, like the line it sits on', () => {
+    expect(lowestMarker([pt(60, 500), pt(20, 500)], NOW)?.y).toBe(0.5);
+  });
+});
+
+describe('shortDate', () => {
+  it('is a South African calendar day', () => {
+    // 00:30 UTC is already the next day in Johannesburg.
+    expect(shortDate('2026-09-14T22:30:00Z')).toBe('15 Sep');
   });
 });
 
