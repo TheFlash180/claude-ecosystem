@@ -1,7 +1,12 @@
 import { useState } from 'react';
-import { Bell, ExternalLink, Package, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  ArrowDownToLine, Bell, ExternalLink, Package, Trash2, TrendingDown, TrendingUp,
+} from 'lucide-react';
 import { P, type TrackedProduct } from '../lib/config';
-import { assess, formatRand, lastChange, latest, stats } from '../lib/price';
+import {
+  assess, formatRand, lastChange, latest, shortDate, stats, targetContext,
+  targetSuggestions,
+} from '../lib/price';
 import { Sparkline } from './Sparkline';
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -29,10 +34,21 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
   const now = latest(history);
   const verdictColor = VERDICT_COLOR[a.verdict] ?? P.sub;
 
+  const suggestions = targetSuggestions(st);
+  const targetNote = targetContext(track.targetPrice, st);
+  // One reading is not a record, so the low row stays hidden until there is
+  // something to compare against — otherwise it just repeats today's price.
+  const showLow = st.lowest !== null && st.observations >= 2;
+  const atLow = showLow && st.current !== null && st.current <= st.lowest!;
+
+  const commit = (value: number | null) => {
+    onSetTarget(track.id, value);
+    setEditing(false);
+  };
+
   const saveTarget = () => {
     const raw = draft.trim().replace(/[^\d.]/g, '');
-    onSetTarget(track.id, raw === '' ? null : Number(raw));
-    setEditing(false);
+    commit(raw === '' ? null : Number(raw));
   };
 
   return (
@@ -138,6 +154,35 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
         <Sparkline history={history} color={a.verdict === 'high' ? P.amber : P.violet} />
       </div>
 
+      {/* The record, always on the card rather than only inside a verdict
+          sentence: it is the number you compare today's price against, and it
+          is what the target chips below are built from. */}
+      {showLow && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          background: P.raised, border: `1px solid ${P.border}`,
+          borderRadius: 10, padding: '7px 10px',
+          fontSize: 11.5, fontFamily: P.body, color: P.sub,
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <ArrowDownToLine size={12} color={P.green} />
+            <span style={{ color: P.muted }}>Lowest seen</span>
+            <strong style={{ color: atLow ? P.green : P.text, fontWeight: 700 }}>
+              {formatRand(st.lowest)}
+            </strong>
+            {st.lowestAt && <span style={{ color: P.muted }}>· {shortDate(st.lowestAt)}</span>}
+          </span>
+
+          {atLow ? (
+            <span style={{ color: P.green, marginLeft: 'auto', fontWeight: 600 }}>at that price now</span>
+          ) : st.current !== null && st.lowest !== null ? (
+            <span style={{ color: P.muted, marginLeft: 'auto' }}>
+              {formatRand(st.current - st.lowest)} above it
+            </span>
+          ) : null}
+        </div>
+      )}
+
       <p style={{ margin: 0, fontSize: 12, color: P.sub, fontFamily: P.body, lineHeight: 1.45 }}>
         {a.detail}
         {a.fakeDiscount && (
@@ -150,9 +195,35 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
         )}
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {editing ? (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1 }}>
+      {editing && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {/* Working out "a bit under the record" by hand is the friction this
+              removes — the whole point of asking for a target below the low. */}
+          {suggestions.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: P.muted, fontFamily: P.body }}>
+                Beat the {formatRand(st.lowest)} low:
+              </span>
+              {suggestions.map(sg => (
+                <button
+                  key={sg.value}
+                  onClick={() => commit(sg.value)}
+                  title={`Alert me under ${formatRand(sg.value)}`}
+                  style={{
+                    display: 'grid', gap: 1, textAlign: 'left',
+                    background: 'transparent', color: P.text,
+                    border: `1px solid ${P.violet}55`, borderRadius: 10,
+                    padding: '5px 9px', cursor: 'pointer', fontFamily: P.body,
+                  }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>{formatRand(sg.value)}</span>
+                  <span style={{ fontSize: 10, color: P.muted }}>{sg.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input
               autoFocus
               inputMode="decimal"
@@ -167,8 +238,23 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
               }}
             />
             <button onClick={saveTarget} style={btn(P.violet, true)}>Save</button>
+            {track.targetPrice !== null && (
+              <button onClick={() => commit(null)} style={btn(P.muted, false)}>Clear</button>
+            )}
           </div>
-        ) : (
+        </div>
+      )}
+
+      {/* Where the target sits against the record. A target the product has
+          already beaten is the one worth saying out loud. */}
+      {!editing && targetNote && (
+        <p style={{ margin: 0, fontSize: 11.5, color: P.muted, fontFamily: P.body }}>
+          {targetNote}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {!editing && (
           <button onClick={() => setEditing(true)} style={btn(P.violet, false)}>
             <Bell size={13} />
             {track.targetPrice === null ? 'Set target' : `Under ${formatRand(track.targetPrice)}`}

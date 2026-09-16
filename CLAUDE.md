@@ -171,6 +171,12 @@ groups thousands with U+00A0 on Node, a comma in browsers and something else
 again on Deno. The same price appears on a card, in a push notification and in
 a test, so price-watch formats by hand. Copy that if you need money elsewhere.
 
+**The same goes for month names.** `toLocaleDateString('en-ZA', {month:'short'})`
+is "Sept" on Node and "Sep" in a browser, so a test and the card disagree about
+the same day — price-watch's `shortDate` takes the day and month from the
+stable `en-CA` ISO output and looks the name up in its own array. Locale-format
+anything you want to *read*; never anything you want to *assert*.
+
 **Push notifications:** every app has its **own** VAPID keypair. The private key
 lives in Supabase Vault as `<app>_vapid_private_key`, read by a
 `get_<app>_vapid_private_key()` function granted to `service_role` only. Never
