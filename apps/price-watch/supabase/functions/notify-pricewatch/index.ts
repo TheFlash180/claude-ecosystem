@@ -4,7 +4,7 @@
 // The alert rules here mirror alertFor() in the app's src/lib/price.ts, and
 // the reasoning for each threshold lives there with its tests. Keep the two in
 // step: a rule that fires on the server but not in the UI makes the app look
-// like it is lying.
+// like it is lying. A test reads this file and checks the two agree.
 //
 // pricewatch_notified is keyed on (track, price row), so re-running is
 // idempotent while a genuine second drop still alerts.
@@ -50,10 +50,12 @@ function alertFor(i: AlertInput): AlertKind {
   // delist must never read as the bargain of the century.
   if (!i.inStock || i.current <= 0) return null;
 
+  // At or under target: the first crossing alerts, and so does every further
+  // drop while it stays under — the noise thresholds below deliberately do not
+  // apply to a price you explicitly asked about. `current < previous` is what
+  // stops a price that has not moved from alerting again.
   if (i.targetPrice !== null && i.current <= i.targetPrice) {
-    // Only when it has just crossed, or a product sitting below target
-    // re-alerts every single day.
-    if (i.previous === null || i.previous > i.targetPrice) return "target";
+    if (i.previous === null || i.current < i.previous) return "target";
   }
 
   if (!i.wasInStock && i.inStock) return "restock";
@@ -88,8 +90,12 @@ function rand(v: number): string {
 
 function message(kind: Exclude<AlertKind, null>, title: string, cur: number, prev: number | null) {
   switch (kind) {
-    case "target":
-      return { title: `\u{1F3AF} ${rand(cur)} — hit your target`, body: title };
+    case "target": {
+      // Under target and cheaper than last time says more than "hit your
+      // target" alone, which reads like a repeat of an alert already sent.
+      const off = prev && prev > cur ? ` — down from ${rand(prev)}` : "";
+      return { title: `\u{1F3AF} ${rand(cur)} — under your target`, body: `${title}${off}` };
+    }
     case "restock":
       return { title: `\u{1F4E6} Back in stock — ${rand(cur)}`, body: title };
     case "drop": {

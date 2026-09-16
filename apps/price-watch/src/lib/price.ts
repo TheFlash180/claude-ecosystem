@@ -418,10 +418,18 @@ export function alertFor(i: AlertInput): AlertKind {
   // delist must never read as the bargain of the century.
   if (!i.inStock || i.current <= 0) return null;
 
+  // At or under the target you set: the first crossing alerts, and so does
+  // every further drop while it stays under. A target is an explicit statement
+  // of interest, so the noise thresholds below deliberately do not apply to it
+  // — under target, a small drop is still the thing you asked to hear about.
+  //
+  // `current < previous` is what stops the nagging: a price that has not moved
+  // does not alert, however long it sits under target. The series is sparse
+  // (sync-pricewatch writes a row only when price or stock changes) so a flat
+  // price usually produces no new row to judge at all, and pricewatch_notified
+  // is keyed per price row — this is the third guard, not the only one.
   if (i.targetPrice !== null && i.current <= i.targetPrice) {
-    // Only fire when it has just crossed, otherwise a product sitting below
-    // target re-alerts every single day.
-    if (i.previous === null || i.previous > i.targetPrice) return 'target';
+    if (i.previous === null || i.current < i.previous) return 'target';
   }
 
   if (!i.wasInStock && i.inStock) return 'restock';

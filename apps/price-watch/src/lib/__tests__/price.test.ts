@@ -343,9 +343,32 @@ describe('alertFor', () => {
     expect(alertFor({ ...base, previous: 1000, current: 900, targetPrice: 950 })).toBe('target');
   });
 
-  it('does not re-fire for a price already below target', () => {
-    // Sitting under target for weeks must not alert every single day.
-    expect(alertFor({ ...base, previous: 900, current: 890, targetPrice: 950 })).toBeNull();
+  it('fires again on every further drop while under target', () => {
+    // R800 with a R700 target drops to R600 — alert. Two days later it drops
+    // again to R500 — alert again. The target does not move; it just keeps
+    // being met by a cheaper price.
+    expect(alertFor({ ...base, previous: 800, current: 600, targetPrice: 700 })).toBe('target');
+    expect(alertFor({ ...base, previous: 600, current: 500, targetPrice: 700 })).toBe('target');
+  });
+
+  it('ignores the noise thresholds once under target', () => {
+    // Above target a R5 move is noise worth suppressing. Under a target you
+    // set deliberately, it is the thing you asked to be told about.
+    expect(alertFor({ ...base, previous: 605, current: 600, targetPrice: 700 })).toBe('target');
+  });
+
+  it('does not re-fire for a price that has not moved', () => {
+    // The case that must not nag: sitting at R500 under a R600 target for days
+    // on end. Only a further drop alerts again.
+    expect(alertFor({ ...base, previous: 500, current: 500, targetPrice: 600 })).toBeNull();
+  });
+
+  it('does not fire when the price rises but is still under target', () => {
+    expect(alertFor({ ...base, previous: 500, current: 550, targetPrice: 700 })).toBeNull();
+  });
+
+  it('fires on the first reading of a product already under target', () => {
+    expect(alertFor({ ...base, previous: null, current: 500, targetPrice: 700 })).toBe('target');
   });
 
   it('fires when something comes back into stock', () => {
@@ -383,6 +406,45 @@ describe('parseTakealotId', () => {
     expect(parseTakealotId('samsung ssd')).toBeNull();
     expect(parseTakealotId('')).toBeNull();
     expect(parseTakealotId('https://www.takealot.com/')).toBeNull();
+  });
+});
+
+describe('the notifier decides alerts the same way the app does', () => {
+  // Same reasoning as the money parity check below: the edge function cannot
+  // import from src/, so it carries its own copy of alertFor. A rule that
+  // fires on the server but not in the UI — or the reverse — makes the app
+  // look like it is lying about its own notifications.
+  const src = readFileSync(
+    new URL('../../../supabase/functions/notify-pricewatch/index.ts', import.meta.url),
+    'utf8',
+  );
+  const body = src.match(/function alertFor\(i: AlertInput\): AlertKind \{[\s\S]*?\n\}/)?.[0];
+
+  it('still has an alertFor() to compare against', () => {
+    expect(body).toBeTruthy();
+  });
+
+  const notifierAlertFor = new Function(
+    'MIN_DROP_PCT', 'MIN_DROP_RAND',
+    `${body!.replace(/: AlertInput/g, '').replace(/: AlertKind/g, '')}; return alertFor;`,
+  )(3, 20) as typeof alertFor;
+
+  const cases: { name: string; input: Parameters<typeof alertFor>[0] }[] = [
+    { name: 'target crossed', input: { previous: 800, current: 600, targetPrice: 700, wasInStock: true, inStock: true } },
+    { name: 'second drop under target', input: { previous: 600, current: 500, targetPrice: 700, wasInStock: true, inStock: true } },
+    { name: 'held under target', input: { previous: 500, current: 500, targetPrice: 600, wasInStock: true, inStock: true } },
+    { name: 'small drop under target', input: { previous: 605, current: 600, targetPrice: 700, wasInStock: true, inStock: true } },
+    { name: 'rise under target', input: { previous: 500, current: 550, targetPrice: 700, wasInStock: true, inStock: true } },
+    { name: 'plain drop, no target', input: { previous: 1000, current: 900, targetPrice: null, wasInStock: true, inStock: true } },
+    { name: 'noise drop, no target', input: { previous: 7000, current: 6997, targetPrice: null, wasInStock: true, inStock: true } },
+    { name: 'restock', input: { previous: 900, current: 900, targetPrice: null, wasInStock: false, inStock: true } },
+    { name: 'out of stock', input: { previous: 1000, current: 900, targetPrice: null, wasInStock: true, inStock: false } },
+    { name: 'zeroed price', input: { previous: 1000, current: 0, targetPrice: 500, wasInStock: true, inStock: true } },
+    { name: 'first reading under target', input: { previous: null, current: 500, targetPrice: 700, wasInStock: true, inStock: true } },
+  ];
+
+  it.each(cases)('agrees on $name', ({ input }) => {
+    expect(notifierAlertFor(input)).toBe(alertFor(input));
   });
 });
 
