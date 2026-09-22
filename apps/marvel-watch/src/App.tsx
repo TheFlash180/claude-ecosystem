@@ -1,13 +1,15 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 import { AlertTriangle, Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
 import { staleSources, staleMessage, type Source } from "@ecosystem/shared";
 import { M, type MediaType, type Title } from "./lib/config";
 import { fetchSources, fetchTitles, groupTitles, remindersList } from "./lib/titles";
 import { listReminders, registerPush, setReminders } from "./lib/push";
+import { listWatched, setWatched } from "./lib/watched";
 import { HeroCard } from "./components/HeroCard";
 import { TitleCard } from "./components/TitleCard";
 import { LeadPicker } from "./components/LeadPicker";
 import { RemindersModal } from "./components/RemindersModal";
+import { ConfirmWatched } from "./components/ConfirmWatched";
 
 const AdminPage = lazy(() => import("./components/AdminPage"));
 
@@ -45,20 +47,36 @@ export default function App() {
   const [reminders, setRemindersMap] = useState<Map<string, Set<number>>>(new Map());
   const [picker, setPicker] = useState<Title | null>(null);
   const [showReminders, setShowReminders] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  const [watched, setWatchedSet] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState<Title | null>(null);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2600);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** An undoable toast stays up more than twice as long: 2.6s is fine for
+   *  "saved", but not for noticing a mistake, reading it and reaching the
+   *  button. A second toast cancels the first one's timer rather than letting
+   *  it close the new one early. */
+  const showToast = (msg: string, undo?: () => void) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, undo });
+    toastTimer.current = setTimeout(() => setToast(null), undo ? 6000 : 2600);
   };
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const stale = useMemo(() => staleSources(sources), [sources]);
 
   const loadTitles = useCallback(async () => {
-    const [rows, srcs] = await Promise.all([fetchTitles(), fetchSources()]);
+    const [rows, srcs, seen] = await Promise.all([
+      fetchTitles(), fetchSources(), listWatched(),
+    ]);
     setTitles(rows);
     setSources(srcs);
+    // null means the read failed. Keeping the previous set beats falling back
+    // to empty, which would flash every hidden title back onto the page.
+    if (seen) setWatchedSet(seen);
     setLoading(false);
   }, []);
 
@@ -96,6 +114,31 @@ export default function App() {
       : `Set — we'll nudge you ${leads.length} time${leads.length > 1 ? "s" : ""} before release`);
   };
 
+  const confirmWatched = async (t: Title) => {
+    setConfirming(null);
+    const ok = await setWatched(t.id, true);
+    if (!ok) {
+      showToast("Couldn't save — check your connection and try again.");
+      return;
+    }
+    setWatchedSet(prev => new Set(prev).add(t.id));
+    showToast(`Marked watched — ${t.title}`, () => void undoWatched(t));
+  };
+
+  const undoWatched = async (t: Title) => {
+    const ok = await setWatched(t.id, false);
+    if (!ok) {
+      showToast("Couldn't undo — check your connection and try again.");
+      return;
+    }
+    setWatchedSet(prev => {
+      const next = new Set(prev);
+      next.delete(t.id);
+      return next;
+    });
+    showToast(`Back on the list — ${t.title}`);
+  };
+
   const removeReminders = async (t: Title) => {
     const ok = await setReminders(t, []);
     if (!ok) {
@@ -107,7 +150,7 @@ export default function App() {
   };
 
   const visible = titles.filter(t => filter === "all" || t.mediaType === filter);
-  const groups = groupTitles(visible);
+  const groups = groupTitles(visible, undefined, undefined, watched);
   const comingUp = groups.upcoming.filter(t => t.id !== groups.nextUp?.id);
   // Built from every title, not the filtered view: the bell reflects what this
   // device has set, not whichever pill happens to be selected.
@@ -131,9 +174,28 @@ export default function App() {
       color: M.text, padding: "11px 20px", borderRadius: 24,
       fontSize: 13.5, fontWeight: 500, fontFamily: M.body,
       boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
-      whiteSpace: "nowrap", pointerEvents: "none",
+      maxWidth: "min(92vw, 420px)", lineHeight: 1.4,
+      display: "flex", alignItems: "center", gap: 12,
+      // Only clickable when there is something to click; otherwise it must not
+      // swallow taps on the card underneath it.
+      pointerEvents: toast.undo ? "auto" : "none",
     } as CSSProperties}>
-      {toast}
+      {/* One line, ellipsised: a long film title used to wrap the toast to
+          three lines and cover the header and the filter pills. */}
+      <span style={{
+        minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{toast.msg}</span>
+      {toast.undo && (
+        <button
+          onClick={() => { setToast(null); toast.undo!(); }}
+          style={{
+            flexShrink: 0, background: "transparent", border: "none",
+            color: M.gold, fontFamily: M.body, fontSize: 13.5, fontWeight: 800,
+            cursor: "pointer", padding: "2px 2px", textDecoration: "underline",
+          }}>
+          Undo
+        </button>
+      )}
     </div>
   );
 
@@ -171,6 +233,14 @@ export default function App() {
           current={reminders.get(picker.id) ?? EMPTY_LEADS}
           onSave={(t, leads) => void savePicker(t, leads)}
           onClose={() => setPicker(null)}
+        />
+      )}
+
+      {confirming && (
+        <ConfirmWatched
+          title={confirming}
+          onConfirm={t => void confirmWatched(t)}
+          onClose={() => setConfirming(null)}
         />
       )}
 
@@ -287,6 +357,22 @@ export default function App() {
               onBell={t => void openPicker(t)}
             />
 
+            {/* Out Now sits directly under the hero, not at the bottom: what
+                you can actually watch tonight is more use than a release two
+                years out, and the list stays short because anything ticked
+                off leaves it. */}
+            {groups.outNow.length > 0 && (
+              <>
+                <SectionLabel text="OUT NOW" />
+                {groups.outNow.map(t => (
+                  <TitleCard key={t.id} title={t}
+                    leads={reminders.get(t.id) ?? EMPTY_LEADS}
+                    onBell={tt => void openPicker(tt)}
+                    onWatched={tt => setConfirming(tt)} />
+                ))}
+              </>
+            )}
+
             {comingUp.length > 0 && (
               <>
                 <SectionLabel text="COMING UP" />
@@ -309,16 +395,6 @@ export default function App() {
               </>
             )}
 
-            {groups.outNow.length > 0 && (
-              <>
-                <SectionLabel text="OUT NOW" />
-                {groups.outNow.map(t => (
-                  <TitleCard key={t.id} title={t}
-                    leads={reminders.get(t.id) ?? EMPTY_LEADS}
-                    onBell={tt => void openPicker(tt)} />
-                ))}
-              </>
-            )}
           </>
         )}
 

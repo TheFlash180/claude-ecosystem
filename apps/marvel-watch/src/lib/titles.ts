@@ -127,7 +127,18 @@ export function remindersList(
     .sort((a, b) => a.title.releaseDate!.localeCompare(b.title.releaseDate!));
 }
 
-export function groupTitles(titles: Title[], today = sastDay(), recentDays = 60): Grouped {
+/** `watched` hides titles this device has ticked off, and deliberately only
+ *  from `outNow`. A release still to come cannot have been seen, so letting a
+ *  watched flag reach `upcoming` or `horizon` would mean a stale tick — from a
+ *  date that moved, or a re-release — silently deleting a future film from the
+ *  page with no way to notice. Out Now is the only section where "seen it" is
+ *  a statement about the past and hiding is what the user asked for. */
+export function groupTitles(
+  titles: Title[],
+  today = sastDay(),
+  recentDays = 60,
+  watched: ReadonlySet<string> = new Set(),
+): Grouped {
   const dated = titles.filter(t => t.releaseDate !== null);
   const upcoming = dated
     .filter(t => daysUntil(t.releaseDate!, today) >= 0)
@@ -135,7 +146,7 @@ export function groupTitles(titles: Title[], today = sastDay(), recentDays = 60)
   const outNow = dated
     .filter(t => {
       const d = daysUntil(t.releaseDate!, today);
-      return d < 0 && d >= -recentDays;
+      return d < 0 && d >= -recentDays && !watched.has(t.id);
     })
     .sort((a, b) => b.releaseDate!.localeCompare(a.releaseDate!));
   const horizon = titles.filter(t => t.releaseDate === null);

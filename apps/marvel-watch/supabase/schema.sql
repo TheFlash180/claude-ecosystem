@@ -6,6 +6,7 @@
 --   marvel_settings        admin password (RLS, no policies)
 --   marvel_push_subs       Web Push subscriptions (writes via RPCs only)
 --   marvel_push_reminders  stackable per-device leads (1w / 3d / 1d)
+--   marvel_watched         per-device "seen it", hides a title from Out Now
 --
 -- Edge functions (see ./functions/):
 --   sync-marvel            daily: TMDB -> marvel_titles, both directions —
@@ -259,6 +260,63 @@ returns text language sql stable security definer set search_path = '' as
 $$ select decrypted_secret from vault.decrypted_secrets where name = 'tmdb_api_key' $$;
 
 -- ---------------------------------------------------------------- grants
+-- ------------------------------------------------------------- watched
+-- Per-device "I have seen this". Device-scoped like every other write here:
+-- RLS on, no policies at all, token-checked definer RPCs are the only way in.
+-- Deliberately NOT shared between devices — one person ticking off a film must
+-- not clear it from the other's phone.
+--
+-- The app hides a watched title from Out Now only. A release still to come
+-- cannot have been seen, so a stale flag (a date that moved, a re-release) can
+-- never silently delete a future film from the page.
+create table marvel_watched (
+  device_token_hash text not null,
+  title_id text not null references marvel_titles(id) on delete cascade,
+  watched_at timestamptz not null default now(),
+  primary key (device_token_hash, title_id)
+);
+
+alter table marvel_watched enable row level security;
+-- NO open policies: token-checked definer RPCs only.
+
+-- Idempotent both ways: ticking an already-watched title is a no-op rather
+-- than an error, and un-ticking one that was never watched succeeds quietly.
+-- The UI's undo path depends on that.
+create or replace function marvel_set_watched(
+  p_token text, p_title_id text, p_watched boolean)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare v_hash text;
+begin
+  if length(coalesce(p_token,'')) < 8 or length(coalesce(p_title_id,'')) = 0 then
+    return false;
+  end if;
+  v_hash := _marvel_hash_token(p_token);
+
+  if coalesce(p_watched, false) then
+    -- A title id that does not exist would violate the FK; report that as
+    -- false rather than letting the exception reach an anon caller.
+    if not exists (select 1 from marvel_titles where id = p_title_id) then
+      return false;
+    end if;
+    insert into marvel_watched (device_token_hash, title_id)
+    values (v_hash, p_title_id)
+    on conflict (device_token_hash, title_id) do nothing;
+  else
+    delete from marvel_watched
+     where device_token_hash = v_hash and title_id = p_title_id;
+  end if;
+
+  return true;
+end $$;
+
+create or replace function marvel_list_watched(p_token text)
+returns table (title_id text)
+language sql stable security definer set search_path = public as $$
+  select w.title_id
+    from marvel_watched w
+   where w.device_token_hash = _marvel_hash_token(p_token)
+$$;
+
 revoke all on function _marvel_hash_token(text) from public, anon;
 revoke all on function _marvel_admin_ok(text) from public, anon;
 revoke all on function marvel_admin_check(text) from public, anon;
@@ -267,6 +325,8 @@ revoke all on function marvel_admin_delete_title(text,text) from public, anon;
 revoke all on function marvel_push_register(text,text,text,text) from public, anon;
 revoke all on function marvel_set_reminders(text,text,text,date,int[]) from public, anon;
 revoke all on function marvel_list_reminders(text) from public, anon;
+revoke all on function marvel_set_watched(text,text,boolean) from public, anon;
+revoke all on function marvel_list_watched(text) from public, anon;
 revoke all on function get_tmdb_api_key() from public, anon, authenticated;
 
 grant execute on function marvel_admin_check(text) to anon;
@@ -275,6 +335,8 @@ grant execute on function marvel_admin_delete_title(text,text) to anon;
 grant execute on function marvel_push_register(text,text,text,text) to anon;
 grant execute on function marvel_set_reminders(text,text,text,date,int[]) to anon;
 grant execute on function marvel_list_reminders(text) to anon;
+grant execute on function marvel_set_watched(text,text,boolean) to anon;
+grant execute on function marvel_list_watched(text) to anon;
 grant execute on function get_tmdb_api_key() to service_role;
 
 -- ---------------------------------------------------------------- crons

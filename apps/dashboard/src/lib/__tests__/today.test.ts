@@ -144,6 +144,35 @@ describe('marvelCard', () => {
     expect(card?.headline).toBe('VisionQuest');
     expect(card?.detail).toBe('in 35 days · series');
   });
+
+  it('names a film inside the week by its weekday', () => {
+    const card = marvelCard(
+      [{ title: 'Spidey and the Avengers', releaseDate: '2026-09-11', mediaType: 'movie' }], TODAY);
+    expect(card?.detail).toBe('Friday · film');
+    expect(card?.urgent).toBe(false);
+  });
+
+  it('is urgent on the day and the day before', () => {
+    const t = (d: string) => marvelCard([{ title: 'X', releaseDate: d, mediaType: 'movie' }], TODAY);
+    expect(t('2026-09-09')?.urgent).toBe(true);
+    expect(t('2026-09-10')?.urgent).toBe(true);
+  });
+
+  // fetchMarvel bounds the query on sastDay(). It used to use
+  // new Date().toISOString().slice(0,10), which between midnight and 02:00
+  // SAST is still yesterday — so a film released yesterday came back first
+  // and the card rendered "Landing next — past · film". The query is fixed;
+  // this pins the card so the wrong row can never be displayed either.
+  it('renders nothing rather than the word "past"', () => {
+    expect(marvelCard(
+      [{ title: 'Spider-Man: Brand New Day', releaseDate: '2026-09-08', mediaType: 'movie' }],
+      TODAY,
+    )).toBeNull();
+  });
+
+  it('has nothing to say with no titles', () => {
+    expect(marvelCard([], TODAY)).toBeNull();
+  });
 });
 
 describe('babyCard', () => {

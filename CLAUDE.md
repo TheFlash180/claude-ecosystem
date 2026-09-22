@@ -76,6 +76,23 @@ columns every `<app>_sources` table has. Each app still draws its own banner
 in its own palette. It lives in `packages/shared`, so **that package now has
 its own vitest run** — `npm test` covers it like any app.
 
+**Marvel Watch's Out Now list is dismissible, and the dismissal is
+device-scoped.** `marvel_watched` is one row per (device, title) behind
+`marvel_set_watched` / `marvel_list_watched`, same token-hash definer pattern
+as the reminders. Two things about it are deliberate:
+
+- **It hides from `outNow` only.** A release still to come cannot have been
+  seen, so a stale flag — a date that moved, a re-release — must never delete
+  a future title from the page, where nothing would explain the absence.
+  `groupTitles` takes the watched set and applies it to that one list.
+- **It is per device, not per household.** One person ticking off a film must
+  not clear it from the other's phone. That is the opposite of how the shared
+  world data works, and it is the right way round here.
+
+A failed `listWatched()` returns null, not an empty set, and the app keeps the
+set it already had — otherwise one flaky read flashes every hidden title back
+onto the page.
+
 ### What the apps are, where the name misleads
 
 Most are what they sound like. Two are not:
@@ -171,7 +188,12 @@ export function addDays(ymd: string, n: number): string {
 ```
 
 Do not reach for `toISOString().slice(0,10)` on `new Date()` — between midnight
-and 02:00 SAST that is yesterday.
+and 02:00 SAST that is yesterday. **This has already bitten once**: the
+dashboard's `fetchMarvel` bounded its query that way, so in those two hours a
+film released *yesterday* came back first and the Today card rendered
+"Landing next — past · film". Where a query bound and a rendered label both
+depend on "today", derive both from `sastDay()` — and have the card refuse to
+render a row that is past anyway, so a bad bound cannot reach the screen.
 
 **Currency formatting is hand-rolled, on purpose.** `toLocaleString('en-ZA')`
 groups thousands with U+00A0 on Node, a comma in browsers and something else
