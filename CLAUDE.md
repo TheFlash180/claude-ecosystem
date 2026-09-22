@@ -39,7 +39,8 @@ Two apps are the exception and use real auth: **baby-logger** and
 
 ```
 apps/            one folder per app; the dashboard is the hub
-packages/shared  Supabase client, AppShell, deviceToken, ensurePushSubscription
+packages/shared  Supabase client, AppShell, deviceToken, ensurePushSubscription,
+                 and the `*_sources` staleness rule (`sources.ts`)
 tooling/         build-all.mjs (what CI runs) and new-app.mjs (scaffold)
 ```
 
@@ -66,8 +67,14 @@ that would publish a household's pregnancy on a public URL.**
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
 meal-prep, `W` in workout-plan, and so on). What the apps actually share is
-`getSupabase`, `deviceToken` and `ensurePushSubscription` — do not go looking
-for a common layout component.
+`getSupabase`, `deviceToken`, `ensurePushSubscription` and `sources.ts` — do
+not go looking for a common layout component.
+
+`sources.ts` is shared because the rule is identical everywhere, not the
+chrome: `staleSources` / `staleMessage` / `sourceFromRow` over the seven
+columns every `<app>_sources` table has. Each app still draws its own banner
+in its own palette. It lives in `packages/shared`, so **that package now has
+its own vitest run** — `npm test` covers it like any app.
 
 ### What the apps are, where the name misleads
 
@@ -256,6 +263,24 @@ exactly what a naive lean-protein filter would surface first.
 
 - A source that goes quiet looks identical to "nothing new". Every syncing app
   records adapter health (`*_sources`) and the UI shows a stale-source banner.
+- **A sync that only ever adds is half a sync.** `sync-marvel` upserted what
+  TMDB returned and never removed what TMDB had dropped, so three titles TMDB
+  retracted upstream — including a bogus `movie/1774182` "VisionQuest" sitting
+  next to the real `tv/213375` show — stayed on the slate forever, and one of
+  them still had an unsent reminder queued. `marvel-prune-titles` did not
+  catch them: it only deletes rows **130+ days past release**, and a retracted
+  *future* title never reaches that. The reconcile pass has three guards worth
+  keeping if you copy it:
+  - **It only runs when every page of every query read cleanly.** One bad
+    afternoon at TMDB otherwise reads as "Marvel cancelled everything".
+    Paging now walks to the last page rather than stopping at 2, because
+    "absent from the results" only means "gone" if you saw all the results.
+  - **A row is only eligible if this run would have returned it.** Outside the
+    120-day discover window, no `tmdb_id`, `manual`, a Sony *show* — absence
+    proves nothing about any of those, so they are never candidates.
+  - **`missing_since` + a grace period, never delete on first miss.** Same
+    shape as price-watch's `delisted_at`. A title that reappears clears the
+    stamp and starts over.
 - Notifiers only record a send **after** delivery succeeds, so a total failure
   retries rather than being silently marked done. **price-watch and front-row
   add two deliberate exceptions**, both meaning "we chose not to send this"

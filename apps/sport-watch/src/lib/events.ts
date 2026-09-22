@@ -3,7 +3,7 @@
 // category list are only an offline/failure fallback.
 import { sb } from './supabase';
 import { DEFAULT_CATEGORIES, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from './config';
-import type { Source } from './sources';
+import { sourceFromRow, type Source, type SourceRow } from '@ecosystem/shared';
 import eventsData from '../data/events.json';
 
 interface DbEventRow {
@@ -23,16 +23,6 @@ interface DbEventRow {
   is_special: boolean;
   is_conditional: boolean;
   date_tbc: boolean;
-}
-
-interface DbSourceRow {
-  key: string;
-  label: string;
-  enabled: boolean;
-  last_run_at: string | null;
-  last_ok_at: string | null;
-  last_error: string | null;
-  last_count: number | null;
 }
 
 interface DbCategoryRow {
@@ -63,18 +53,6 @@ function fromDb(r: DbEventRow): SportEvent {
     isSpecial: r.is_special,
     isConditional: r.is_conditional,
     dateTBC: r.date_tbc,
-  };
-}
-
-function sourceFromDb(r: DbSourceRow): Source {
-  return {
-    key: r.key,
-    label: r.label,
-    enabled: r.enabled,
-    lastRunAt: r.last_run_at,
-    lastOkAt: r.last_ok_at,
-    lastError: r.last_error,
-    lastCount: r.last_count,
   };
 }
 
@@ -146,7 +124,7 @@ export async function fetchEvents(): Promise<RegistryData> {
         // No sources row is not the same as a stale one: an older database
         // without the table should show no banner, not a false alarm.
         sources: (!srcRes.error && srcRes.data)
-          ? (srcRes.data as DbSourceRow[]).map(sourceFromDb)
+          ? (srcRes.data as SourceRow[]).map(sourceFromRow)
           : [],
         fromDb: true,
       };

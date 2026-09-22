@@ -1,8 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 import { AlertTriangle, Bell, CalendarDays, Settings } from "lucide-react";
+import { staleSources, staleMessage, type Source } from "@ecosystem/shared";
 import { catOf, DEFAULT_CATEGORIES, matchTitle, S, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from "./lib/config";
 import { fetchEvents, sortEvents } from "./lib/events";
-import { staleSources, staleMessage, type Source } from "./lib/sources";
 import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
 import { pruneToExisting } from "./lib/reminders";
 import { loadIdSet, saveIdSet, loadLeads, saveLead } from "./lib/storage";

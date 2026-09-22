@@ -2,13 +2,16 @@
 -- to the shared Supabase project).
 --
 --   marvel_titles          movies + shows, TMDB-synced or admin-managed
+--   marvel_sources         adapter health for the stale-feed banner
 --   marvel_settings        admin password (RLS, no policies)
 --   marvel_push_subs       Web Push subscriptions (writes via RPCs only)
 --   marvel_push_reminders  stackable per-device leads (1w / 3d / 1d)
 --
 -- Edge functions (see ./functions/):
---   sync-marvel            daily: TMDB -> marvel_titles (needs Vault key
---                          'tmdb_api_key'; skips gracefully without it)
+--   sync-marvel            daily: TMDB -> marvel_titles, both directions —
+--                          it adds what TMDB gained and removes what TMDB
+--                          retracted (needs Vault key 'tmdb_api_key'; skips
+--                          gracefully without it)
 --   send-marvel-reminders  daily 07:10 UTC (09:10 SAST): due reminders +
 --                          newly-announced pushes to every device
 
@@ -27,6 +30,11 @@ create table marvel_titles (
   tmdb_id bigint,
   manual boolean not null default false,     -- admin-owned: sync won't overwrite
   announced_pushed boolean not null default false,
+  -- First run on which TMDB stopped returning this title; cleared the moment
+  -- it comes back. sync-marvel deletes the row once it has been absent for
+  -- MISSING_GRACE_DAYS, which is the only way a retracted FUTURE title ever
+  -- leaves — marvel-prune-titles only clears rows 130+ days past release.
+  missing_since timestamptz,
   updated_at timestamptz not null default now()
 );
 create unique index marvel_titles_tmdb_idx
@@ -34,6 +42,27 @@ create unique index marvel_titles_tmdb_idx
 
 alter table marvel_titles enable row level security;
 create policy "public read" on marvel_titles for select to anon, authenticated using (true);
+
+-- -------------------------------------------------------------- health
+-- A feed that has stopped answering looks exactly like "no new Marvel
+-- announcements". sync-marvel writes here on every run; last_ok_at only
+-- advances when it read every page cleanly, and the app shows a banner when
+-- that timestamp goes quiet. Same seven columns as sport_sources and
+-- pricewatch_sources — packages/shared/src/sources.ts reads all three.
+create table marvel_sources (
+  key text primary key,
+  label text not null,
+  enabled boolean not null default true,
+  last_run_at timestamptz,
+  last_ok_at timestamptz,
+  last_error text,
+  last_count integer
+);
+insert into marvel_sources (key, label) values ('tmdb', 'TMDB')
+  on conflict (key) do nothing;
+
+alter table marvel_sources enable row level security;
+create policy "public read" on marvel_sources for select to anon, authenticated using (true);
 
 -- ---------------------------------------------------------------- admin
 create table marvel_settings (

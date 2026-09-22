@@ -1,7 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useState, CSSProperties } from "react";
-import { Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, CSSProperties } from "react";
+import { AlertTriangle, Bell, Clapperboard, Settings, Tv, type LucideIcon } from "lucide-react";
+import { staleSources, staleMessage, type Source } from "@ecosystem/shared";
 import { M, type MediaType, type Title } from "./lib/config";
-import { fetchTitles, groupTitles, remindersList } from "./lib/titles";
+import { fetchSources, fetchTitles, groupTitles, remindersList } from "./lib/titles";
 import { listReminders, registerPush, setReminders } from "./lib/push";
 import { HeroCard } from "./components/HeroCard";
 import { TitleCard } from "./components/TitleCard";
@@ -45,14 +46,19 @@ export default function App() {
   const [picker, setPicker] = useState<Title | null>(null);
   const [showReminders, setShowReminders] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [sources, setSources] = useState<Source[]>([]);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
   };
 
+  const stale = useMemo(() => staleSources(sources), [sources]);
+
   const loadTitles = useCallback(async () => {
-    setTitles(await fetchTitles());
+    const [rows, srcs] = await Promise.all([fetchTitles(), fetchSources()]);
+    setTitles(rows);
+    setSources(srcs);
     setLoading(false);
   }, []);
 
@@ -250,6 +256,25 @@ export default function App() {
 
       {/* Body */}
       <div style={{ padding: "16px 14px 48px" }}>
+        {/* The slate is auto-synced, so a sync that has stopped has to say so:
+            "no new announcements" and "nobody has looked in a fortnight" are
+            the same empty screen otherwise. */}
+        {stale.length > 0 && (
+          <div style={{
+            display: "flex", gap: 9, alignItems: "flex-start",
+            background: `${M.gold}12`, border: `1px solid ${M.gold}44`,
+            borderRadius: 12, padding: "11px 12px", marginBottom: 14,
+            fontFamily: M.body, fontSize: 12, color: M.sub, lineHeight: 1.5,
+          }}>
+            <AlertTriangle size={15} strokeWidth={2.2} color={M.gold}
+                           style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              <strong style={{ color: M.text }}>{staleMessage(stale)}</strong>{" "}
+              Release dates may have moved since these were last checked.
+            </span>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ color: M.sub, fontSize: 13, textAlign: "center", padding: 40 }}>
             Assembling…
