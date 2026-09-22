@@ -1,6 +1,10 @@
-// Adapter health for the auto-synced categories. A feed that stops answering
-// looks exactly like "no fixture changes" — the whole point of this file is
-// that the app can tell the difference and say so.
+// Adapter health, shared by every app that syncs from an outside feed.
+//
+// A source that stops answering looks exactly like "nothing changed" — the
+// whole point of this file is that an app can tell the difference and say so.
+// Each app keys its own `<app>_sources` table on the same seven columns and
+// maps them with `sourceFromRow` below; the staleness rule itself has no
+// reason to differ per app, so it lives here rather than being copied.
 
 export interface Source {
   key: string;
@@ -42,4 +46,27 @@ export function staleMessage(stale: Source[]): string {
     ? names[0]
     : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return `${list} ${names.length === 1 ? "is" : "are"} not updating.`;
+}
+
+/** The `<app>_sources` row shape every app uses, straight off PostgREST. */
+export interface SourceRow {
+  key: string;
+  label: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+  last_count: number | null;
+}
+
+export function sourceFromRow(r: SourceRow): Source {
+  return {
+    key: r.key,
+    label: r.label,
+    enabled: r.enabled,
+    lastRunAt: r.last_run_at,
+    lastOkAt: r.last_ok_at,
+    lastError: r.last_error,
+    lastCount: r.last_count,
+  };
 }

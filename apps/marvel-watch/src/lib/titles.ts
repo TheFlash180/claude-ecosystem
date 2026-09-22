@@ -1,4 +1,5 @@
 // Title data + the pure date/grouping logic (unit-tested).
+import { sourceFromRow, type Source, type SourceRow } from '@ecosystem/shared';
 import { sb } from './supabase';
 import type { MediaType, Title, Universe } from './config';
 
@@ -43,6 +44,20 @@ export async function fetchTitles(): Promise<Title[]> {
     .order('release_date', { ascending: true, nullsFirst: false });
   if (error || !data) return [];
   return (data as DbTitleRow[]).map(fromDb);
+}
+
+/** Adapter health for the TMDB sync. The list is a bare feed read: if the
+ *  sync has stopped, the app looks identical to a quiet month at Marvel, so
+ *  the banner is the only thing that can tell them apart.
+ *
+ *  A database without the table yet returns nothing rather than a false
+ *  alarm — same call as sport-watch makes. */
+export async function fetchSources(): Promise<Source[]> {
+  const client = sb();
+  if (!client) return [];
+  const { data, error } = await client.from('marvel_sources').select('*').order('key');
+  if (error || !data) return [];
+  return (data as SourceRow[]).map(sourceFromRow);
 }
 
 // ---- pure date helpers (SAST calendar days; releases are dates) ----

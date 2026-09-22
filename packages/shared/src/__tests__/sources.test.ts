@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { staleSources, staleMessage, STALE_HOURS, type Source } from '../sources';
+import { staleSources, staleMessage, sourceFromRow, STALE_HOURS, type Source } from '../sources';
 
 const NOW = Date.parse('2026-08-22T09:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW - h * 3600000).toISOString();
@@ -68,5 +68,28 @@ describe('staleMessage', () => {
       src({ label: 'A' }), src({ label: 'B' }), src({ label: 'C' }),
     ];
     expect(staleMessage(three)).toBe('A, B and C are not updating.');
+  });
+});
+
+describe('sourceFromRow', () => {
+  it('camel-cases a PostgREST row without losing nulls', () => {
+    expect(sourceFromRow({
+      key: 'tmdb', label: 'TMDB', enabled: true,
+      last_run_at: '2026-09-22T06:20:00Z', last_ok_at: null,
+      last_error: 'HTTP 429', last_count: null,
+    })).toEqual({
+      key: 'tmdb', label: 'TMDB', enabled: true,
+      lastRunAt: '2026-09-22T06:20:00Z', lastOkAt: null,
+      lastError: 'HTTP 429', lastCount: null,
+    });
+  });
+
+  it('round-trips into staleSources, which is the only reason it exists', () => {
+    const row = sourceFromRow({
+      key: 'tmdb', label: 'TMDB', enabled: true,
+      last_run_at: hoursAgo(1), last_ok_at: hoursAgo(1),
+      last_error: null, last_count: 10,
+    });
+    expect(staleSources([row], NOW)).toEqual([]);
   });
 });
