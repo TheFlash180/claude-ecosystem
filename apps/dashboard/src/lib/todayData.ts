@@ -12,6 +12,7 @@
 // loads the public site — the query returns nothing and it does not. RLS is
 // the gate, so no household detail is published by adding this screen.
 import { getSupabase, supabaseConfigured } from '@ecosystem/shared';
+import { sastDay } from './today';
 import type {
   BabyRow, CookRow, MarvelRow, PriceRow, RegistryCounts, SportRow, TodayInput,
   TrainingInput,
@@ -91,7 +92,10 @@ async function fetchMarvel(sb: ReturnType<typeof getSupabase>): Promise<MarvelRo
     .from('marvel_titles')
     .select('title, release_date, media_type')
     .eq('date_tbc', false)
-    .gte('release_date', new Date().toISOString().slice(0, 10))
+    // sastDay(), not toISOString().slice(0,10): between midnight and 02:00
+    // SAST the UTC date is still yesterday, so the bound would be a day too
+    // early and a film released yesterday would come back as "landing next".
+    .gte('release_date', sastDay())
     .order('release_date', { ascending: true })
     .limit(1);
   return (data ?? []).map(r => ({

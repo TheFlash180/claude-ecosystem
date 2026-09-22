@@ -185,6 +185,10 @@ export function marvelCard(titles: MarvelRow[], today = sastDay()): TodayCard | 
   const next = titles[0];
   if (!next) return null;
   const when = relativeDay(next.releaseDate, today);
+  // The query already excludes past releases, but it is the caller's clock
+  // that decides that and this card's whole claim is "landing next". Rather
+  // than print the word "past" where a date belongs, show nothing.
+  if (when === 'past') return null;
   return {
     key: 'marvel',
     slug: 'marvel-watch',

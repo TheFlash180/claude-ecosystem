@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bell, BellOff, Clapperboard, Star, Tv } from "lucide-react";
+import { Bell, BellOff, Clapperboard, Eye, Star, Tv } from "lucide-react";
 import { LEAD_DAYS, M, UNIVERSE_LABEL, type Title } from "../lib/config";
 import { daysUntil, fmtRelease, releaseLabel } from "../lib/titles";
 
@@ -51,11 +51,14 @@ function Badge({ text, color, icon }: { text: string; color: string; icon?: Reac
   );
 }
 
-export function TitleCard({ title: t, leads, onBell }: {
+export function TitleCard({ title: t, leads, onBell, onWatched }: {
   title: Title;
   /** Lead days set on this device for this title (empty = no reminders). */
   leads: Set<number>;
   onBell: (t: Title) => void;
+  /** Only passed for Out Now cards — a title still to come cannot be watched,
+   *  so those render no button at all rather than a disabled one. */
+  onWatched?: (t: Title) => void;
 }) {
   const released = t.releaseDate !== null && daysUntil(t.releaseDate) < 0;
   const belled = leads.size > 0;
@@ -134,6 +137,21 @@ export function TitleCard({ title: t, leads, onBell }: {
             ) : (
               <><BellOff size={13} strokeWidth={2.2} /> Awaiting date</>
             )}
+          </button>
+        )}
+
+        {released && onWatched && (
+          <button
+            onClick={() => onWatched(t)}
+            aria-label={`Mark ${t.title} as watched and hide it`}
+            style={{
+              alignSelf: "flex-start", marginTop: 6,
+              display: "flex", alignItems: "center", gap: 6,
+              border: `1px solid ${M.border}`, background: "transparent",
+              color: M.sub, borderRadius: 18, padding: "7px 13px",
+              cursor: "pointer", fontFamily: M.body, fontSize: 12, fontWeight: 600,
+            }}>
+            <Eye size={13} strokeWidth={2.2} /> Watched
           </button>
         )}
       </div>

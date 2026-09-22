@@ -72,6 +72,41 @@ describe('groupTitles', () => {
     expect(g.nextUp?.id).toBe('today');
     expect(g.outNow).toHaveLength(0);
   });
+
+  describe('watched', () => {
+    it('hides a ticked-off title from out-now', () => {
+      const g = groupTitles(titles, TODAY, 60, new Set(['recent-show']));
+      expect(g.outNow).toHaveLength(0);
+    });
+
+    it('leaves the other out-now titles alone', () => {
+      const two = [...titles, t('other-recent', '2026-06-20')];
+      const g = groupTitles(two, TODAY, 60, new Set(['recent-show']));
+      expect(g.outNow.map(x => x.id)).toEqual(['other-recent']);
+    });
+
+    // The whole point of scoping the filter to outNow: a watched flag left
+    // over from a date that moved must not delete a future release from the
+    // page, where nothing would explain its absence.
+    it('never hides an upcoming title, the hero, or the horizon', () => {
+      const g = groupTitles(
+        titles, TODAY, 60,
+        new Set(['brand-new-day', 'doomsday', 'secret-wars', 'vision-quest']),
+      );
+      expect(g.nextUp?.id).toBe('brand-new-day');
+      expect(g.upcoming.map(x => x.id)).toEqual(['brand-new-day', 'doomsday', 'secret-wars']);
+      expect(g.horizon.map(x => x.id)).toEqual(['vision-quest']);
+    });
+
+    it('defaults to hiding nothing', () => {
+      expect(groupTitles(titles, TODAY).outNow.map(x => x.id)).toEqual(['recent-show']);
+    });
+
+    it('ignores ids that are not on the page', () => {
+      const g = groupTitles(titles, TODAY, 60, new Set(['deleted-by-the-sync']));
+      expect(g.outNow.map(x => x.id)).toEqual(['recent-show']);
+    });
+  });
 });
 
 describe('remindersList', () => {
