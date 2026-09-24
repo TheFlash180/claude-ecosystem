@@ -1,0 +1,103 @@
+name: Database Backup
+
+# A weekly, encrypted copy of every table in the shared Supabase project's
+# public schema, plus the two auth tables that the rows in it point at.
+#
+# The free plan has no backups you can download and restore yourself, and
+# most of this data cannot be re-synced from anywhere: the household's
+# transaction history, the baby log, the registry's claims, glovebox dates.
+#
+# How it works, and why:
+# - Logs in as `backup_reader`, a read-only role (see CLAUDE.md, "Backups"),
+#   never the main database password. It bypasses RLS because pg_dump refuses
+#   to dump a table whose policies would hide rows from it.
+# - GitHub runners have no IPv6, so it goes through the session pooler.
+#   Which pooler cluster a project lives on is not visible from here, so
+#   both eu-central-1 clusters are tried and the one that accepts the login
+#   is used.
+# - The dump is checked (tooling/backup-check.sh), gzipped and encrypted with
+#   BACKUP_PASSPHRASE before it touches disk as an artifact. This repo is
+#   public and so are its artifacts to any signed-in GitHub user: unencrypted,
+#   the backup would publish the household's finances.
+# - Kept as a workflow artifact for 90 days: the last ~13 weeks, each one a
+#   complete copy on its own.
+#
+# Needs two repository secrets: BACKUP_DB_PASSWORD (backup_reader's password)
+# and BACKUP_PASSPHRASE (keep a copy somewhere other than GitHub — without it
+# every backup is unreadable). Restoring: see CLAUDE.md.
+on:
+  schedule:
+    - cron: '30 1 * * 0' # Sundays 01:30 UTC (03:30 SAST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dump, check and encrypt
+        env:
+          PGPASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          PROJECT_REF: objkdeagyltvgcuxsnxu
+        run: |
+          set -euo pipefail
+          if [ -z "$PGPASSWORD" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Set the BACKUP_DB_PASSWORD and BACKUP_PASSPHRASE repository secrets."
+            exit 1
+          fi
+
+          # The server is Postgres 17; pg_dump must not be older than it.
+          pg() { docker run --rm -e PGPASSWORD -e PGSSLMODE=require postgres:17 "$@"; }
+          user="backup_reader.$PROJECT_REF"
+
+          host=""
+          for cluster in aws-0-eu-central-1 aws-1-eu-central-1; do
+            if pg psql -h "$cluster.pooler.supabase.com" -p 5432 -U "$user" -d postgres \
+                 -Atc 'select 1' >/dev/null 2>&1; then
+              host="$cluster.pooler.supabase.com"
+              break
+            fi
+          done
+          if [ -z "$host" ]; then
+            echo "::error::Could not log in as backup_reader on either eu-central-1 pooler. Check BACKUP_DB_PASSWORD."
+            exit 1
+          fi
+
+          umask 077
+          # Users first, as data only: feed_events.logged_by and friends point
+          # at auth.users, so a restore has to load them before public. A new
+          # project already has the auth schema itself.
+          pg pg_dump -h "$host" -p 5432 -U "$user" -d postgres \
+            --data-only --table=auth.users --table=auth.identities > dump.sql
+          pg pg_dump -h "$host" -p 5432 -U "$user" -d postgres \
+            --schema=public --no-owner --no-privileges \
+            --no-publications --no-subscriptions >> dump.sql
+
+          bash tooling/backup-check.sh dump.sql
+
+          stamp="$(date -u +%Y-%m-%d)"
+          gzip -9 dump.sql
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+            --symmetric --cipher-algo AES256 \
+            -o "backup-$stamp.sql.gz.gpg" dump.sql.gz 3<<<"$BACKUP_PASSPHRASE"
+          rm -f dump.sql.gz
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.STAMP }}
+          path: backup-*.sql.gz.gpg
+          retention-days: 90
+          if-no-files-found: error
+          # Already gzipped and encrypted; compressing again gains nothing.
+          compression-level: 0

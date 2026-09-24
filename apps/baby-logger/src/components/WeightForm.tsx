@@ -70,7 +70,7 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(18, 16, 24, 0.8)',
+    background: 'var(--overlay)',
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',

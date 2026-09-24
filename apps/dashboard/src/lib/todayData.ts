@@ -145,13 +145,29 @@ async function fetchBaby(sb: ReturnType<typeof getSupabase>): Promise<BabyRow | 
   if (!session) return null; // signed out: nothing to show, and nothing leaks
   const { data } = await sb
     .from('babies')
-    .select('name, due_date, birth_date, week_anchor')
+    .select('id, name, due_date, birth_date, week_anchor')
     .limit(1)
     .maybeSingle();
-  // Once the baby is here the countdown is over and the app itself is the
-  // place to look, so the card stands down rather than counting past zero.
-  if (!data?.due_date || data.birth_date) return null;
-  return { name: data.name, dueDate: data.due_date, weekAnchor: data.week_anchor };
+  if (!data?.due_date) return null;
+  const baby: BabyRow = {
+    name: data.name, dueDate: data.due_date, weekAnchor: data.week_anchor,
+    birthDate: data.birth_date,
+  };
+  // Once the baby is here the countdown gives way to the last feed, read
+  // through the same session and the same RLS as the babies row.
+  if (data.birth_date) {
+    const { data: feed } = await sb
+      .from('feed_events')
+      .select('feed_type, amount_ml, started_at')
+      .eq('baby_id', data.id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    baby.lastFeed = feed
+      ? { feedType: feed.feed_type, amountMl: feed.amount_ml, startedAt: feed.started_at }
+      : null;
+  }
+  return baby;
 }
 
 /** Capacity and quantities, not row counts — see `registryCounts`. Both
