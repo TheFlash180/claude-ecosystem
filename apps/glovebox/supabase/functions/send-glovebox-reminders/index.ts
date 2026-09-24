@@ -48,15 +48,19 @@ interface Due {
   date: string;
   lead: number;
   days: number;
-  key: string;
+  /** Every key this push settles — see dueFor. */
+  keys: string[];
   table: "glovebox_vehicles" | "glovebox_people";
   rowId: string;
   notified: string[];
 }
 
 /** Every lead that has opened and not yet been sent. Only the largest opened
- *  lead fires per run, so a freshly added item with three leads already past
- *  sends one push rather than three. */
+ *  lead fires, so a freshly added item with three leads already past sends one
+ *  push rather than three — and the push settles *all* of them. Recording just
+ *  the largest left the next one still open, so a disc added five days out
+ *  with 30/7/1-day leads pushed today, again tomorrow for the 7-day lead, and
+ *  only then waited for the 1-day one. A lead not yet open is left armed. */
 function dueFor(
   kind: string, label: string, subject: string, date: string | null,
   leads: number[], notified: string[], today: string,
@@ -74,10 +78,11 @@ function dueFor(
     if (days >= 0) return null;
     const overdueKey = `${kind}:${date}:overdue-${today}`;
     if (notified.includes(overdueKey)) return null;
-    return { subject, label, date, lead: -1, days, key: overdueKey, table, rowId, notified };
+    return { subject, label, date, lead: -1, days, keys: [overdueKey], table, rowId, notified };
   }
   const lead = opened[0];
-  return { subject, label, date, lead, days, key: `${kind}:${date}:${lead}`, table, rowId, notified };
+  const keys = opened.map((l) => `${kind}:${date}:${l}`);
+  return { subject, label, date, lead, days, keys, table, rowId, notified };
 }
 
 Deno.serve(async () => {
@@ -170,7 +175,7 @@ Deno.serve(async () => {
     // failure retries tomorrow instead of being silently marked as sent.
     if (anyDelivered) {
       const entry = newKeys.get(d.rowId) ?? { table: d.table, notified: [...d.notified] };
-      entry.notified.push(d.key);
+      entry.notified.push(...d.keys);
       newKeys.set(d.rowId, entry);
     }
   }

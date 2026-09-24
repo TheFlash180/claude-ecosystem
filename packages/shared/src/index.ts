@@ -3,3 +3,5 @@ export { AppShell } from './components/AppShell';
 export { deviceToken, ensurePushSubscription } from './push';
 export { STALE_HOURS, staleSources, staleMessage, sourceFromRow } from './sources';
 export type { Source, SourceRow } from './sources';
+export { PAGE_SIZE, fetchAllPages } from './paging';
+export type { PageResult } from './paging';

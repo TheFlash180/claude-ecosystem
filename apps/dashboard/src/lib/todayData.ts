@@ -12,7 +12,7 @@
 // loads the public site — the query returns nothing and it does not. RLS is
 // the gate, so no household detail is published by adding this screen.
 import { getSupabase, supabaseConfigured } from '@ecosystem/shared';
-import { sastDay } from './today';
+import { registryCounts, sastDay } from './today';
 import type {
   BabyRow, CookRow, MarvelRow, PriceRow, RegistryCounts, SportRow, TodayInput,
   TrainingInput,
@@ -154,16 +154,16 @@ async function fetchBaby(sb: ReturnType<typeof getSupabase>): Promise<BabyRow | 
   return { name: data.name, dueDate: data.due_date, weekAnchor: data.week_anchor };
 }
 
-/** Ids rather than an exact-count head request: the registry is under a
- *  hundred rows either way, and counting what came back needs no Prefer
- *  header or Content-Range parsing to go right. */
+/** Capacity and quantities, not row counts — see `registryCounts`. Both
+ *  tables are well under the API's 1000-row cap. A failed claims read hides
+ *  the card rather than reporting every item as still needed. */
 async function fetchRegistry(sb: ReturnType<typeof getSupabase>): Promise<RegistryCounts | null> {
   const [items, claims] = await Promise.all([
-    sb.from('items').select('id'),
-    sb.from('claims').select('id'),
+    sb.from('items').select('id, max_claims'),
+    sb.from('claims').select('item_id, qty'),
   ]);
-  if (!items.data) return null;
-  return { items: items.data.length, claims: claims.data?.length ?? 0 };
+  if (!items.data || !claims.data) return null;
+  return registryCounts(items.data, claims.data);
 }
 
 export async function fetchToday(): Promise<TodayInput> {

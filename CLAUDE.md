@@ -5,15 +5,20 @@ is free-tier: GitHub Pages for hosting, one shared Supabase project for data.
 
 ## Read this first: things that look like bugs and are not
 
-**Supabase's advisors report ~154 findings and essentially all of them are the
-design. Do not "fix" them.** As of August 2026:
+**Supabase's advisors report ~162 findings and essentially all of them are the
+design. Do not "fix" them.** As of September 2026:
 
 | Count | Lint | Why it is there |
 |---|---|---|
-| 127 | `anon_/authenticated_security_definer_function_executable` | The definer RPCs **are** the write path. Revoking execute breaks every app. |
-| 21 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
-| 5 | `rls_policy_always_true` | fintrack's `using (true)` on `transactions`, `budgets`, `profiles`, `fintrack_settings`, `fintrack_accounts`. Deliberate — see the fintrack-pro CLAUDE.md. |
+| 139 | `anon_/authenticated_security_definer_function_executable` (67 + 72) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
+| 22 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
+
+fintrack's `using (true)` policies on `transactions`, `budgets`, `profiles`,
+`fintrack_settings` and `fintrack_accounts` are still in place and still
+deliberate (see the fintrack-pro CLAUDE.md) — Supabase simply stopped
+reporting them as `rls_policy_always_true` by September 2026, so their absence
+from the list is not a change to chase.
 
 Adding policies to those tables, revoking anon execute on those functions, or
 tightening the fintrack policies to per-owner isolation each break a working
@@ -40,7 +45,8 @@ Two apps are the exception and use real auth: **baby-logger** and
 ```
 apps/            one folder per app; the dashboard is the hub
 packages/shared  Supabase client, AppShell, deviceToken, ensurePushSubscription,
-                 and the `*_sources` staleness rule (`sources.ts`)
+                 the `*_sources` staleness rule (`sources.ts`) and
+                 `fetchAllPages` for reads past the 1000-row cap (`paging.ts`)
 tooling/         build-all.mjs (what CI runs) and new-app.mjs (scaffold)
 ```
 
@@ -67,14 +73,16 @@ that would publish a household's pregnancy on a public URL.**
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
 meal-prep, `W` in workout-plan, and so on). What the apps actually share is
-`getSupabase`, `deviceToken`, `ensurePushSubscription` and `sources.ts` — do
-not go looking for a common layout component.
+`getSupabase`, `deviceToken`, `ensurePushSubscription`, `fetchAllPages` and
+`sources.ts` — do not go looking for a common layout component.
 
 `sources.ts` is shared because the rule is identical everywhere, not the
 chrome: `staleSources` / `staleMessage` / `sourceFromRow` over the seven
-columns every `<app>_sources` table has. Each app still draws its own banner
-in its own palette. It lives in `packages/shared`, so **that package now has
-its own vitest run** — `npm test` covers it like any app.
+columns an `<app>_sources` table has (`pricewatch_sources` predates
+`last_run_at` and lacks it; the staleness rule never reads that column). Each
+app still draws its own banner in its own palette. It lives in
+`packages/shared`, so **that package now has its own vitest run** — `npm test`
+covers it like any app.
 
 **Marvel Watch's Out Now list is dismissible, and the dismissal is
 device-scoped.** `marvel_watched` is one row per (device, title) behind
@@ -283,6 +291,14 @@ exactly what a naive lean-protein filter would surface first.
 
 ## Things learned the hard way
 
+- **The API returns at most 1000 rows per request, and says so quietly.**
+  `.limit(2000)` or `.range(0, 49999)` comes back as a 206 with the first 1000
+  and no error. Front Row asked for 2000 of ~2700 upcoming listings and showed
+  about a month ahead, with every undated listing gone; fintrack-pro's
+  newest-first load silently dropped its oldest 141 transactions, and would
+  have dropped another month with every import. Anything that can outgrow
+  1000 rows goes through `fetchAllPages` (`packages/shared/src/paging.ts`),
+  with a unique column as the last `.order` so pages cannot overlap.
 - A source that goes quiet looks identical to "nothing new". Every syncing app
   records adapter health (`*_sources`) and the UI shows a stale-source banner.
 - **A sync that only ever adds is half a sync.** `sync-marvel` upserted what

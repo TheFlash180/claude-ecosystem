@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   babyCard, buildToday, cookCard, daysBetween, formatRand, marvelCard, priceCard,
-  registryCard, relativeDay, sportCard, trainingCard, type TodayInput,
+  registryCard, registryCounts, relativeDay, sportCard, trainingCard, type TodayInput,
 } from '../today';
 
 const TODAY = '2026-09-09'; // a Wednesday
@@ -204,15 +204,49 @@ describe('babyCard', () => {
 });
 
 describe('registryCard', () => {
-  it('reports claimed against the total', () => {
-    const card = registryCard({ items: 86, claims: 45 });
-    expect(card?.headline).toBe('45 of 86 claimed');
-    expect(card?.detail).toBe('41 still unclaimed');
+  it('reports full items against the total', () => {
+    const card = registryCard({ items: 86, full: 32 });
+    expect(card?.headline).toBe('32 of 86 claimed');
+    expect(card?.detail).toBe('54 still needed');
+  });
+
+  it('says so when every item is full', () => {
+    expect(registryCard({ items: 3, full: 3 })?.detail).toBe('Everything claimed');
   });
 
   it('is absent when there is no registry', () => {
-    expect(registryCard({ items: 0, claims: 0 })).toBeNull();
+    expect(registryCard({ items: 0, full: 0 })).toBeNull();
     expect(registryCard(null)).toBeNull();
+  });
+});
+
+describe('registryCounts', () => {
+  const items = [
+    { id: 'cot', max_claims: 1 },
+    { id: 'bottles', max_claims: 3 },
+    { id: 'nappies', max_claims: 5 },
+    { id: 'blanket', max_claims: 1 },
+  ];
+
+  it('counts an item full only when its spots are all taken', () => {
+    expect(registryCounts(items, [
+      { item_id: 'cot', qty: 1 },
+      { item_id: 'bottles', qty: 1 },
+      { item_id: 'bottles', qty: 2 },
+      { item_id: 'nappies', qty: 2 },
+    ])).toEqual({ items: 4, full: 2 });
+  });
+
+  it('is not fooled by more claim rows than items', () => {
+    // Four guests on the nappies: four rows against one item, 4 of 5 spots.
+    const claims = Array.from({ length: 4 }, () => ({ item_id: 'nappies', qty: 1 }));
+    expect(registryCounts(items, claims).full).toBe(0);
+    const card = registryCard(registryCounts(items, [...claims, ...claims]));
+    expect(card?.headline).toBe('1 of 4 claimed');
+  });
+
+  it('ignores claims on an item that no longer exists', () => {
+    expect(registryCounts(items, [{ item_id: 'gone', qty: 9 }]).full).toBe(0);
   });
 });
 
@@ -230,7 +264,7 @@ describe('buildToday', () => {
       ...empty,
       sport: [fixture()],
       training: { title: 'Twenty', weeks: 12, startedOn: '2026-08-17', dayLabels: ['Cindy'] },
-      registry: { items: 86, claims: 45 },
+      registry: { items: 86, full: 32 },
     }, TODAY);
     expect(cards.map(c => c.key)).toEqual(['sport', 'training', 'registry']);
   });

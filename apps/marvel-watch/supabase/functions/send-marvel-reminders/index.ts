@@ -85,28 +85,34 @@ Deno.serve(async () => {
   // a reminder set two days before release has all three open at once. The
   // wording comes from days-to-release rather than from the lead, so firing
   // each row sent the *identical* notification two or three times over.
-  // Collapse to one push per device per title, keeping the widest open lead;
-  // the narrower ones stay armed and fire on their own days.
-  const widestOpen = new Map<string, typeof reminders[number]>();
+  // Collapse to one push per device per title, keeping the widest open lead.
+  // The push settles every lead already open for that pair, not just the
+  // widest: an open lead left unmarked does not wait for its own day, it fires
+  // tomorrow. A reminder set two days out used to push on day -2 (1w), day -1
+  // (3d) and then release day (1d). Leads not yet open stay armed and fire on
+  // their own days, which is what puts the 1d push on the eve of release.
+  const widestOpen = new Map<string, any>();
+  const openIds = new Map<string, string[]>();
   for (const r of reminders ?? []) {
     const daysOut = daysBetween(today, r.release_date);
     if (daysOut > r.lead_days) continue; // window not open yet
     const sub = (r as any).marvel_push_subs;
     if (!sub?.endpoint) continue;
     const key = `${sub.id}|${r.title_id}`;
+    openIds.set(key, [...(openIds.get(key) ?? []), r.id]);
     const prev = widestOpen.get(key);
     if (!prev || r.lead_days > prev.lead_days) widestOpen.set(key, r);
   }
 
   const doneIds: string[] = [];
-  for (const r of widestOpen.values()) {
+  for (const [pair, r] of widestOpen) {
     const daysOut = daysBetween(today, r.release_date);
     const sub = (r as any).marvel_push_subs;
     const when = daysOut === 0 ? "releases TODAY \u{1F37F}"
       : daysOut === 1 ? "releases tomorrow"
       : `releases in ${daysOut} days`;
     const ok = await push(sub, `\u{1F577}\u{FE0F} ${r.title_label}`, `${when} · ${fmtNice(r.release_date)}`);
-    if (ok) doneIds.push(r.id);
+    if (ok) doneIds.push(...(openIds.get(pair) ?? [r.id]));
   }
   if (doneIds.length > 0) {
     await sb.from("marvel_push_reminders").update({ notified: true }).in("id", doneIds);

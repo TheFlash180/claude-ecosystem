@@ -1,6 +1,6 @@
 // Data access. Events and source health are public reads; everything
 // device-scoped goes through the token-checked RPCs.
-import { deviceToken, ensurePushSubscription, getSupabase } from '@ecosystem/shared';
+import { deviceToken, ensurePushSubscription, fetchAllPages, getSupabase } from '@ecosystem/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   MONTECASINO, type FrontRowEvent, type SourceHealth, type Watch, type WatchKind,
@@ -64,14 +64,20 @@ export async function fetchEvents(): Promise<FrontRowEvent[]> {
   const client = sb();
   if (!client) return [];
   const since = new Date(Date.now() - 86400000).toISOString();
-  const { data, error } = await client
-    .from('frontrow_events')
-    .select('*')
-    .or(`starts_at.gte.${since},starts_at.is.null`)
-    .order('starts_at', { ascending: true, nullsFirst: false })
-    .limit(2000);
+  // Paged: there are well over the API's 1000-row cap of upcoming listings,
+  // and a single request silently returned only the first 1000 — about a
+  // month ahead, with every undated row (sorted last) cut off. `id` is the
+  // tiebreak that keeps rows sharing a start time from shifting between pages.
+  const { data, error } = await fetchAllPages<EventRow>((from, to) =>
+    client
+      .from('frontrow_events')
+      .select('*')
+      .or(`starts_at.gte.${since},starts_at.is.null`)
+      .order('starts_at', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
+      .range(from, to));
   if (error || !data) return [];
-  return (data as EventRow[]).map(toEvent);
+  return data.map(toEvent);
 }
 
 export async function fetchSources(): Promise<SourceHealth[]> {
