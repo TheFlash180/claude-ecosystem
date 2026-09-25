@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { mergePending, QUEUE_EVENT } from '../lib/eventQueue';
 import type { Baby, UserProfile, FeedEvent, SleepEvent, NappyEvent, WeightEvent, TimelineEvent } from '../types';
@@ -11,6 +11,7 @@ import NappyForm from './NappyForm';
 import WeightForm from './WeightForm';
 import GrowthChart from './GrowthChart';
 import Settings from './Settings';
+import { suggestedFeedType } from '../lib/feedSummary';
 
 interface Props {
   baby: Baby;
@@ -59,6 +60,47 @@ export default function PostBirthView({ baby, displayName, userId, onBabyUpdate,
   }, [baby.id, timelinePage]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Live sync between the two phones. A feed logged on one appears on the
+  // other within a second or two, instead of waiting for someone to reload —
+  // at 3am "did you already feed her?" should never need asking.
+  //
+  // Realtime's socket does not survive a phone locking its screen for long,
+  // and nothing re-sends what happened while it was down. So coming back to
+  // the app reloads as well; the socket is the fast path, the visibility
+  // reload is what makes it correct. RLS applies to Realtime exactly as to
+  // queries, so only a signed-in household member receives anything.
+  const loadRef = useRef(loadData);
+  loadRef.current = loadData;
+  useEffect(() => {
+    const sb = supabase();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Coalesced like the queue reload below: a flush of queued rows arrives
+    // as one change per row.
+    const reload = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { void loadRef.current(); }, 300);
+    };
+    const channel = sb.channel(`baby-events-${baby.id}`);
+    for (const table of ['feed_events', 'sleep_events', 'nappy_events', 'weight_events']) {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table, filter: `baby_id=eq.${baby.id}` },
+        reload,
+      );
+    }
+    channel.subscribe();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      void sb.removeChannel(channel);
+    };
+  }, [baby.id]);
 
   // The queue changing means a row was just added offline, or a flush landed.
   // Either way what is on screen is now stale. Coalesced, because a flush
@@ -150,7 +192,12 @@ export default function PostBirthView({ baby, displayName, userId, onBabyUpdate,
       <QuickLog activeSleep={!!activeSleep} onTap={handleQuickTap} />
 
       {modal === 'feed' && (
-        <FeedForm babyId={baby.id} userId={userId} onDone={handleFormDone} />
+        <FeedForm
+          babyId={baby.id}
+          userId={userId}
+          defaultType={suggestedFeedType(feeds)}
+          onDone={handleFormDone}
+        />
       )}
       {modal === 'sleep' && (
         <SleepToggle

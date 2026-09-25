@@ -99,3 +99,10 @@ create index if not exists idx_feed_baby_time on feed_events (baby_id, started_a
 create index if not exists idx_sleep_baby_time on sleep_events (baby_id, started_at desc);
 create index if not exists idx_nappy_baby_time on nappy_events (baby_id, logged_at desc);
 create index if not exists idx_weight_baby_date on weight_events (baby_id, measured_at desc);
+
+-- Live sync between the two phones (applied as migration
+-- baby_logger_realtime). The app subscribes to postgres_changes on these;
+-- Realtime runs each change through the same RLS as a query, so only a
+-- signed-in household member receives anything.
+alter publication supabase_realtime
+  add table babies, feed_events, sleep_events, nappy_events, weight_events;

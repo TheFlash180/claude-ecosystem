@@ -90,7 +90,19 @@ export interface TrainingInput {
 export interface CookRow { name: string; emoji: string | null }
 export interface MarvelRow { title: string; releaseDate: string; mediaType: string }
 export interface PriceRow { title: string; latest: number; lowest: number; points: number }
-export interface BabyRow { name: string | null; dueDate: string; weekAnchor: string | null }
+export interface LastFeedRow {
+  feedType: 'breast_left' | 'breast_right' | 'bottle' | 'solid';
+  amountMl: number | null;
+  startedAt: string;
+}
+export interface BabyRow {
+  name: string | null;
+  dueDate: string;
+  weekAnchor: string | null;
+  /** Set once the baby is here; the card switches from countdown to feeds. */
+  birthDate?: string | null;
+  lastFeed?: LastFeedRow | null;
+}
 /** `full` is items with no spot left — the registry's own "claimed", as opposed
  *  to its "Still needed", which is every item that still has one. */
 export interface RegistryCounts { items: number; full: number }
@@ -236,13 +248,63 @@ export function priceCard(prices: PriceRow[]): TodayCard | null {
   };
 }
 
+/** Hours and minutes: feeds are two to three hours apart, so "2h" cannot
+ *  tell 2:05 from 2:55. Same rule as baby-logger's `elapsedText` — keep the
+ *  two in step. */
+export function elapsedText(ms: number): string {
+  const mins = Math.floor(Math.max(0, ms) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) {
+    const rest = mins % 60;
+    return rest === 0 ? `${hrs}h ago` : `${hrs}h ${rest}m ago`;
+  }
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+/** Which side, and which side is next — baby-logger's `feedLabel` and
+ *  `suggestedFeedType` in one line. */
+function feedDetail(f: LastFeedRow): string {
+  switch (f.feedType) {
+    case 'breast_left': return 'Left side · right next';
+    case 'breast_right': return 'Right side · left next';
+    case 'bottle': return f.amountMl ? `Bottle · ${f.amountMl} ml` : 'Bottle';
+    case 'solid': return 'Solids';
+  }
+}
+
+/** After the birth the countdown is over and the question becomes "when did
+ *  she last eat?". Signed-in only, exactly like the countdown — see
+ *  todayData.ts. */
+function newbornCard(baby: BabyRow, now: number): TodayCard {
+  const label = baby.name ? baby.name : 'Baby';
+  if (!baby.lastFeed) {
+    return {
+      key: 'baby', slug: 'baby-logger', label,
+      headline: 'No feeds logged yet',
+      detail: 'Tap to log the first one',
+      href: APP.baby,
+    };
+  }
+  return {
+    key: 'baby', slug: 'baby-logger', label,
+    headline: `Fed ${elapsedText(now - Date.parse(baby.lastFeed.startedAt))}`,
+    detail: feedDetail(baby.lastFeed),
+    href: APP.baby,
+  };
+}
+
 /** Weeks and the countdown.
  *
  *  Mirrors baby-logger's `getPregnancyInfo`: the clinic-set `week_anchor`
  *  wins for the week count because a scan dates a pregnancy a few days off
  *  naive 280-days-before-due arithmetic, while the countdown stays on the due
  *  date. Keep the two in step if either changes. */
-export function babyCard(baby: BabyRow | null, today = sastDay()): TodayCard | null {
+export function babyCard(
+  baby: BabyRow | null, today = sastDay(), now = Date.now(),
+): TodayCard | null {
+  if (baby?.birthDate) return newbornCard(baby, now);
   if (!baby?.dueDate) return null;
   const daysUntilDue = daysBetween(today, baby.dueDate);
   const daysPregnant = baby.weekAnchor
@@ -280,11 +342,11 @@ export function registryCard(r: RegistryCounts | null): TodayCard | null {
 /** The whole surface, in the order it reads. Cards with nothing to say return
  *  null and simply do not appear — a quiet day should be a short screen, not a
  *  wall of "nothing yet". */
-export function buildToday(input: TodayInput, today = sastDay()): TodayCard[] {
+export function buildToday(input: TodayInput, today = sastDay(), now = Date.now()): TodayCard[] {
   return [
     sportCard(input.sport, today),
     trainingCard(input.training, today),
-    babyCard(input.baby, today),
+    babyCard(input.baby, today, now),
     cookCard(input.cook),
     priceCard(input.prices),
     marvelCard(input.marvel, today),

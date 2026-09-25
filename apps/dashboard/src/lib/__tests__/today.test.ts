@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  babyCard, buildToday, cookCard, daysBetween, formatRand, marvelCard, priceCard,
+  babyCard, buildToday, cookCard, daysBetween, elapsedText, formatRand, marvelCard, priceCard,
   registryCard, registryCounts, relativeDay, sportCard, trainingCard, type TodayInput,
 } from '../today';
 
@@ -200,6 +200,43 @@ describe('babyCard', () => {
 
   it('is absent with no baby row at all', () => {
     expect(babyCard(null, TODAY)).toBeNull();
+  });
+
+  describe('after the birth', () => {
+    const born = { ...baby, name: 'Mia', birthDate: '2026-12-15' };
+    const now = Date.parse('2026-12-20T03:10:00Z');
+
+    it('swaps the countdown for the last feed, to the minute', () => {
+      const card = babyCard(
+        { ...born, lastFeed: { feedType: 'breast_left', amountMl: null, startedAt: '2026-12-20T01:00:00Z' } },
+        '2026-12-20', now,
+      );
+      expect(card?.label).toBe('Mia');
+      expect(card?.headline).toBe('Fed 2h 10m ago');
+      expect(card?.detail).toBe('Left side · right next');
+    });
+
+    it('names a bottle and its amount', () => {
+      const card = babyCard(
+        { ...born, lastFeed: { feedType: 'bottle', amountMl: 90, startedAt: '2026-12-20T02:55:00Z' } },
+        '2026-12-20', now,
+      );
+      expect(card?.headline).toBe('Fed 15m ago');
+      expect(card?.detail).toBe('Bottle · 90 ml');
+    });
+
+    it('still renders before the first feed is logged', () => {
+      expect(babyCard({ ...born, lastFeed: null }, '2026-12-15', now)?.headline)
+        .toBe('No feeds logged yet');
+    });
+  });
+});
+
+describe('elapsedText', () => {
+  it('keeps minutes past the hour and drops a zero', () => {
+    expect(elapsedText(130 * 60000)).toBe('2h 10m ago');
+    expect(elapsedText(180 * 60000)).toBe('3h ago');
+    expect(elapsedText(20 * 1000)).toBe('just now');
   });
 });
 

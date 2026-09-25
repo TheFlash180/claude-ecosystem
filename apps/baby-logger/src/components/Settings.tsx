@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Baby, UserProfile } from '../types';
+import { readNightPref, writeNightPref, type NightPref } from '../lib/night';
+
+const NIGHT_OPTIONS: { value: NightPref; label: string }[] = [
+  { value: 'auto', label: 'Auto (7pm–6am)' },
+  { value: 'on', label: 'Always' },
+  { value: 'off', label: 'Off' },
+];
 
 interface Props {
   baby: Baby;
@@ -27,6 +34,7 @@ export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Prop
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [babyName, setBabyName] = useState(baby.name ?? '');
   const [saving, setSaving] = useState(false);
+  const [nightPref, setNightPref] = useState<NightPref>(readNightPref);
 
   // Week counter: current gestational age (anchor if set, else due-date maths)
   const currentDays = baby.week_anchor
@@ -138,6 +146,31 @@ export default function Settings({ baby, onBabyUpdate, onBack, onSignOut }: Prop
           )}
         </section>
       )}
+
+      <section style={styles.section}>
+        <h3 style={styles.sectionTitle}>Night mode</h3>
+        <div style={styles.info}>
+          Dim, warm colours for night feeds. On this phone only.
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          {NIGHT_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { setNightPref(o.value); writeNightPref(o.value); }}
+              aria-pressed={nightPref === o.value}
+              style={{
+                ...styles.smallBtn,
+                flex: 1,
+                ...(nightPref === o.value
+                  ? {}
+                  : { background: 'none', color: 'var(--muted)', border: '1px solid var(--border)' }),
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section style={styles.section}>
         <h3 style={styles.sectionTitle}>Family</h3>

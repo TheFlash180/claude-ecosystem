@@ -59,8 +59,10 @@ registry to update; adding a folder under `apps/` is enough.
 **Today** section (`src/components/Today.tsx`, logic in `src/lib/today.ts`):
 the next fixture, where the running workout programme has got to, the cook
 list, a tracked product at its lowest, the next Marvel release, the registry
-count, and — only when signed in — the pregnancy countdown. Cards with nothing
-to say return null and do not render, so a quiet day is a short screen.
+count, and — only when signed in — the pregnancy countdown, which becomes
+"Fed 2h 10m ago · Left side · right next" once `babies.birth_date` is set.
+Cards with nothing to say return null and do not render, so a quiet day is a
+short screen.
 
 **It reads that data with the anon key and adds no RPC and no policy.** Every
 source is already public-read world data. The one exception is `babies`, which
@@ -100,6 +102,23 @@ as the reminders. Two things about it are deliberate:
 A failed `listWatched()` returns null, not an empty set, and the app keeps the
 set it already had — otherwise one flaky read flashes every hidden title back
 onto the page.
+
+**Baby Logger is built for 3am, and three things in it are load-bearing:**
+
+- **Live sync.** `babies` and the four `*_events` tables are in the
+  `supabase_realtime` publication; PostBirthView subscribes to changes and
+  App to the babies row, so a feed logged on one phone shows on the other and
+  setting the birth date switches both. Realtime goes through RLS like any
+  query. The socket dies when a phone sleeps and nothing replays what it
+  missed, so **coming back to the app reloads as well** — keep that when
+  touching it; the socket alone is not correct.
+- **Night mode** (`lib/night.ts`) swaps the CSS variables for a dim
+  amber-on-black palette, automatically 19:00–06:00 SAST or always/off per
+  phone. It only works because components use `var(--…)`; a hardcoded colour
+  in a new component will glow in the dark.
+- **The last feed** reads to the minute with its side, and the feed form
+  opens on the other side (`lib/feedSummary.ts`). The hub's newborn card has
+  its own copy of those rules in `today.ts` — keep the two in step.
 
 ### What the apps are, where the name misleads
 
@@ -178,6 +197,34 @@ drift, the file is the one that is wrong.
 
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
+
+### Backups
+
+The free plan has no backups you can restore yourself, so
+`.github/workflows/backup.yml` takes one every Sunday 01:30 UTC (and on
+demand): `pg_dump` of the `public` schema plus `auth.users` /
+`auth.identities` as data, checked by `tooling/backup-check.sh`, gzipped and
+**encrypted with `BACKUP_PASSPHRASE` before upload** — this repo is public, and
+so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
+
+- It logs in as **`backup_reader`**: login, `bypassrls` (pg_dump refuses
+  tables whose RLS would hide rows), `select` on `public` (default privileges
+  cover new tables) and on the two auth tables, nothing else. Its password is
+  the `BACKUP_DB_PASSWORD` secret and was set outside migrations so it is not
+  in `supabase_migrations`. To rotate it: `alter role backup_reader password
+  '…'` and update the secret. To retire backups: `drop role backup_reader`.
+- Runners are IPv4-only, so it connects through the session pooler, trying
+  both eu-central-1 clusters.
+- **Not in the backup:** Vault secrets (VAPID and TMDB keys — regenerate; push
+  subscriptions then re-register), pg_cron jobs (documented in each
+  `schema.sql`), edge functions (in this repo).
+
+To restore into a fresh project: download the artifact from the Actions run,
+then
+`gpg -d backup-YYYY-MM-DD.sql.gz.gpg | gunzip > backup.sql` and
+`psql "<new project's session-pooler URI>" -v ON_ERROR_STOP=1 -f backup.sql`.
+Users load first, so the rows pointing at them resolve. This has not yet been
+rehearsed end to end; do it once before relying on it.
 
 ## Conventions that matter
 

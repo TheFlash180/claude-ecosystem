@@ -4,6 +4,8 @@ import { saveEvent } from '../lib/eventQueue';
 interface Props {
   babyId: string;
   userId: string;
+  /** Opens on this type — the other side after a breast feed. */
+  defaultType?: string;
   onDone: () => void;
 }
 
@@ -14,8 +16,8 @@ const feedTypes = [
   { value: 'solid', label: 'Solid food' },
 ] as const;
 
-export default function FeedForm({ babyId, userId, onDone }: Props) {
-  const [feedType, setFeedType] = useState<string>('bottle');
+export default function FeedForm({ babyId, userId, defaultType = 'bottle', onDone }: Props) {
+  const [feedType, setFeedType] = useState<string>(defaultType);
   const [duration, setDuration] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -103,7 +105,7 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(18, 16, 24, 0.8)',
+    background: 'var(--overlay)',
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
