@@ -6,6 +6,13 @@
 // non-empty result) are never overwritten. Result-fetch failures are
 // reported in the response (they used to be silent, which hid days of
 // rate-limited fetches at the old 04:15 cron slot).
+//
+// It also RETIRES future sessions the calendar no longer has. Rows are keyed
+// on (round, session), so when a round was inserted mid-season Singapore moved
+// from round 16 to 17: the sync wrote its sprint under r17 and left the old
+// r16 sprint behind, and the app showed the same sprint twice. The same thing
+// happens when a sprint weekend is dropped or a round is cancelled. See
+// RETIRE_AFTER_DAYS for the guard.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -29,6 +36,12 @@ const FLAGS: Record<string, string> = {
 };
 
 const DEFAULT_CHANNEL = "SuperSport Grand Prix (DStv 214)";
+
+/** Every run stamps updated_at on each session the calendar still carries, so
+ *  a future session untouched for this long has been missing from several
+ *  consecutive daily runs, not one bad response. Same shape as marvel's
+ *  missing_since and price-watch's delisted_at, without a new column. */
+const RETIRE_AFTER_DAYS = 3;
 
 function isoDate(date?: string, time?: string): string | null {
   if (!date) return null;
@@ -86,6 +99,7 @@ Deno.serve(async () => {
   }
 
   let upserted = 0;
+  let writeErrors = 0;
   let resultsFilled = 0;
   const resultErrors: string[] = [];
   const now = Date.now();
@@ -116,6 +130,7 @@ Deno.serve(async () => {
       if (found) {
         const { error } = await sb.from("sport_events").update(patch).eq("id", found.id);
         if (!error) upserted++;
+        else writeErrors++;
       } else {
         const { error } = await sb.from("sport_events").insert({
           id: `f1-${season}-r${round}-${s.key}`,
@@ -130,6 +145,7 @@ Deno.serve(async () => {
           ...patch,
         });
         if (!error) upserted++;
+        else writeErrors++;
       }
     }
 
@@ -157,18 +173,40 @@ Deno.serve(async () => {
     }
   }
 
+  // ---- retire sessions the calendar has dropped ----
+  // Only after a run in which every session write landed: a row whose update
+  // failed was not refreshed, and must not start to look abandoned. Only
+  // future, feed-owned rows (f1_round set) — history and anything entered by
+  // hand are never touched. Reminders on a retired row cascade with it rather
+  // than firing for a session that is not happening.
+  const retired: string[] = [];
+  if (writeErrors === 0) {
+    const { data: gone, error } = await sb.from("sport_events")
+      .delete()
+      .eq("sport", "f1")
+      .eq("f1_season", season)
+      .not("f1_round", "is", null)
+      .gt("event_date", new Date(now).toISOString())
+      .lt("updated_at", new Date(now - RETIRE_AFTER_DAYS * 86400000).toISOString())
+      .select("id");
+    if (error) resultErrors.push(`retire: ${error.message}`);
+    else for (const r of gone ?? []) retired.push(r.id);
+  }
+
   // A result fetch that got rate-limited is a partial run, not a clean one, so
   // last_ok_at only advances when nothing went wrong.
   const health: Record<string, unknown> = {
     last_run_at: startedAt,
-    last_error: resultErrors.length === 0 ? null : resultErrors.join("; "),
+    last_error: resultErrors.length === 0 && writeErrors === 0
+      ? null
+      : [...resultErrors, ...(writeErrors ? [`${writeErrors} session writes failed`] : [])].join("; "),
     last_count: races.length,
   };
-  if (resultErrors.length === 0) health.last_ok_at = startedAt;
+  if (resultErrors.length === 0 && writeErrors === 0) health.last_ok_at = startedAt;
   await sb.from("sport_sources").update(health).eq("key", SOURCE_KEY);
 
   return new Response(
-    JSON.stringify({ season, races: races.length, upserted, resultsFilled, resultErrors }),
+    JSON.stringify({ season, races: races.length, upserted, writeErrors, retired, resultsFilled, resultErrors }),
     { headers: { "Content-Type": "application/json" } },
   );
 });
