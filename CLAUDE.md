@@ -209,7 +209,15 @@ so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
 
 - It logs in as **`backup_reader`**: login, `bypassrls` (pg_dump refuses
   tables whose RLS would hide rows), `select` on `public` (default privileges
-  cover new tables) and on the two auth tables, nothing else. Its password is
+  cover new tables), nothing else.
+- **It cannot read `auth` directly, and cannot be made to.** `supabase_admin`
+  owns that schema and `postgres` holds `usage` on it without grant option, so
+  `grant usage on schema auth` is a silent no-op — the first real run failed
+  with "permission denied for schema auth". The users come through
+  `backup.auth_users()` / `backup.auth_identities()` instead: `security
+  definer` functions in a schema PostgREST does not expose, executable only by
+  `backup_reader`. The workflow writes them in COPY format with generated
+  columns left out. Its password is
   the `BACKUP_DB_PASSWORD` secret and was set outside migrations so it is not
   in `supabase_migrations`. To rotate it: `alter role backup_reader password
   '…'` and update the secret. To retire backups: `drop role backup_reader`.
