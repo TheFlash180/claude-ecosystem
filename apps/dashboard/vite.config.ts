@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'badge-96.png'],
       manifest: {
         name: 'Ecosystem',
         short_name: 'Ecosystem',
@@ -30,6 +30,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // The morning summary's push handler (public/push-sw.js).
+        importScripts: [`${base}push-sw.js`],
         navigateFallback: `${base}index.html`,
         // Never serve the hub shell for sub-app routes (/<base>/<app>/...) —
         // each sub-app has its own service worker and offline handling.

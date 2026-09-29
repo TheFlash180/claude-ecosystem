@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { parseApps } from './lib/apps';
 import { Today, TODAY_CSS } from './components/Today';
+import { MorningSummary, MORNING_CSS } from './components/MorningSummary';
 import { COMING_SOON, metaFor, greeting, type IconKey } from './lib/appMeta';
 
 type CloudStatus = 'checking' | 'connected' | 'not-configured' | 'error';
@@ -65,6 +66,8 @@ export default function App() {
         <h2 className="hero-greet">{greeting(now.getHours())}</h2>
         <p className="hero-date">{today}</p>
       </section>
+
+      <MorningSummary />
 
       {/* What the apps are actually saying right now. Renders nothing when
           there is nothing on, so the hub is never padded out with empties. */}
@@ -166,6 +169,7 @@ function CloudBadge({ status }: { status: CloudStatus }) {
 
 const CSS = `
 ${TODAY_CSS}
+${MORNING_CSS}
 .hero { margin: 4px 0 22px; }
 .hero-greet {
   margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em;

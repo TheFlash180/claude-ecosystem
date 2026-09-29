@@ -5,13 +5,13 @@ is free-tier: GitHub Pages for hosting, one shared Supabase project for data.
 
 ## Read this first: things that look like bugs and are not
 
-**Supabase's advisors report ~162 findings and essentially all of them are the
-design. Do not "fix" them.** As of September 2026:
+**Supabase's advisors report ~169 findings and essentially all of them are the
+design. Do not "fix" them.** As of late September 2026:
 
 | Count | Lint | Why it is there |
 |---|---|---|
-| 139 | `anon_/authenticated_security_definer_function_executable` (67 + 72) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
-| 22 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
+| 145 | `anon_/authenticated_security_definer_function_executable` (70 + 75) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
+| 23 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
 
 fintrack's `using (true)` policies on `transactions`, `budgets`, `profiles`,
@@ -64,13 +64,37 @@ count, and — only when signed in — the pregnancy countdown, which becomes
 Cards with nothing to say return null and do not render, so a quiet day is a
 short screen.
 
-**It reads that data with the anon key and adds no RPC and no policy.** Every
+**Today reads that data with the anon key and adds no RPC and no policy.** Every
 source is already public-read world data. The one exception is `babies`, which
 is auth-gated: all apps are served from the same origin, so the client picks up
 whatever session baby-logger stored, and RLS decides. Signed out — which is
 what a stranger loading the public site is — the query returns nothing and the
 card is absent. **Do not "fix" this by adding a definer RPC for the baby data:
 that would publish a household's pregnancy on a public URL.**
+
+**The hub sends one push: the 07:00 morning summary**, opt-in from a line
+under the date (`MorningSummary.tsx`, `lib/morning.ts`), sent by
+`send-morning-digest` at 05:00 UTC. What it says lives in
+`supabase/functions/send-morning-digest/digest.ts`, a plain module that the
+function and the dashboard's vitest both import. Three rules in it matter:
+
+- **A quiet day sends nothing.** A line exists only for something today — a
+  fixture still to come, a release, a Glovebox renewal within 14 days or
+  overdue, a feed that has stopped syncing. No lines, no push; a summary that
+  arrives daily saying nothing teaches you to swipe it away.
+- **Anyone can subscribe, so nothing personal goes in.** World data, plus the
+  subscribing device's *own* Glovebox rows: the hub shares Glovebox's origin,
+  reads `glovebox:device-token` from localStorage and registers its hash, the
+  same hash Glovebox stores. **Never add baby-logger data here** — that would
+  push a household's baby to any stranger who taps "Turn on".
+- **The stale-feed line is the new information.** A feed that stopped looks
+  like a quiet week inside its app; the summary says it out loud. `isStale`
+  copies the shared `staleSources` rule and a parity test holds them together.
+
+It has its own VAPID keypair (`dashboard_vapid_private_key`),
+`public/push-sw.js` imported into the hub's worker, and a badge.
+`?dry=1` returns the shared lines without sending — never the Glovebox ones,
+because the function takes no auth.
 
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
@@ -173,6 +197,7 @@ schema change lands in the same database as everything else.
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
 | front-row | `frontrow_*` | `sync-frontrow`, `notify-frontrow` | `frontrow-sync`, `frontrow-notify` |
 | price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
+| dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
 
 Owned by the external repos, but in the same database:
 
