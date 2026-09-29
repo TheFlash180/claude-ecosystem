@@ -399,6 +399,14 @@ exactly what a naive lean-protein filter would surface first.
   - **`missing_since` + a grace period, never delete on first miss.** Same
     shape as price-watch's `delisted_at`. A title that reappears clears the
     stamp and starts over.
+
+  `sync-f1` had the same hole. Its rows are keyed on (round, session), so
+  when a round was inserted mid-2026 Singapore moved from round 16 to 17: the
+  sprint was written under r17 and the old r16 sprint stayed, and Sport Watch
+  showed it twice. It now retires **future, feed-owned** F1 sessions that no
+  run has refreshed for `RETIRE_AFTER_DAYS` (3) — `updated_at` is stamped on
+  every session the calendar still carries, so it serves as the missing-since
+  clock without a new column — and only after a run whose every write landed.
 - Notifiers only record a send **after** delivery succeeds, so a total failure
   retries rather than being silently marked done. **price-watch and front-row
   add two deliberate exceptions**, both meaning "we chose not to send this"
