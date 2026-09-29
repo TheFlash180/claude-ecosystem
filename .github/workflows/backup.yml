@@ -74,11 +74,33 @@ jobs:
           fi
 
           umask 077
+          psql_q() { pg psql -X -q -v ON_ERROR_STOP=1 -h "$host" -p 5432 -U "$user" -d postgres "$@"; }
+
           # Users first, as data only: feed_events.logged_by and friends point
           # at auth.users, so a restore has to load them before public. A new
           # project already has the auth schema itself.
-          pg pg_dump -h "$host" -p 5432 -U "$user" -d postgres \
-            --data-only --table=auth.users --table=auth.identities > dump.sql
+          #
+          # Not pg_dump: backup_reader cannot be given USAGE on schema auth
+          # (supabase_admin owns it; postgres cannot pass it on), so the rows
+          # come through backup.auth_users() / auth_identities(), definer
+          # functions only this role may call. Written in pg_dump's own COPY
+          # format with an explicit column list that leaves out generated
+          # columns (auth.users.confirmed_at), which a restore cannot write.
+          auth_copy() {
+            local cols
+            cols="$(psql_q -Atc "select string_agg(quote_ident(a.attname), ', ' order by a.attnum)
+              from pg_attribute a join pg_class c on c.oid = a.attrelid
+              join pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'auth' and c.relname = '$1'
+                and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''")"
+            [ -n "$cols" ] || { echo "::error::no columns found for auth.$1"; return 1; }
+            echo "COPY auth.$1 ($cols) FROM stdin;"
+            psql_q -c "\copy (select $cols from backup.auth_$1()) to stdout"
+            echo '\.'
+            echo
+          }
+          { auth_copy users; auth_copy identities; } > dump.sql
+
           pg pg_dump -h "$host" -p 5432 -U "$user" -d postgres \
             --schema=public --no-owner --no-privileges \
             --no-publications --no-subscriptions >> dump.sql
