@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <!-- The hub icon's 2x2 grid as a solid white silhouette: Android keeps only
+       the alpha channel of a notification badge (see CLAUDE.md). -->
+  <rect x="24" y="24" width="22" height="22" rx="5" fill="#fff"/>
+  <rect x="50" y="24" width="22" height="22" rx="5" fill="#fff"/>
+  <rect x="24" y="50" width="22" height="22" rx="5" fill="#fff"/>
+  <rect x="50" y="50" width="22" height="22" rx="5" fill="#fff"/>
+</svg>
