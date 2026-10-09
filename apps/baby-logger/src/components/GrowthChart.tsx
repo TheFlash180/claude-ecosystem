@@ -8,6 +8,8 @@ interface Props {
 }
 
 export default function GrowthChart({ weights, onClose }: Props) {
+  // Colours are the CSS variables, never literals: night mode swaps the
+  // variables, and a hardcoded hue here would stay day-bright at 3am.
   const data = [...weights]
     .sort((a, b) => a.measured_at.localeCompare(b.measured_at))
     .map((w) => ({
@@ -30,31 +32,31 @@ export default function GrowthChart({ weights, onClose }: Props) {
               <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#6B6278', fontSize: 11 }}
-                  axisLine={{ stroke: '#2A2535' }}
+                  tick={{ fill: 'var(--muted)', fontSize: 11 }}
+                  axisLine={{ stroke: 'var(--border)' }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#6B6278', fontSize: 11 }}
+                  tick={{ fill: 'var(--muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   unit=" kg"
                 />
                 <Tooltip
                   contentStyle={{
-                    background: '#1C1825',
-                    border: '1px solid #2A2535',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
                     borderRadius: 8,
-                    color: '#F0ECF4',
+                    color: 'var(--text)',
                     fontSize: '0.85rem',
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="kg"
-                  stroke="#A0D4B4"
+                  stroke="var(--weight)"
                   strokeWidth={2}
-                  dot={{ fill: '#A0D4B4', r: 4 }}
+                  dot={{ fill: 'var(--weight)', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
               </LineChart>

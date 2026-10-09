@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { mergePending, QUEUE_EVENT } from '../lib/eventQueue';
 import type { Baby, UserProfile, FeedEvent, SleepEvent, NappyEvent, WeightEvent, TimelineEvent } from '../types';
@@ -9,9 +9,13 @@ import FeedForm from './FeedForm';
 import SleepToggle from './SleepToggle';
 import NappyForm from './NappyForm';
 import WeightForm from './WeightForm';
-import GrowthChart from './GrowthChart';
 import Settings from './Settings';
 import { suggestedFeedType } from '../lib/feedSummary';
+
+// recharts is about half of this app's JavaScript and only the growth chart
+// uses it. Loading it on demand keeps it off the 3am cold start; the service
+// worker still precaches the chunk, so the chart opens offline too.
+const GrowthChart = lazy(() => import('./GrowthChart'));
 
 interface Props {
   baby: Baby;
@@ -214,7 +218,9 @@ export default function PostBirthView({ baby, displayName, userId, onBabyUpdate,
         <WeightForm babyId={baby.id} userId={userId} onDone={handleFormDone} />
       )}
       {modal === 'growth' && (
-        <GrowthChart weights={weights} onClose={() => setModal(null)} />
+        <Suspense fallback={null}>
+          <GrowthChart weights={weights} onClose={() => setModal(null)} />
+        </Suspense>
       )}
     </div>
   );

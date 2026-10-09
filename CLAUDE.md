@@ -135,7 +135,11 @@ onto the page.
   setting the birth date switches both. Realtime goes through RLS like any
   query. The socket dies when a phone sleeps and nothing replays what it
   missed, so **coming back to the app reloads as well** — keep that when
-  touching it; the socket alone is not correct.
+  touching it; the socket alone is not correct. The same goes for the
+  offline queue (`lib/eventQueue.ts`): on a weak signal the phone reports
+  itself online while requests die, so the `online` event never fires.
+  App retries every 15s and on coming back to the app while anything is
+  queued; without that a feed sat on one phone until a restart.
 - **Night mode** (`lib/night.ts`) swaps the CSS variables for a dim
   amber-on-black palette, automatically 19:00–06:00 SAST or always/off per
   phone. It only works because components use `var(--…)`; a hardcoded colour
