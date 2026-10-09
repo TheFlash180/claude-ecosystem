@@ -1,5 +1,5 @@
 // Price Watch: types + visual identity. Violet, matching its hub tile —
-// distinct from Front Row's magenta and Glovebox's blue.
+// distinct from Glovebox's blue.
 
 export interface Product {
   id: string;

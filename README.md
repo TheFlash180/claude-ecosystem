@@ -53,7 +53,6 @@ What each one is:
   shape as a parkrun time.
 - **baby-logger** — feeds, sleeps, nappies and weights, offline-first.
 - **glovebox** — vehicle documents, service and licence-renewal reminders.
-- **front-row** — what is on at Montecasino and nearby, with watches.
 - **price-watch** — Takealot price tracking with drop alerts.
 
 Everything else is owned by exactly one in-repo app, which prefixes its tables
@@ -69,7 +68,6 @@ separately, so editing one does not change the running system:
 | workout-plan | `workout_*` | — | — |
 | baby-logger | `babies`, `*_events` | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| front-row | `frontrow_*` | `sync-frontrow`, `notify-frontrow` | `frontrow-sync`, `frontrow-notify` |
 | price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 
 The apps that predate accounts (everything except baby-logger and fintrack-pro)

@@ -2,7 +2,7 @@
 //
 // This project's API returns at most 1000 rows per request, whatever the
 // client asks for: `.limit(2000)` or `.range(0, 49999)` comes back as a 206
-// with the first 1000 and no error. That is how Front Row came to show events
+// with the first 1000 and no error. That is how Front Row (since retired) came to show events
 // only up to the next month, with every undated listing — sorted last — gone.
 //
 // Pass a function that runs the query for one inclusive row range; this keeps

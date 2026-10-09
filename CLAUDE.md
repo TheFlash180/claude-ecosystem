@@ -195,9 +195,12 @@ schema change lands in the same database as everything else.
 | workout-plan | `workout_*` | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events` | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| front-row | `frontrow_*` | `sync-frontrow`, `notify-frontrow` | `frontrow-sync`, `frontrow-notify` |
 | price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
+
+**Front Row was retired in October 2026** (unused). Its folder, `frontrow_*`
+tables and functions, both cron jobs and its Vault key are gone, and its edge
+functions answer 410. A mention of it elsewhere in this file is history.
 
 Owned by the external repos, but in the same database:
 
@@ -373,7 +376,7 @@ exactly what a naive lean-protein filter would surface first.
 
 - **The API returns at most 1000 rows per request, and says so quietly.**
   `.limit(2000)` or `.range(0, 49999)` comes back as a 206 with the first 1000
-  and no error. Front Row asked for 2000 of ~2700 upcoming listings and showed
+  and no error. Front Row (since retired) asked for 2000 of ~2700 upcoming listings and showed
   about a month ahead, with every undated listing gone; fintrack-pro's
   newest-first load silently dropped its oldest 141 transactions, and would
   have dropped another month with every import. Anything that can outgrow
@@ -408,8 +411,8 @@ exactly what a naive lean-protein filter would surface first.
   every session the calendar still carries, so it serves as the missing-since
   clock without a new column — and only after a run whose every write landed.
 - Notifiers only record a send **after** delivery succeeds, so a total failure
-  retries rather than being silently marked done. **price-watch and front-row
-  add two deliberate exceptions**, both meaning "we chose not to send this"
+  retries rather than being silently marked done. **price-watch adds two
+  deliberate exceptions**, both meaning "we chose not to send this"
   rather than "we tried and failed": an alert past that run's per-device cap
   (`MAX_PER_DEVICE = 6`), and a device with no push subscription at all. Both
   mark as notified. The second is the one with a consequence — movement that
@@ -447,8 +450,6 @@ exactly what a naive lean-protein filter would surface first.
   guessing. If you build another time or duration field, do the same: never
   ask for a separator the keyboard cannot produce, and never quietly reinterpret
   digits you did not get a separator for.
-- Quicket carries almost nothing at Montecasino; Front Row's useful source is
-  Montecasino's own WordPress REST API (`/wp-json/wp/v2/whatson`).
 - Takealot returns two shapes. `buybox_items_type: "summary"` is a **variant
   parent** whose price is the cheapest option, and its
   `is_add_to_cart_available` is false because you must pick a size — reading

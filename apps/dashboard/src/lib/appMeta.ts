@@ -24,7 +24,6 @@ const META: Record<string, AppMeta> = {
   'baby-registry':{ color: '#D9A441', icon: 'gift',     note: 'gifts & claims' },
   'glovebox':     { color: '#5B8DEF', icon: 'car',      note: 'licence, disc & services' },
   'price-watch':  { color: '#A78BFA', icon: 'tag',      note: 'price drops & history' },
-  'front-row':    { color: '#EC4899', icon: 'ticket',   note: 'events before they sell out' },
 };
 
 export interface PlannedApp {
@@ -37,7 +36,7 @@ export interface PlannedApp {
  *  its META row — the tile picks up colour and icon like any other, and the
  *  test below fails if the META row is forgotten. */
 export const COMING_SOON: PlannedApp[] = [
-  // Nothing planned right now. Glovebox, Front Row and Price Watch have all
+  // Nothing planned right now. Glovebox and Price Watch have both
   // shipped — build-all picks each up from its index.html <title>, so listing
   // one here as well would render its tile twice.
 ];

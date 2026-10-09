@@ -1,5 +1,5 @@
 self.addEventListener('push', function (event) {
-  var data = { title: 'Front Row', body: 'A new event just landed' };
+  var data = { title: 'Price Watch', body: 'A price you track just moved' };
   try {
     data = event.data.json();
   } catch (e) {

@@ -75,7 +75,7 @@ create policy "public read" on sport_events for select to anon, authenticated us
 -- ---------------------------------------------------------------- sources
 -- A feed that goes quiet looks exactly like "no fixture changes", so every
 -- sync records how its last run went and the app shows a stale banner.
--- last_ok_at only advances on a clean run. Same shape as frontrow_sources.
+-- last_ok_at only advances on a clean run. Same shape as marvel_sources.
 create table sport_sources (
   key text primary key,
   label text not null,
