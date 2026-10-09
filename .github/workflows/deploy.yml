@@ -49,6 +49,20 @@ jobs:
         with:
           path: dist
 
+  # The edge functions are deployed by hand (CLAUDE.md, "Copy of record"), and
+  # Supabase's deploy does not typecheck, so nothing else ever compiles them,
+  # and a type error would go unnoticed until a cron run failed. This
+  # typechecks every function in the repo as Deno would run it. The deploy
+  # below does not wait for it: the site does not ship the functions, so a
+  # function's types should not hold the site back, but the PR shows it red.
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Typecheck edge functions
+        run: npm run check:functions
+
   deploy:
     needs: build
     # A PR gets the checks, never the live site.
