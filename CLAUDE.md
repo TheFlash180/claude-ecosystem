@@ -234,8 +234,9 @@ schedule them explicitly, once.
 
 The free plan has no backups you can restore yourself, so
 `.github/workflows/backup.yml` takes one every Sunday 01:30 UTC (and on
-demand): `pg_dump` of the `public` schema plus `auth.users` /
-`auth.identities` as data, checked by `tooling/backup-check.sh`, gzipped and
+demand): `tooling/backup-dump.sh` — `pg_dump` of the `public` schema plus
+`auth.users` / `auth.identities` as data — checked by
+`tooling/backup-check.sh`, gzipped and
 **encrypted with `BACKUP_PASSPHRASE` before upload** — this repo is public, and
 so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
 
@@ -257,14 +258,39 @@ so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
   both eu-central-1 clusters.
 - **Not in the backup:** Vault secrets (VAPID and TMDB keys — regenerate; push
   subscriptions then re-register), pg_cron jobs (documented in each
-  `schema.sql`), edge functions (in this repo).
+  `schema.sql`), edge functions (in this repo), and the `backup` schema with
+  its two functions and `backup_reader`'s login (the restore creates the role
+  without one) — recreate those before the new project's first backup.
+
+**Every backup is restored before it counts.** The `restore-check` job restores
+each one, exactly as below, into a throwaway Supabase on the runner and runs
+`tooling/restore-check.sh`: every table's row count against the dump, and the
+"manifest" (`tooling/backup-manifest.sql` — grants, RLS, policies, triggers,
+realtime membership, default privileges) taken from the live project at
+backup time against the same query on the restored copy. The first rehearsal
+is why. A plain `pg_dump --schema=public` restored badly in four ways, and
+three of them failed open:
+
+- It stopped at its own `CREATE SCHEMA public` — the documented restore had
+  never worked.
+- `--no-privileges`, and then the new project's default privileges, made
+  every function anon-executable, including the service_role-only Vault
+  getters (`get_*_vapid_private_key`, `get_tmdb_api_key`).
+- The signup allowlist trigger lives on `auth.users`, outside `public`, so it
+  was simply absent: anyone could sign up, and baby-logger's "any
+  authenticated user" policies would then hand them the baby log.
+- Realtime membership was dropped (`--no-publications`), so Baby Logger's
+  live sync went quiet.
+
+`backup-dump.sh` fixes each and says how in its comments. If the check goes
+red, the backup would not have saved you: fix the dump, not the check.
 
 To restore into a fresh project: download the artifact from the Actions run,
 then
 `gpg -d backup-YYYY-MM-DD.sql.gz.gpg | gunzip > backup.sql` and
 `psql "<new project's session-pooler URI>" -v ON_ERROR_STOP=1 -f backup.sql`.
-Users load first, so the rows pointing at them resolve. This has not yet been
-rehearsed end to end; do it once before relying on it.
+Users load first, so the rows pointing at them resolve; the allowlist trigger
+comes last, so it does not fire on them.
 
 ## Conventions that matter
 
