@@ -85,7 +85,7 @@ describe('renewalLines', () => {
 
 describe('staleLines', () => {
   const src = (over: Partial<DigestSource>): DigestSource => ({
-    app: 'Front Row', label: 'Quicket', enabled: true,
+    app: 'Price Watch', label: 'Takealot', enabled: true,
     lastOkAt: new Date(NOW - 2 * H).toISOString(), lastError: null, ...over,
   });
 
@@ -98,9 +98,9 @@ describe('staleLines', () => {
       src({ lastOkAt: new Date(NOW - 75 * H).toISOString() }),
       src({ app: 'Sport Watch', label: 'F1 calendar', lastError: 'HTTP 503' }),
       src({ app: 'Marvel Watch', label: 'TMDB', lastOkAt: null }),
-      src({ app: 'Price Watch', label: 'Takealot', enabled: false, lastError: 'off' }),
+      src({ app: 'Price Watch', label: 'Makro', enabled: false, lastError: 'off' }),
     ], NOW)).toEqual([
-      "⚠️ Front Row: Quicket hasn't updated in 3 days",
+      "⚠️ Price Watch: Takealot hasn't updated in 3 days",
       '⚠️ Sport Watch: F1 calendar sync is failing',
       '⚠️ Marvel Watch: TMDB has never synced',
     ]);
@@ -108,7 +108,7 @@ describe('staleLines', () => {
 
   it('never prints NaN for an unreadable sync time', () => {
     expect(staleLines([src({ lastOkAt: 'not a date' })], NOW))
-      .toEqual(['⚠️ Front Row: Quicket has no readable sync time']);
+      .toEqual(['⚠️ Price Watch: Takealot has no readable sync time']);
   });
 
   it('agrees with the shared staleness rule the apps draw their banners from', () => {

@@ -21,7 +21,6 @@ const VAPID_PUBLIC = "BO702Z-eGk6j4wmvsBxXxTK7fpuYoMvcOgA3qzlleNujyheKl7ldmC5245
 const SOURCE_TABLES: [string, string][] = [
   ["sport_sources", "Sport Watch"],
   ["marvel_sources", "Marvel Watch"],
-  ["frontrow_sources", "Front Row"],
   ["pricewatch_sources", "Price Watch"],
 ];
 
