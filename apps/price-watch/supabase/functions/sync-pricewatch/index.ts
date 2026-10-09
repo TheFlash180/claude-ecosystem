@@ -6,7 +6,7 @@
 // for an unchanged price would bury the handful of moments that matter, and
 // the reader treats it as a step function anyway.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const DETAIL = "https://api.takealot.com/rest/v-1-13-0/product-details";
 const UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36";
@@ -78,12 +78,29 @@ async function read(externalId: string): Promise<Reading> {
   };
 }
 
-Deno.serve(async () => {
+/** Only pg_cron may run this. The job sends x-cron-secret, read from Vault
+ *  (cron_secret) as it fires, and cron_secret_ok() checks it against Vault
+ *  again, service-role only, so the secret never leaves the database. Without
+ *  it, anyone who found the URL could run this as often as they liked: pushes
+ *  re-checked, upstream APIs hammered, the free tier's invocations spent.
+ *  See CLAUDE.md, "Edge functions". */
+async function fromCron(req: Request, sb: SupabaseClient): Promise<boolean> {
+  const secret = req.headers.get("x-cron-secret");
+  if (!secret) return false;
+  const { data, error } = await sb.rpc("cron_secret_ok", { p_secret: secret });
+  return !error && data === true;
+}
+
+Deno.serve(async (req) => {
   const started = Date.now();
   const sb = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+
+  if (!(await fromCron(req, sb))) {
+    return new Response(JSON.stringify({ error: "cron only" }), { status: 403 });
+  }
 
   // Only products someone actually tracks. An untracked product in the
   // catalogue is history worth keeping but not worth spending requests on.

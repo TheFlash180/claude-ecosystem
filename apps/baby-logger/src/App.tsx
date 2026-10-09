@@ -10,6 +10,9 @@ import type { Session } from '@supabase/supabase-js';
 
 type AppState = 'loading' | 'auth' | 'pre-birth' | 'post-birth';
 
+/** How often a queued event is retried while the phone claims to be online. */
+const RETRY_MS = 15_000;
+
 // The shared profiles table (FinTrack's) requires owner_key — map it from
 // the email so the fallback insert below can never violate its NOT NULL.
 const OWNER_KEYS: Record<string, string> = {
@@ -97,12 +100,33 @@ export default function App() {
 
   // Flush queued offline events on start-up and whenever we come back
   // online; remount the views afterwards so they show the synced rows.
+  //
+  // Coming back online is not enough on its own. On a weak signal the phone
+  // still reports itself online while requests die, so a feed is queued with
+  // `online` never changing — and it used to sit there, visible on this phone
+  // and absent from the other, until the app was restarted. While anything is
+  // waiting, retry on a timer and whenever the app is brought back to the
+  // front. flushQueue guards against overlapping runs.
+  const hasPending = pendingSync > 0;
   useEffect(() => {
     if (!online) return;
-    void flushQueue().then((n) => {
-      if (n > 0) setRefreshNonce((x) => x + 1);
-    });
-  }, [online]);
+    const flush = () => {
+      void flushQueue().then((n) => {
+        if (n > 0) setRefreshNonce((x) => x + 1);
+      });
+    };
+    flush();
+    if (!hasPending) return;
+    const t = setInterval(flush, RETRY_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') flush();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [online, hasPending]);
 
   useEffect(() => {
     const style = document.createElement('style');

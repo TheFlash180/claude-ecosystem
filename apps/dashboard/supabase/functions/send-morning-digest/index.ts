@@ -8,10 +8,11 @@
 // stopped syncing. `last_sent_on` makes a retried or doubled run harmless.
 //
 // POST ?dry=1 returns the shared lines — everything except Glovebox — without
-// sending. The function takes no auth, like every sender here, so a dry run
-// must never show one device's renewals to whoever asks.
+// sending. It needs the cron secret like any other call (see fromCron), but a
+// dry run still never shows one device's renewals: whoever holds the secret
+// is no more entitled to a stranger's licence dates than anyone else.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { buildDigest, sastDay, type DigestRenewal, type DigestSource } from "./digest.ts";
 
@@ -39,12 +40,29 @@ function fail(message: string): Response {
   return new Response(JSON.stringify({ error: message }), { status: 500 });
 }
 
+/** Only pg_cron may run this. The job sends x-cron-secret, read from Vault
+ *  (cron_secret) as it fires, and cron_secret_ok() checks it against Vault
+ *  again, service-role only, so the secret never leaves the database. Without
+ *  it, anyone who found the URL could run this as often as they liked: pushes
+ *  re-checked, upstream APIs hammered, the free tier's invocations spent.
+ *  See CLAUDE.md, "Edge functions". */
+async function fromCron(req: Request, sb: SupabaseClient): Promise<boolean> {
+  const secret = req.headers.get("x-cron-secret");
+  if (!secret) return false;
+  const { data, error } = await sb.rpc("cron_secret_ok", { p_secret: secret });
+  return !error && data === true;
+}
+
 Deno.serve(async (req) => {
   const dry = new URL(req.url).searchParams.get("dry") === "1";
   const sb = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+
+  if (!(await fromCron(req, sb))) {
+    return new Response(JSON.stringify({ error: "cron only" }), { status: 403 });
+  }
 
   const now = Date.now();
   const today = sastDay(now);

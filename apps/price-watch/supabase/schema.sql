@@ -276,13 +276,13 @@ grant execute on function pricewatch_push_register(text, text, text, text) to an
 select cron.schedule('pricewatch-sync', '5 4 * * *', $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-pricewatch',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
     body := '{}'::jsonb) AS request_id;
 $$);
 
 select cron.schedule('pricewatch-notify', '35 4 * * *', $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/notify-pricewatch',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
     body := '{}'::jsonb) AS request_id;
 $$);

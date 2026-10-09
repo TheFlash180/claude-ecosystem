@@ -41,10 +41,13 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      stamp: ${{ steps.dump.outputs.stamp }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Dump, check and encrypt
+        id: dump
         env:
           PGPASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -74,36 +77,11 @@ jobs:
           fi
 
           umask 077
-          psql_q() { pg psql -X -q -v ON_ERROR_STOP=1 -h "$host" -p 5432 -U "$user" -d postgres "$@"; }
-
-          # Users first, as data only: feed_events.logged_by and friends point
-          # at auth.users, so a restore has to load them before public. A new
-          # project already has the auth schema itself.
-          #
-          # Not pg_dump: backup_reader cannot be given USAGE on schema auth
-          # (supabase_admin owns it; postgres cannot pass it on), so the rows
-          # come through backup.auth_users() / auth_identities(), definer
-          # functions only this role may call. Written in pg_dump's own COPY
-          # format with an explicit column list that leaves out generated
-          # columns (auth.users.confirmed_at), which a restore cannot write.
-          auth_copy() {
-            local cols
-            cols="$(psql_q -Atc "select string_agg(quote_ident(a.attname), ', ' order by a.attnum)
-              from pg_attribute a join pg_class c on c.oid = a.attrelid
-              join pg_namespace n on n.oid = c.relnamespace
-              where n.nspname = 'auth' and c.relname = '$1'
-                and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''")"
-            [ -n "$cols" ] || { echo "::error::no columns found for auth.$1"; return 1; }
-            echo "COPY auth.$1 ($cols) FROM stdin;"
-            psql_q -c "\copy (select $cols from backup.auth_$1()) to stdout"
-            echo '\.'
-            echo
-          }
-          { auth_copy users; auth_copy identities; } > dump.sql
-
-          pg pg_dump -h "$host" -p 5432 -U "$user" -d postgres \
-            --schema=public --no-owner --no-privileges \
-            --no-publications --no-subscriptions >> dump.sql
+          # What goes in, and why it is more than a pg_dump: the comments
+          # at the top of tooling/backup-dump.sh.
+          export PGHOST="$host" PGPORT=5432 PGUSER="$user" PGDATABASE=postgres PGSSLMODE=require
+          export PG_RUN="docker run --rm -i -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE postgres:17"
+          bash tooling/backup-dump.sh > dump.sql
 
           bash tooling/backup-check.sh dump.sql
 
@@ -114,6 +92,7 @@ jobs:
             -o "backup-$stamp.sql.gz.gpg" dump.sql.gz 3<<<"$BACKUP_PASSPHRASE"
           rm -f dump.sql.gz
           echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -123,3 +102,46 @@ jobs:
           if-no-files-found: error
           # Already gzipped and encrypted; compressing again gains nothing.
           compression-level: 0
+
+  # A backup is only as good as its restore, and the first one rehearsed
+  # failed at its first public statement. So every backup is restored, the way
+  # CLAUDE.md says to, into a throwaway Supabase (database and auth only) on
+  # the runner, and checked against the project it came from: every table's
+  # row count, and the manifest of grants, RLS, policies, triggers and
+  # realtime membership (tooling/restore-check.sh). A red run here means the
+  # backup would not have saved you; the artifact is kept either way.
+  #
+  # The decrypted copy exists only on this runner. The log shows table
+  # names, counts and schema facts, never rows: psql reports errors tersely,
+  # because a failed COPY's context line would quote a row into a public log.
+  restore-check:
+    needs: backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: db-backup-${{ needs.backup.outputs.stamp }}
+
+      - name: Start a throwaway Supabase
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx -y supabase@2.120.0 init --force > /dev/null
+          npx -y supabase@2.120.0 start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit,kong,postgrest
+
+      - name: Restore and compare with the live project
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 \
+            -d backup-*.sql.gz.gpg 3<<<"$BACKUP_PASSPHRASE" | gunzip > backup.sql
+
+          export PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres PGDATABASE=postgres
+          export PG_RUN="docker run --rm -i --network host -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -v $PWD:/w -w /w postgres:17"
+          $PG_RUN psql -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -f backup.sql > /dev/null
+          bash tooling/restore-check.sh backup.sql
+          rm -f backup.sql

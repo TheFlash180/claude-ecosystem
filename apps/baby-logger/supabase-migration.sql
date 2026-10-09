@@ -32,7 +32,7 @@ create table if not exists babies (
 );
 alter table babies enable row level security;
 create policy "Authenticated users full access" on babies
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
 
 -- 3. FEED EVENTS
 create table if not exists feed_events (
@@ -48,7 +48,7 @@ create table if not exists feed_events (
 );
 alter table feed_events enable row level security;
 create policy "Authenticated users full access" on feed_events
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
 
 -- 4. SLEEP EVENTS
 create table if not exists sleep_events (
@@ -62,7 +62,7 @@ create table if not exists sleep_events (
 );
 alter table sleep_events enable row level security;
 create policy "Authenticated users full access" on sleep_events
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
 
 -- 5. NAPPY EVENTS
 create table if not exists nappy_events (
@@ -76,7 +76,7 @@ create table if not exists nappy_events (
 );
 alter table nappy_events enable row level security;
 create policy "Authenticated users full access" on nappy_events
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
 
 -- 6. WEIGHT EVENTS
 create table if not exists weight_events (
@@ -90,7 +90,7 @@ create table if not exists weight_events (
 );
 alter table weight_events enable row level security;
 create policy "Authenticated users full access" on weight_events
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
 
 -- ============================================================
 -- INDEXES

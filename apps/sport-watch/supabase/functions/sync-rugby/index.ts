@@ -22,7 +22,7 @@
 // sync-f1. Reminders need no handling here: sport_reminders_follow_event
 // repoints and re-arms them when a kick-off moves.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.wr-rims-prod.pulselive.com/rugby/v3/match";
 const UA = { "User-Agent": "sa-sport-watch/1.0 (personal PWA; daily sync)" };
@@ -193,11 +193,28 @@ function adoptable(rows: Row[], f: Fixture): Row | undefined {
   });
 }
 
-Deno.serve(async () => {
+/** Only pg_cron may run this. The job sends x-cron-secret, read from Vault
+ *  (cron_secret) as it fires, and cron_secret_ok() checks it against Vault
+ *  again, service-role only, so the secret never leaves the database. Without
+ *  it, anyone who found the URL could run this as often as they liked: pushes
+ *  re-checked, upstream APIs hammered, the free tier's invocations spent.
+ *  See CLAUDE.md, "Edge functions". */
+async function fromCron(req: Request, sb: SupabaseClient): Promise<boolean> {
+  const secret = req.headers.get("x-cron-secret");
+  if (!secret) return false;
+  const { data, error } = await sb.rpc("cron_secret_ok", { p_secret: secret });
+  return !error && data === true;
+}
+
+Deno.serve(async (req) => {
   const sb = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+
+  if (!(await fromCron(req, sb))) {
+    return new Response(JSON.stringify({ error: "cron only" }), { status: 403 });
+  }
 
   const startedAt = new Date().toISOString();
   const fail = async (message: string, status: number) => {

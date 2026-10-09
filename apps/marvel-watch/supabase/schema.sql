@@ -346,7 +346,7 @@ select cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-marvel',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
     body := '{}'::jsonb
   ) AS request_id;
   $$
@@ -358,7 +358,7 @@ select cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/send-marvel-reminders',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
     body := '{}'::jsonb
   ) AS request_id;
   $$

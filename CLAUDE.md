@@ -93,8 +93,9 @@ function and the dashboard's vitest both import. Three rules in it matter:
 
 It has its own VAPID keypair (`dashboard_vapid_private_key`),
 `public/push-sw.js` imported into the hub's worker, and a badge.
-`?dry=1` returns the shared lines without sending — never the Glovebox ones,
-because the function takes no auth.
+`?dry=1` returns the shared lines without sending — never the Glovebox ones:
+it needs the cron secret like any call (below), but holding that is no
+entitlement to one device's renewals.
 
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
@@ -135,7 +136,11 @@ onto the page.
   setting the birth date switches both. Realtime goes through RLS like any
   query. The socket dies when a phone sleeps and nothing replays what it
   missed, so **coming back to the app reloads as well** — keep that when
-  touching it; the socket alone is not correct.
+  touching it; the socket alone is not correct. The same goes for the
+  offline queue (`lib/eventQueue.ts`): on a weak signal the phone reports
+  itself online while requests die, so the `online` event never fires.
+  App retries every 15s and on coming back to the app while anything is
+  queued; without that a feed sat on one phone until a restart.
 - **Night mode** (`lib/night.ts`) swaps the CSS variables for a dim
   amber-on-black palette, automatically 19:00–06:00 SAST or always/off per
   phone. It only works because components use `var(--…)`; a hardcoded colour
@@ -226,12 +231,39 @@ drift, the file is the one that is wrong.
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
 
+### Edge functions are cron-only, except two
+
+Every function runs with `verify_jwt` off, because pg_cron has no user JWT to
+send. Until October 2026 they also checked nothing, so anyone who found a URL
+could run any sync or sender as often as they liked. **The ten cron-driven
+functions now answer 403 unless the request carries `x-cron-secret`.**
+
+- The secret is generated in Vault (`cron_secret`) and never leaves the
+  database. Each cron job reads it as it fires
+  (`jsonb_build_object(…, 'x-cron-secret', (select decrypted_secret …))`).
+  Each function's `fromCron()` checks it through `cron_secret_ok()`, which only
+  `service_role` may call, before doing anything else. Copy of record:
+  `packages/shared/supabase/cron_secret.sql`, including how to rotate it.
+- **A new cron-driven function needs both halves:** `fromCron()` at the top of
+  its handler, and the header in its cron job. Without the header, its own
+  cron gets 403 every run. Without the check, it is open again.
+- **`search-pricewatch` and `sport-calendar` deliberately do not check it.**
+  The Price Watch app calls the first from the browser, and a phone's calendar
+  subscribes to the second. Neither writes anything.
+- To run a cron function by hand, call it from SQL with the same header, e.g.
+  `select net.http_post(url := '…/functions/v1/sync-f1', headers :=
+  jsonb_build_object('x-cron-secret', (select decrypted_secret from
+  vault.decrypted_secrets where name = 'cron_secret')))`, then read the reply
+  from `net._http_response`. Mind that the senders really send, Meal Prep's
+  "Prep day!" in particular.
+
 ### Backups
 
 The free plan has no backups you can restore yourself, so
 `.github/workflows/backup.yml` takes one every Sunday 01:30 UTC (and on
-demand): `pg_dump` of the `public` schema plus `auth.users` /
-`auth.identities` as data, checked by `tooling/backup-check.sh`, gzipped and
+demand): `tooling/backup-dump.sh` — `pg_dump` of the `public` schema plus
+`auth.users` / `auth.identities` as data — checked by
+`tooling/backup-check.sh`, gzipped and
 **encrypted with `BACKUP_PASSPHRASE` before upload** — this repo is public, and
 so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
 
@@ -253,14 +285,39 @@ so are its artifacts to any signed-in GitHub user. Artifacts are kept 90 days.
   both eu-central-1 clusters.
 - **Not in the backup:** Vault secrets (VAPID and TMDB keys — regenerate; push
   subscriptions then re-register), pg_cron jobs (documented in each
-  `schema.sql`), edge functions (in this repo).
+  `schema.sql`), edge functions (in this repo), and the `backup` schema with
+  its two functions and `backup_reader`'s login (the restore creates the role
+  without one) — recreate those before the new project's first backup.
+
+**Every backup is restored before it counts.** The `restore-check` job restores
+each one, exactly as below, into a throwaway Supabase on the runner and runs
+`tooling/restore-check.sh`: every table's row count against the dump, and the
+"manifest" (`tooling/backup-manifest.sql` — grants, RLS, policies, triggers,
+realtime membership, default privileges) taken from the live project at
+backup time against the same query on the restored copy. The first rehearsal
+is why. A plain `pg_dump --schema=public` restored badly in four ways, and
+three of them failed open:
+
+- It stopped at its own `CREATE SCHEMA public` — the documented restore had
+  never worked.
+- `--no-privileges`, and then the new project's default privileges, made
+  every function anon-executable, including the service_role-only Vault
+  getters (`get_*_vapid_private_key`, `get_tmdb_api_key`).
+- The signup allowlist trigger lives on `auth.users`, outside `public`, so it
+  was simply absent: anyone could sign up, and baby-logger's "any
+  authenticated user" policies would then hand them the baby log.
+- Realtime membership was dropped (`--no-publications`), so Baby Logger's
+  live sync went quiet.
+
+`backup-dump.sh` fixes each and says how in its comments. If the check goes
+red, the backup would not have saved you: fix the dump, not the check.
 
 To restore into a fresh project: download the artifact from the Actions run,
 then
 `gpg -d backup-YYYY-MM-DD.sql.gz.gpg | gunzip > backup.sql` and
 `psql "<new project's session-pooler URI>" -v ON_ERROR_STOP=1 -f backup.sql`.
-Users load first, so the rows pointing at them resolve. This has not yet been
-rehearsed end to end; do it once before relying on it.
+Users load first, so the rows pointing at them resolve; the allowlist trigger
+comes last, so it does not fire on them.
 
 ## Conventions that matter
 
