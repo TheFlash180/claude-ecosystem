@@ -15,7 +15,7 @@ const VAPID_PUBLIC = "BLmIByq8Kf76APBsfcRI-vliFFaZbQyBZtJbkD3rqb8LsUv925pXbgj1DI
 
 let vapidReady = false;
 
-async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function ensureVapid(sb: SupabaseClient): Promise<boolean> {
   if (vapidReady) return true;
   const { data, error } = await sb.rpc("get_marvel_vapid_private_key");
   if (error || !data) return false;
