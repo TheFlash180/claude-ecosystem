@@ -8,7 +8,7 @@
 // VAPID key from Vault (get_marvel_vapid_private_key) — Marvel has its OWN
 // keypair since 2026-07-18; it no longer shares sport-watch's.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 const VAPID_PUBLIC = "BLmIByq8Kf76APBsfcRI-vliFFaZbQyBZtJbkD3rqb8LsUv925pXbgj1DIjGejwbIew-LBJuZc8NNdJXo_7dQJI";
@@ -40,11 +40,28 @@ function fmtNice(ymd: string): string {
   });
 }
 
-Deno.serve(async () => {
+/** Only pg_cron may run this. The job sends x-cron-secret, read from Vault
+ *  (cron_secret) as it fires, and cron_secret_ok() checks it against Vault
+ *  again, service-role only, so the secret never leaves the database. Without
+ *  it, anyone who found the URL could run this as often as they liked: pushes
+ *  re-checked, upstream APIs hammered, the free tier's invocations spent.
+ *  See CLAUDE.md, "Edge functions". */
+async function fromCron(req: Request, sb: SupabaseClient): Promise<boolean> {
+  const secret = req.headers.get("x-cron-secret");
+  if (!secret) return false;
+  const { data, error } = await sb.rpc("cron_secret_ok", { p_secret: secret });
+  return !error && data === true;
+}
+
+Deno.serve(async (req) => {
   const sb = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+
+  if (!(await fromCron(req, sb))) {
+    return new Response(JSON.stringify({ error: "cron only" }), { status: 403 });
+  }
 
   if (!(await ensureVapid(sb))) {
     return new Response(JSON.stringify({ error: "VAPID key unavailable" }), { status: 500 });

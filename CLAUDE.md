@@ -93,8 +93,9 @@ function and the dashboard's vitest both import. Three rules in it matter:
 
 It has its own VAPID keypair (`dashboard_vapid_private_key`),
 `public/push-sw.js` imported into the hub's worker, and a badge.
-`?dry=1` returns the shared lines without sending — never the Glovebox ones,
-because the function takes no auth.
+`?dry=1` returns the shared lines without sending — never the Glovebox ones:
+it needs the cron secret like any call (below), but holding that is no
+entitlement to one device's renewals.
 
 **Only the dashboard uses `AppShell`.** Every other app builds its own chrome
 around an app-specific palette exported from its `lib/config.ts` (`K` in
@@ -229,6 +230,32 @@ drift, the file is the one that is wrong.
 
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
+
+### Edge functions are cron-only, except two
+
+Every function runs with `verify_jwt` off, because pg_cron has no user JWT to
+send. Until October 2026 they also checked nothing, so anyone who found a URL
+could run any sync or sender as often as they liked. **The ten cron-driven
+functions now answer 403 unless the request carries `x-cron-secret`.**
+
+- The secret is generated in Vault (`cron_secret`) and never leaves the
+  database. Each cron job reads it as it fires
+  (`jsonb_build_object(…, 'x-cron-secret', (select decrypted_secret …))`).
+  Each function's `fromCron()` checks it through `cron_secret_ok()`, which only
+  `service_role` may call, before doing anything else. Copy of record:
+  `packages/shared/supabase/cron_secret.sql`, including how to rotate it.
+- **A new cron-driven function needs both halves:** `fromCron()` at the top of
+  its handler, and the header in its cron job. Without the header, its own
+  cron gets 403 every run. Without the check, it is open again.
+- **`search-pricewatch` and `sport-calendar` deliberately do not check it.**
+  The Price Watch app calls the first from the browser, and a phone's calendar
+  subscribes to the second. Neither writes anything.
+- To run a cron function by hand, call it from SQL with the same header, e.g.
+  `select net.http_post(url := '…/functions/v1/sync-f1', headers :=
+  jsonb_build_object('x-cron-secret', (select decrypted_secret from
+  vault.decrypted_secrets where name = 'cron_secret')))`, then read the reply
+  from `net._http_response`. Mind that the senders really send, Meal Prep's
+  "Prep day!" in particular.
 
 ### Backups
 
