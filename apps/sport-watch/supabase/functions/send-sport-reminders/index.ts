@@ -12,7 +12,7 @@ const VAPID_PUBLIC = "BGYmKYowZiS3ohHCksH6TKHimd-EaDcLX5ehZMAuURlVrBixtIxEpoStOq
 
 let vapidReady = false;
 
-async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function ensureVapid(sb: SupabaseClient): Promise<boolean> {
   if (vapidReady) return true;
   let key = Deno.env.get("VAPID_PRIVATE_KEY");
   if (!key) {

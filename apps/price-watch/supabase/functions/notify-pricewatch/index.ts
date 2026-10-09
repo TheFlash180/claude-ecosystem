@@ -22,7 +22,7 @@ const MAX_PER_DEVICE = 6;
 
 let vapidReady = false;
 
-async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function ensureVapid(sb: SupabaseClient): Promise<boolean> {
   if (vapidReady) return true;
   let key = Deno.env.get("PRICEWATCH_VAPID_PRIVATE_KEY");
   if (!key) {

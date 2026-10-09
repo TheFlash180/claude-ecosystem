@@ -27,7 +27,7 @@ const SOURCE_TABLES: [string, string][] = [
 
 let vapidReady = false;
 
-async function ensureVapid(sb: ReturnType<typeof createClient>): Promise<boolean> {
+async function ensureVapid(sb: SupabaseClient): Promise<boolean> {
   if (vapidReady) return true;
   const { data, error } = await sb.rpc("get_dashboard_vapid_private_key");
   if (error || !data) return false;
