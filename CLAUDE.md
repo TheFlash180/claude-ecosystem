@@ -405,8 +405,11 @@ exactly what a naive lean-protein filter would surface first.
 
 ## Working practice
 
-- `npm test && npm run build` locally is exactly what CI runs, in that order.
-  Run both before pushing.
+- `npm test && npm run build` locally is exactly what CI's `build` job runs,
+  in that order. Run both before pushing. CI's `functions` job runs
+  `npm run check:functions`, a `deno check` of every edge function: their
+  deploy never typechecks, so this is the only thing that does. Run it too
+  when you touch `supabase/functions/**`.
 - Tests are vitest, colocated in `src/lib/__tests__/`. Pure logic lives in
   `src/lib/*.ts` with no React or Supabase imports so it is directly testable.
 - `.github/workflows/deploy.yml` runs on pushes to `main` **and on pull
