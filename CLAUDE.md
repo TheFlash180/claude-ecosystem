@@ -5,13 +5,14 @@ is free-tier: GitHub Pages for hosting, one shared Supabase project for data.
 
 ## Read this first: things that look like bugs and are not
 
-**Supabase's advisors report ~169 findings and essentially all of them are the
-design. Do not "fix" them.** As of late September 2026:
+**Supabase's advisors report ~156 findings and essentially all of them are the
+design. Do not "fix" them.** As of October 2026, recounted after Front Row's
+retirement took its tables and functions out of the list:
 
 | Count | Lint | Why it is there |
 |---|---|---|
-| 145 | `anon_/authenticated_security_definer_function_executable` (70 + 75) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
-| 23 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
+| 135 | `anon_/authenticated_security_definer_function_executable` (65 + 70) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
+| 20 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
 
 fintrack's `using (true)` policies on `transactions`, `budgets`, `profiles`,
@@ -19,6 +20,11 @@ fintrack's `using (true)` policies on `transactions`, `budgets`, `profiles`,
 deliberate (see the fintrack-pro CLAUDE.md) — Supabase simply stopped
 reporting them as `rls_policy_always_true` by September 2026, so their absence
 from the list is not a change to chase.
+
+Security definer functions that only `service_role` may execute — the Vault
+getters (`get_*_vapid_private_key`, `get_tmdb_api_key`) and `cron_secret_ok` —
+raise no lint at all, so a new one adding to the count means it is reachable
+by anon or authenticated, which for those would be a leak.
 
 Adding policies to those tables, revoking anon execute on those functions, or
 tightening the fintrack policies to per-owner isolation each break a working
