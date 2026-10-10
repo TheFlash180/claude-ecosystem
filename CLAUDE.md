@@ -485,6 +485,15 @@ exactly what a naive lean-protein filter would surface first.
   run has refreshed for `RETIRE_AFTER_DAYS` (3) — `updated_at` is stamped on
   every session the calendar still carries, so it serves as the missing-since
   clock without a new column — and only after a run whose every write landed.
+- **Never decide anything from absence on a load that failed.** Sport Watch
+  fell back to a bundled `events.json` when its read failed, with ids from
+  before the database, so the bell-pruning effect saw every reminded fixture
+  as gone: one failed request on a weak signal cleared every bell and then
+  deleted them from the server. It now prunes only on a fresh load
+  (`fromDb`), and the fallback is the phone's own last good load
+  (`lib/eventsCache.ts`) rather than a file nobody kept current, which still
+  had August's round numbers in October. Same rule as Marvel's
+  `listWatched()` returning null: a failed read is not an empty one.
 - Notifiers only record a send **after** delivery succeeds, so a total failure
   retries rather than being silently marked done. **price-watch adds two
   deliberate exceptions**, both meaning "we chose not to send this"

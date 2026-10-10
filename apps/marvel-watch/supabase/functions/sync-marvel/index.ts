@@ -1,6 +1,7 @@
 // Marvel Watch: TMDB auto-sync (copy of record — deployed as sync-marvel).
 // Called daily by pg_cron. Pulls Marvel Studios movies + Disney+ shows (and
-// Sony's Marvel films) from TMDB and upserts marvel_titles. Rows the admin
+// Sony's Marvel films) from TMDB, minus side content (podcasts, making-ofs,
+// kids' specials; see SIDE_GENRES), and upserts marvel_titles. Rows the admin
 // created/edited (manual=true) are never overwritten. Brand-new future
 // titles land with announced_pushed=false, which makes
 // send-marvel-reminders push a "newly announced" notification to every
@@ -38,6 +39,19 @@ const WINDOW_DAYS = 120;
  *  so pages are walked until TMDB says there are no more; hitting this cap
  *  means the list was truncated and the reconcile pass stands down. */
 const MAX_PAGES = 5;
+
+/** TMDB genres that mark side content rather than a release: podcasts (Talk),
+ *  the "Assembled" making-ofs (Documentary), News, Reality, and the kids'
+ *  specials (Family on films, Kids on TV). Marvel Studios' company id brings
+ *  all of these in with the films and series. Checked against every title the
+ *  company had from 2021 to 2028: not one real film or series carries any of
+ *  these, and the animated ones that matter (What If...?, X-Men '97, Marvel
+ *  Zombies) are tagged Animation without Family. No genres at all, as on a
+ *  freshly announced title, is kept. A side title already in the table simply
+ *  stops being returned, so reconcile retires it after the grace period. */
+const SIDE_GENRES = new Set([99, 10751, 10762, 10763, 10764, 10767]);
+const isSideContent = (row: any) =>
+  Array.isArray(row.genre_ids) && row.genre_ids.some((g: number) => SIDE_GENRES.has(g));
 
 function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -151,7 +165,7 @@ Deno.serve(async (req) => {
     for (let page = 1; page <= MAX_PAGES; page++) {
       const j = await tmdb(path, params(page));
       if (!j) { errors.push(`${label} p${page}`); return; }
-      for (const row of j.results ?? []) onRow(row);
+      for (const row of j.results ?? []) if (!isSideContent(row)) onRow(row);
       const total = j.total_pages ?? 1;
       if (total <= page) return;
       if (page === MAX_PAGES) {

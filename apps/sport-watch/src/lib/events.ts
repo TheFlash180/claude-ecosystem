@@ -1,10 +1,10 @@
 // Event + category data: the database is the source of truth (editable in
-// /admin, F1 auto-synced daily). The bundled events.json and built-in
-// category list are only an offline/failure fallback.
+// /admin, F1 auto-synced daily). When a load fails, the phone's own last good
+// load stands in (lib/eventsCache.ts), with the built-in category list.
 import { sb } from './supabase';
 import { DEFAULT_CATEGORIES, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from './config';
 import { sourceFromRow, type Source, type SourceRow } from '@ecosystem/shared';
-import eventsData from '../data/events.json';
+import { EVENTS_CACHE_KEY, decodeCache, encodeCache } from './eventsCache';
 
 interface DbEventRow {
   id: string;
@@ -68,41 +68,35 @@ function catFromDb(r: DbCategoryRow): Category {
   };
 }
 
-interface RawJsonEvent {
-  id: number;
-  sport: string;
-  competition: string;
-  home: string;
-  away: string | null;
-  homeFlag: string;
-  awayFlag: string | null;
-  date: string | null;
-  venue?: string;
-  result?: string;
-  note?: string;
-  isConditional?: boolean;
-  isSpecial?: boolean;
-  dateTBC?: boolean;
-}
-
-export function fallbackEvents(): SportEvent[] {
-  const known = new Set(DEFAULT_CATEGORIES.map((c) => c.key));
-  return (eventsData.events as RawJsonEvent[])
-    .filter((e) => known.has(e.sport))
-    .map((e) => ({
-      ...e,
-      id: String(e.id),
-      sport: e.sport as SportKey,
-      date: e.date ? new Date(e.date) : null,
-    }));
-}
-
 export interface RegistryData {
   events: SportEvent[];
   categories: Category[];
   cats: CatMap;
   sources: Source[];
+  /** True only for a fresh database load. Anything decided from absence —
+   *  pruning bells, syncing them to the server — must wait for this. */
   fromDb: boolean;
+  /** When the cached list was loaded, for a load that fell back to it. */
+  cachedAt?: string;
+}
+
+function readCache() {
+  try {
+    return decodeCache<DbEventRow, DbCategoryRow>(localStorage.getItem(EVENTS_CACHE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(events: DbEventRow[], categories: DbCategoryRow[]) {
+  try {
+    localStorage.setItem(EVENTS_CACHE_KEY, encodeCache(events, categories));
+  } catch { /* storage full/blocked: the next failed load just shows nothing */ }
+}
+
+function withCategories(rows: DbCategoryRow[]) {
+  const categories = rows.length > 0 ? rows.map(catFromDb) : DEFAULT_CATEGORIES;
+  return { categories, cats: toCatMap(categories) };
 }
 
 export async function fetchEvents(): Promise<RegistryData> {
@@ -114,13 +108,11 @@ export async function fetchEvents(): Promise<RegistryData> {
       client.from('sport_sources').select('*').order('key'),
     ]);
     if (!evRes.error && evRes.data && evRes.data.length > 0) {
-      const categories = (!catRes.error && catRes.data && catRes.data.length > 0)
-        ? (catRes.data as DbCategoryRow[]).map(catFromDb)
-        : DEFAULT_CATEGORIES;
+      const catRows = (!catRes.error && catRes.data) ? catRes.data as DbCategoryRow[] : [];
+      writeCache(evRes.data as DbEventRow[], catRows);
       return {
         events: (evRes.data as DbEventRow[]).map(fromDb),
-        categories,
-        cats: toCatMap(categories),
+        ...withCategories(catRows),
         // No sources row is not the same as a stale one: an older database
         // without the table should show no banner, not a false alarm.
         sources: (!srcRes.error && srcRes.data)
@@ -130,14 +122,15 @@ export async function fetchEvents(): Promise<RegistryData> {
       };
     }
   }
+  const cache = readCache();
   return {
-    events: fallbackEvents(),
-    categories: DEFAULT_CATEGORIES,
-    cats: toCatMap(DEFAULT_CATEGORIES),
-    // Offline: the bundled fixtures are the known problem already, so there is
-    // nothing useful a source banner could add on top of that.
+    events: (cache?.events ?? []).map(fromDb),
+    ...withCategories(cache?.categories ?? []),
+    // Offline: the line saying when this list was loaded is the warning; a
+    // source banner on top of it would add nothing.
     sources: [],
     fromDb: false,
+    cachedAt: cache?.savedAt,
   };
 }
 
