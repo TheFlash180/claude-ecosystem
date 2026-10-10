@@ -155,6 +155,37 @@ create table marvel_push_reminders (
   unique (sub_id, title_id, lead_days)
 );
 
+-- Reminders store a denormalized release_date and title_label (the sender
+-- reads only this table). TMDB moves dates by a day or two all the time, and
+-- before this trigger a reminder kept the date it was set with: three titles'
+-- reminders were a day or two out, so a "releases tomorrow" push would have
+-- landed on the wrong day. Pending reminders now follow the title, and re-arm
+-- if the new date is today or later (SAST), same as sport_reminders_follow_event.
+-- A title going TBA (null date) leaves them be: the column is not null, and
+-- the old date is the best guess until a new one arrives.
+create or replace function marvel_reminders_follow_title()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.release_date is not null
+     and (new.release_date is distinct from old.release_date or new.title is distinct from old.title) then
+    update marvel_push_reminders
+       set release_date = new.release_date,
+           title_label = new.title,
+           notified = case
+             when release_date is distinct from new.release_date
+              and new.release_date >= (now() at time zone 'Africa/Johannesburg')::date
+             then false else notified end
+     where title_id = new.id
+       and (release_date is distinct from new.release_date or title_label is distinct from new.title);
+  end if;
+  return new;
+end $$;
+revoke all on function marvel_reminders_follow_title() from public, anon, authenticated;
+
+create trigger marvel_reminders_follow_title
+  after update of release_date, title on marvel_titles
+  for each row execute function marvel_reminders_follow_title();
+
 alter table marvel_push_subs enable row level security;
 alter table marvel_push_reminders enable row level security;
 -- NO open policies: token-checked definer RPCs only.
