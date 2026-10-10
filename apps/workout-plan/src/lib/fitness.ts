@@ -192,3 +192,22 @@ export function runStats(runs: RunEntry[]): RunStats {
   const latestSeconds = runs[0].seconds;
   return { pbSeconds, latestSeconds, latestIsPb: runs.length > 1 && latestSeconds === pbSeconds };
 }
+
+/** Where past runs were, most recent first, one entry per place. The run sheet
+ *  starts on the first and offers the rest, because a free-text field typed at
+ *  the finish line every Saturday is how "Bryanston" became "Bryonston" in
+ *  September 2026. Case and spacing differences count as the same place (the
+ *  most recent spelling wins), and "parkrun", what an empty field saves as, is
+ *  not a place. */
+export function pastLocations(runs: RunEntry[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of [...runs].sort((a, b) => b.date.localeCompare(a.date))) {
+    const loc = r.location.trim().replace(/\s+/g, ' ');
+    const key = loc.toLowerCase();
+    if (!loc || key === 'parkrun' || seen.has(key)) continue;
+    seen.add(key);
+    out.push(loc);
+  }
+  return out;
+}

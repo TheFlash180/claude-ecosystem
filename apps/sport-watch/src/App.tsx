@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, CSSProperties } from "react";
 import { AlertTriangle, Bell, CalendarDays, Settings } from "lucide-react";
 import { staleSources, staleMessage, type Source } from "@ecosystem/shared";
+import { savedAtLabel } from "./lib/eventsCache";
 import { catOf, DEFAULT_CATEGORIES, matchTitle, S, toCatMap, type Category, type CatMap, type SportEvent, type SportKey } from "./lib/config";
 import { fetchEvents, sortEvents } from "./lib/events";
 import { fmtTime, getCountdown, isPast, isLive } from "./lib/time";
@@ -113,6 +114,10 @@ export default function App() {
   const [, tick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  // null while the first load runs; then fresh (true) or the cached/empty
+  // fallback (false), with when the cached list was loaded.
+  const [fresh, setFresh] = useState<boolean | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | undefined>();
   const pushReady = useRef(false);
 
   const leadFor = useCallback(
@@ -128,6 +133,8 @@ export default function App() {
     setCategories(data.categories);
     setCats(data.cats);
     setSources(data.sources);
+    setFresh(data.fromDb);
+    setCachedAt(data.cachedAt);
     setLoading(false);
   }, []);
 
@@ -137,8 +144,15 @@ export default function App() {
   // already finished (the header count must reflect only upcoming reminders,
   // and a played fixture's bell should clear itself), then bring the server's
   // push reminders in line with this device.
+  //
+  // Only against a fresh load. Pruning is decided from absence, and a list
+  // that failed to load is absent everywhere: the old bundled fallback had
+  // different ids, so one failed read (a weak signal can fail one request and
+  // not the next) cleared every bell and then deleted them from the server. A
+  // cached list can be just as wrong the other way, missing a fixture added
+  // since, so it does not prune either.
   useEffect(() => {
-    if (events.length === 0) return;
+    if (events.length === 0 || !fresh) return;
     const done = (e: SportEvent) =>
       !e.dateTBC && isPast(e.date) && !isLive(e.date, catOf(cats, e.sport).liveMinutes * 60000);
     const valid = new Set(events.filter(e => !done(e)).map(e => e.id));
@@ -156,7 +170,7 @@ export default function App() {
       return pruned;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  }, [events, fresh]);
 
   // Re-render every second for the countdown.
   useEffect(() => {
@@ -399,6 +413,24 @@ export default function App() {
             <span>
               <strong style={{ color: S.text }}>{staleMessage(stale)}</strong>{" "}
               Kick-off times may have moved since these were last checked.
+            </span>
+          </div>
+        )}
+
+        {fresh === false && (
+          <div style={{
+            display: "flex", gap: 9, alignItems: "flex-start",
+            background: `${WARN}12`, border: `1px solid ${WARN}44`,
+            borderRadius: 12, padding: "11px 12px", marginBottom: 12,
+            fontFamily: S.body, fontSize: 12, color: S.sub, lineHeight: 1.5,
+          }}>
+            <AlertTriangle size={15} strokeWidth={2.2} color={WARN}
+                           style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              <strong style={{ color: S.text }}>Couldn't reach the fixture list.</strong>{" "}
+              {cachedAt
+                ? `Showing what this phone loaded on ${savedAtLabel(cachedAt)}; times may have moved since.`
+                : "Check your connection and reopen the app."}
             </span>
           </div>
         )}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ageFromDob, bmr, comparePb, formatGap, formatRunTime, lastSaturday, nutritionTargets, pacePerKm,
-  parseRunTime, runSeconds, runStats, splitTimeText, weightTrend,
+  parseRunTime, pastLocations, runSeconds, runStats, splitTimeText, weightTrend,
 } from '../fitness';
 import type { BodyweightEntry, Profile, RunEntry } from '../config';
 
@@ -216,5 +216,25 @@ describe('runStats', () => {
 
   it('handles no runs', () => {
     expect(runStats([])).toEqual({ pbSeconds: null, latestSeconds: null, latestIsPb: false });
+  });
+});
+
+describe('pastLocations', () => {
+  const run = (date: string, location: string): RunEntry => ({ date, seconds: 1500, location, note: '' });
+
+  it('lists places most recent first, once each', () => {
+    expect(pastLocations([
+      run('2026-04-11', 'Bryanston'),
+      run('2026-09-05', 'Delta Park'),
+      run('2026-08-01', 'Bryanston'),
+    ])).toEqual(['Delta Park', 'Bryanston']);
+  });
+
+  it('treats case and spacing as the same place, keeping the latest spelling', () => {
+    expect(pastLocations([run('2026-04-11', 'bryanston'), run('2026-09-05', ' Bryanston  ')])).toEqual(['Bryanston']);
+  });
+
+  it('skips the default and blanks', () => {
+    expect(pastLocations([run('2026-09-05', 'parkrun'), run('2026-09-12', '  '), run('2026-09-19', 'Parkrun')])).toEqual([]);
   });
 });

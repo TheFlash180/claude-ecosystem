@@ -2,8 +2,8 @@ import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { GOAL_LABEL, W, type Goal, type Profile, type RunEntry } from '../lib/config';
 import {
-  comparePb, formatGap, formatRunTime, lastSaturday, pacePerKm, runSeconds, sastDay,
-  splitTimeText,
+  comparePb, formatGap, formatRunTime, lastSaturday, pacePerKm, pastLocations, runSeconds,
+  sastDay, splitTimeText,
 } from '../lib/fitness';
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -107,7 +107,10 @@ export function RunSheet({ runs, onSave, onClose }: {
   const [date, setDate] = useState(today);
   const [mm, setMm] = useState('');
   const [ss, setSs] = useState('');
-  const [loc, setLoc] = useState('');
+  // Starts on where the last run was: most Saturdays are the same parkrun,
+  // and an untouched field cannot be misspelt.
+  const places = pastLocations(runs);
+  const [loc, setLoc] = useState(places[0] ?? '');
   const [focused, setFocused] = useState<'mm' | 'ss' | null>(null);
   const minRef = useRef<HTMLInputElement>(null);
   const secRef = useRef<HTMLInputElement>(null);
@@ -218,7 +221,11 @@ export function RunSheet({ runs, onSave, onClose }: {
       )}
 
       <Row label="parkrun / location (optional)">
-        <input style={field} placeholder="parkrun" value={loc} onChange={e => setLoc(e.target.value)} />
+        <input style={field} placeholder="parkrun" value={loc} onChange={e => setLoc(e.target.value)}
+               list="run-places" autoComplete="off" />
+        <datalist id="run-places">
+          {places.map(p => <option key={p} value={p} />)}
+        </datalist>
       </Row>
 
       <button
