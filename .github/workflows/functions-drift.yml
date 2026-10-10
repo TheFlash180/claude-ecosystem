@@ -1,0 +1,44 @@
+name: Edge Function Drift
+
+# Do the deployed edge functions still match the repo's copy of record?
+# Functions are deployed by hand (CLAUDE.md, "Copy of record"), so a fix
+# deployed but never committed, a commit never deployed, or a dashboard edit
+# would otherwise go unnoticed until it mattered. tooling/functions-drift.sh
+# says what it checks and why.
+#
+# Needs one repository secret, SUPABASE_DRIFT_TOKEN: a *scoped* Supabase
+# personal access token with Edge Functions: Read on this project and nothing
+# else. Never a classic token: a classic token carries the whole account.
+on:
+  schedule:
+    - cron: '20 6 * * 1' # Mondays 06:20 UTC (08:20 SAST)
+  # A function change merged to main should already be deployed (deploy
+  # first, then commit), so checking right after the push catches one that
+  # was not.
+  push:
+    branches: [main]
+    paths: ['apps/*/supabase/functions/**']
+  # Changes to the check itself are tested on their own PR.
+  pull_request:
+    paths: ['tooling/functions-drift.sh', '.github/workflows/functions-drift.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare deployed functions with the repo
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_DRIFT_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Add the SUPABASE_DRIFT_TOKEN repository secret: a scoped Supabase token with Edge Functions: Read on this project only."
+            exit 1
+          fi
+          bash tooling/functions-drift.sh

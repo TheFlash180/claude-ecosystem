@@ -234,6 +234,15 @@ with `mcp__Supabase__apply_migration` and deploy functions with
 `mcp__Supabase__deploy_edge_function`, then update the file to match. If the two
 drift, the file is the one that is wrong.
 
+For edge functions, drift is checked rather than trusted:
+`.github/workflows/functions-drift.yml` downloads every deployed function each
+Monday, and after any push to `main` that touches one, and fails on a file that
+differs, a function on only one side, or `verify_jwt` switched on. It reads
+through `SUPABASE_DRIFT_TOKEN`, a scoped token with Edge Functions: Read on
+this project and nothing else. Never swap in a classic token: one of those
+carries the whole account. A red run means deploy the repo's version, or
+commit what is live, whichever is right.
+
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
 
