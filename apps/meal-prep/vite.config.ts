@@ -17,8 +17,8 @@ export default defineConfig({
       manifest: {
         name: 'Meal Prep',
         short_name: 'Meal Prep',
-        description: 'Weekly meal planning, shopping lists and prep-day reminders',
-        theme_color: '#C4572E',
+        description: 'Recipes, freezer meals and a shared shopping list',
+        theme_color: '#FAF4E8',
         background_color: '#FAF4E8',
         display: 'standalone',
         start_url: base,

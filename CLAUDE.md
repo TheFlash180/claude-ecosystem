@@ -160,9 +160,34 @@ onto the page.
 Most are what they sound like. Two are not:
 
 - **Meal Prep** is a *recipe book*, not a planner. The weekly grid was used
-  twice in four months and is gone. 61 recipes across lunch / dinner / sides /
+  twice in four months and is gone. 74 recipes across lunch / dinner / sides /
   snacks / puddings, each with a full method, and a cook list that feeds a
   shared shopping list.
+
+  The **Freezer tab** (October 2026) is for cooking before the baby arrives
+  and eating after: breakfasts, lunches, dinners and snacks made in batches,
+  with how to freeze and how to reheat each. It adds no table and no RPC. A
+  freezer recipe is an ordinary recipe with a `mealprep_recipes.freezer` block
+  (`{course, months, freeze, reheat}`), so it keeps the serving stepper, the
+  scaled method, the cook list and the shopping list, and the sheet adds the
+  freezing steps (scaled like the method) and the line to write on the bag.
+  `course` is deliberately not `meal_type`: the book never had breakfasts and
+  the freezer needed them. Book recipes that freeze well (cottage pie,
+  bolognese, lasagne and so on) carry a block too, so they appear on both tabs.
+  The recipe editor does not touch the column, so editing a recipe keeps its
+  freezing steps; they are changed in `seed.sql` and applied by hand. The
+  shared rules — cool within 2 hours, thaw in the fridge, load-shedding — are
+  said once, in `lib/freezer.ts`, rather than in every method.
+
+  **It is built for a phone in one hand**, and four details carry that. Keep
+  them when touching it:
+  - **Android's back button closes the recipe sheet.** The sheet is a
+    history entry. Without that, back leaves the app.
+  - **The shopping list re-reads every 15s** while it is open, and whenever
+    you come back to the app, because two people shop off one list. A tap
+    bumps a write counter, so a refresh that started before it is thrown away.
+  - **The screen stays awake** while a recipe is open (Wake Lock).
+  - **Text inputs are 16px**: iOS zooms the whole page into anything smaller.
 - **Workout Plan** is a *guide*, not a training log. Per-set logging was used
   for one week and is gone with its tables. Routines are workout types you
   browse, not weekdays. It records only whole-session results — bodyweight,
@@ -400,9 +425,14 @@ when writing or editing a step:
   where the quantity is not really a quantity. An ingredient with `"f": true`
   is exempt on its own — the oil you deep-fry in, the bag of charcoal.
 
-`apps/meal-prep/supabase/seed.sql` is a **real export of all 61 recipes** and
-is the copy of record for the content. Regenerate it if you change recipes; it
-was verified byte-identical to the live table by checksum.
+`apps/meal-prep/supabase/seed.sql` is a **real export of all 74 recipes** and
+is the copy of record for the content. Regenerate it if you change recipes.
+**Check it by running it**, not only by checksum: until October 2026 it wrote
+the `scalable` booleans as bare `t` and `f`, so every row failed with
+`column "t" does not exist` and the file had never been runnable, though its
+content matched. Create the table from `schema.sql` in a throwaway Postgres
+(one is installed in the dev container), run the seed, and compare an md5 of
+every column per row against the same query on the live table.
 
 **Recipe tags drive the filter chips** (`mealprep_recipes.tags text[]`). They
 live at the *end* of `seed.sql` as an explicit `update … where id in (…)`
@@ -446,6 +476,10 @@ exactly what a naive lean-protein filter would surface first.
 - `fullPage: true` screenshots blank out `loading="lazy"` images and paint
   `position: fixed` bars in the middle of the page. Take viewport-sized shots
   and scroll instead.
+- Supabase MCP SQL calls sometimes return `{"status":"cancelled"}` and apply
+  nothing. Large multi-statement calls did it most, and a few single updates
+  did it every time on retry. Re-check the state before retrying, and split
+  data changes into one statement per call.
 
 ## Things learned the hard way
 

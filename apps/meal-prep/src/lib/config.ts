@@ -42,7 +42,31 @@ export interface Recipe {
    *  protein serving in the dish itself, not cheese melted over carbohydrate. */
   tags: string[];
   notes?: string;
+  /** Present on recipes that are made to be frozen; drives the Freezer tab. */
+  freezer?: FreezerInfo;
 }
+
+/** When you would eat it out of the freezer. Separate from mealType on
+ *  purpose: mealType shelves the recipe book for cooking tonight, and the
+ *  freezer needs a breakfast that the book never had. */
+export type FreezerCourse = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface FreezerInfo {
+  course: FreezerCourse;
+  /** Best within this many months at -18°C: a quality limit, not a safety one. */
+  months: number;
+  /** After the method: how to cool, portion, pack and label it. */
+  freeze: string[];
+  /** From the freezer to the plate. */
+  reheat: string[];
+}
+
+export const FREEZER_COURSES: { key: FreezerCourse; label: string }[] = [
+  { key: 'breakfast', label: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'dinner', label: 'Dinner' },
+  { key: 'snack', label: 'Snacks' },
+];
 
 /** The tag filter chips, in display order. */
 export const TAG_META: { tag: string; label: string }[] = [
