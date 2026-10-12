@@ -4,6 +4,7 @@
 // recipe deletes need the admin password.
 import { sb } from './supabase';
 import type { CookEntry, Ingredient, MealType, Recipe, ShoppingRow } from './config';
+import { parseFreezer } from './freezer';
 
 interface DbRecipeRow {
   id: string;
@@ -17,6 +18,7 @@ interface DbRecipeRow {
   scalable: boolean;
   tags: string[] | null;
   notes: string | null;
+  freezer: unknown;
 }
 
 export async function fetchRecipes(): Promise<Recipe[]> {
@@ -24,7 +26,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
   if (!client) return [];
   const { data, error } = await client
     .from('mealprep_recipes')
-    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, scalable, tags, notes')
+    .select('id, name, emoji, meal_type, serves, ingredients, steps, total_minutes, scalable, tags, notes, freezer')
     .order('name');
   if (error || !data) return [];
   return (data as DbRecipeRow[]).map(r => ({
@@ -39,6 +41,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     scalable: r.scalable !== false,
     tags: Array.isArray(r.tags) ? r.tags : [],
     notes: r.notes ?? undefined,
+    freezer: parseFreezer(r.freezer),
   }));
 }
 

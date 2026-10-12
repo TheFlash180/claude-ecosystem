@@ -1,7 +1,8 @@
 -- Meal Prep: full server-side schema (copy of record — already applied to
 -- the shared Supabase project).
 --
---   mealprep_recipes    the recipe book: ingredients, method, time, meal type
+--   mealprep_recipes    the recipe book: ingredients, method, time, meal type,
+--                       and freezing steps for the Freezer tab
 --   mealprep_cook_list  what we have decided to cook (household-shared)
 --   mealprep_ticks      shopping tick state + custom extras
 --   mealprep_settings   admin password (RLS, no policies)
@@ -38,8 +39,24 @@ create table mealprep_recipes (
   -- protein serving in the dish itself, not cheese melted over carbohydrate.
   tags text[] not null default '{}',
   notes text,
+  -- Freezer tab (migration mealprep_freezer_column, October 2026): cook before
+  -- the baby, eat after. {course, months, freeze: [steps], reheat: [steps]}.
+  -- course is when you would eat it from the freezer, kept apart from
+  -- meal_type because the freezer needs a breakfast the book never had.
+  -- months is a quality limit at -18°C, not a safety one. The steps are
+  -- scaled with the serving size like the method. null = not a freezer
+  -- recipe. Set in seed.sql; the recipe editor does not touch it, so editing
+  -- a recipe keeps its freezing steps.
+  freezer jsonb,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint mealprep_recipes_freezer_shape check (
+    freezer is null or (
+      jsonb_typeof(freezer) = 'object'
+      and freezer->>'course' in ('breakfast','lunch','dinner','snack')
+      and jsonb_typeof(freezer->'months') = 'number'
+      and jsonb_typeof(freezer->'freeze') = 'array'
+      and jsonb_typeof(freezer->'reheat') = 'array'))
 );
 alter table mealprep_recipes enable row level security;
 create policy "public read" on mealprep_recipes for select to anon, authenticated using (true);

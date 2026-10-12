@@ -1,6 +1,7 @@
-import { Check, Clock, Minus, Plus, Users, X } from 'lucide-react';
+import { Check, Clock, Minus, Plus, Snowflake, Tag, Users, X } from 'lucide-react';
 import { K, MAX_SERVES, MIN_SERVES, type Recipe } from '../lib/config';
 import { timeLabel } from '../lib/recipes';
+import { bagLabel } from '../lib/freezer';
 import { formatQty, scaleRecipe } from '../lib/scale';
 
 function qtyLabel(q: number | string, u: string): string {
@@ -10,9 +11,11 @@ function qtyLabel(q: number | string, u: string): string {
 }
 
 export function RecipeDetail({
-  recipe, onClose, onCook, onUncook, inList, servings, onServings,
+  recipe, onClose, onCook, onUncook, inList, servings, onServings, today,
 }: {
   recipe: Recipe;
+  /** SAST day, for the date on the freezer label. */
+  today: string;
   onClose: () => void;
   onCook: () => void;
   onUncook: () => void;
@@ -97,6 +100,11 @@ export function RecipeDetail({
                   <Clock size={13} /> {time}
                 </span>
               )}
+              {recipe.freezer && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: K.sage }}>
+                  <Snowflake size={13} /> Keeps {recipe.freezer.months} months
+                </span>
+              )}
               {isScaled && (
                 <button
                   onClick={() => onServings(recipe.serves)}
@@ -162,29 +170,36 @@ export function RecipeDetail({
 
           <h3 style={sectionTitle}>Method</h3>
           {scaled.steps.length > 0 ? (
-            <ol style={{ margin: 0, padding: 0, listStyle: 'none', counterReset: 'step' }}>
-              {scaled.steps.map((s, n) => (
-                <li key={n} style={{ display: 'flex', gap: 11, marginBottom: 14 }}>
-                  <span style={{
-                    flexShrink: 0, width: 24, height: 24, borderRadius: 12,
-                    background: K.raised, color: K.terraDark,
-                    display: 'grid', placeItems: 'center',
-                    fontFamily: K.body, fontSize: 12.5, fontWeight: 700,
-                  }}>
-                    {n + 1}
-                  </span>
-                  <span style={{
-                    fontFamily: K.body, fontSize: 14.5, color: K.text, lineHeight: 1.5,
-                  }}>
-                    {s}
-                  </span>
-                </li>
-              ))}
-            </ol>
+            <StepList steps={scaled.steps} />
           ) : (
             <p style={{ margin: 0, fontFamily: K.body, fontSize: 13.5, color: K.muted }}>
               No method written for this one yet.
             </p>
+          )}
+
+          {scaled.freezer && (
+            <>
+              <h3 style={{ ...sectionTitle, marginTop: 22, color: K.sage, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Snowflake size={13} /> Freeze it
+              </h3>
+              <StepList steps={scaled.freezer.freeze} accent={K.sage} />
+              <div style={{
+                display: 'flex', gap: 9, alignItems: 'flex-start',
+                margin: '2px 0 20px', padding: '10px 12px', borderRadius: 10,
+                background: `${K.sage}12`, border: `1px dashed ${K.sage}88`,
+              }}>
+                <Tag size={15} color={K.sage} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span style={{ fontFamily: K.body, fontSize: 13, color: K.sub, lineHeight: 1.5 }}>
+                  Write on the bag:{' '}
+                  <strong style={{ color: K.text }}>
+                    {bagLabel(recipe.name, today, scaled.freezer.months)}
+                  </strong>
+                </span>
+              </div>
+
+              <h3 style={{ ...sectionTitle, color: K.sage }}>From the freezer</h3>
+              <StepList steps={scaled.freezer.reheat} accent={K.sage} />
+            </>
           )}
         </div>
 
@@ -207,6 +222,30 @@ export function RecipeDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+function StepList({ steps, accent = K.terraDark }: { steps: string[]; accent?: string }) {
+  return (
+    <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+      {steps.map((s, n) => (
+        <li key={n} style={{ display: 'flex', gap: 11, marginBottom: 14 }}>
+          <span style={{
+            flexShrink: 0, width: 24, height: 24, borderRadius: 12,
+            background: K.raised, color: accent,
+            display: 'grid', placeItems: 'center',
+            fontFamily: K.body, fontSize: 12.5, fontWeight: 700,
+          }}>
+            {n + 1}
+          </span>
+          <span style={{
+            fontFamily: K.body, fontSize: 14.5, color: K.text, lineHeight: 1.5,
+          }}>
+            {s}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

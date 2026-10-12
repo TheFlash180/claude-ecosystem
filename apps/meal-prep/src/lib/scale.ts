@@ -9,7 +9,7 @@
 // rescaled if — and only if — it is followed by a unit of food. Minutes,
 // seconds, °C, cm and mm are not on the list, so oven temperatures, cooking
 // times and knife-work dimensions are never touched.
-import type { Ingredient, Recipe } from './config';
+import type { FreezerInfo, Ingredient, Recipe } from './config';
 
 /** Units that never take a plural 's'. */
 const INVARIANT = new Set(['g', 'kg', 'ml', 'l', 'tbsp', 'tsp']);
@@ -144,6 +144,9 @@ export interface ScaledRecipe {
   ingredients: Ingredient[];
   steps: string[];
   servings: number;
+  /** The freezing and reheating steps, scaled like the method: a "1.5 litres"
+   *  in them must agree with the ingredient table too. */
+  freezer?: FreezerInfo;
 }
 
 /** A recipe at a chosen serving size. Recipes marked not scalable are handed
@@ -151,12 +154,18 @@ export interface ScaledRecipe {
 export function scaleRecipe(recipe: Recipe, servings: number): ScaledRecipe {
   const base = recipe.serves || 1;
   if (!recipe.scalable || servings === base || servings <= 0) {
-    return { ingredients: recipe.ingredients, steps: recipe.steps, servings: base };
+    return { ingredients: recipe.ingredients, steps: recipe.steps, servings: base, freezer: recipe.freezer };
   }
   const factor = servings / base;
+  const fz = recipe.freezer;
   return {
     ingredients: scaleIngredients(recipe.ingredients, factor),
     steps: recipe.steps.map(s => scaleText(s, factor)),
     servings,
+    freezer: fz && {
+      ...fz,
+      freeze: fz.freeze.map(s => scaleText(s, factor)),
+      reheat: fz.reheat.map(s => scaleText(s, factor)),
+    },
   };
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
+import { Bell, BellOff, BookOpen, Pencil, Search, ShoppingBasket, Snowflake, Sparkles, Trash2 } from 'lucide-react';
 import {
   K, MAX_SERVES, MEAL_FILTERS, MIN_SERVES, TAG_META, TIME_FILTERS,
   type CookEntry, type MealType, type Recipe, type ShoppingRow,
@@ -17,8 +17,9 @@ import { RecipeGrid } from './components/RecipeGrid';
 import { RecipeDetail } from './components/RecipeDetail';
 import { ShoppingList } from './components/ShoppingList';
 import { RecipesPage } from './components/RecipesPage';
+import { FreezerPage } from './components/FreezerPage';
 
-type Tab = 'cook' | 'shop' | 'edit';
+type Tab = 'cook' | 'freezer' | 'shop' | 'edit';
 
 function sastDay(now = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
@@ -108,6 +109,16 @@ export default function App() {
     await load();
   };
 
+  /** Freezer supplies go on the list as ordinary extras, one call each. */
+  const onAddSupplies = async (labels: string[]) => {
+    let added = 0;
+    for (const label of labels) if (await addExtra(label)) added++;
+    say(added === labels.length
+      ? `Added ${added} freezer supplies to the shopping list.`
+      : "Couldn't add all of them — try again.");
+    await load();
+  };
+
   const onRemoveExtra = async (key: string) => {
     setTicks(prev => prev.filter(p => p.itemKey !== key));
     await removeExtra(key);
@@ -193,9 +204,15 @@ export default function App() {
         </button>
       </header>
 
-      <nav style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
+      {/* Scrolls sideways rather than wrapping: four tabs plus a shopping
+          count do not fit a 360px phone on one line. */}
+      <nav style={{
+        display: 'flex', gap: 6, padding: '0 16px 12px',
+        overflowX: 'auto', scrollbarWidth: 'none',
+      }}>
         {([
           { key: 'cook', label: 'Recipes', icon: BookOpen },
+          { key: 'freezer', label: 'Freezer', icon: Snowflake },
           { key: 'shop', label: progress.total > 0 ? `Shopping ${progress.done}/${progress.total}` : 'Shopping', icon: ShoppingBasket },
           { key: 'edit', label: 'Manage', icon: Pencil },
         ] as const).map(t => (
@@ -203,7 +220,7 @@ export default function App() {
             key={t.key}
             onClick={() => setTab(t.key)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
+              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
               background: tab === t.key ? K.terra : K.surface,
               color: tab === t.key ? '#fff' : K.sub,
               border: `1px solid ${tab === t.key ? K.terra : K.border}`,
@@ -312,6 +329,16 @@ export default function App() {
           </>
         )}
 
+        {!loading && tab === 'freezer' && (
+          <FreezerPage
+            recipes={recipes}
+            cookIds={cookSet}
+            extras={ticks.filter(t => t.custom).map(t => t.label)}
+            onOpen={openRecipe}
+            onAddSupplies={l => void onAddSupplies(l)}
+          />
+        )}
+
         {!loading && tab === 'shop' && (
           <>
             {chosen.length > 0 && (
@@ -368,6 +395,7 @@ export default function App() {
       {open && (
         <RecipeDetail
           recipe={open}
+          today={sastDay()}
           inList={cookSet.has(open.id)}
           servings={servings}
           onServings={n => setServings(Math.max(MIN_SERVES, Math.min(MAX_SERVES, n)))}
