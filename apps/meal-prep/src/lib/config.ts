@@ -70,8 +70,14 @@ export const FREEZER_COURSES: { key: FreezerCourse; label: string }[] = [
 
 /** The tag filter chips, in display order. */
 export const TAG_META: { tag: string; label: string }[] = [
+  { tag: 'easy', label: 'Easy' },
   { tag: 'high-protein', label: 'High protein' },
 ];
+
+/** 'easy' = few steps, little technique, mostly one pan or one tray: the
+ *  recipes to reach for when tired. A judgement per recipe (seed.sql), not a
+ *  formula — a ten-step soup can be easier than a five-step omelette. */
+export const EASY_TAG = 'easy';
 
 /** What is on the cook list, and how many people it is being cooked for. */
 export interface CookEntry {

@@ -35,8 +35,12 @@ export interface FreezerShelf {
 }
 
 /** Freezer recipes grouped by when you would eat them, in day order, names
- *  A–Z within each. Empty courses are left out; `only` narrows to one. */
-export function freezerShelves(recipes: Recipe[], only: FreezerCourse | 'all' = 'all'): FreezerShelf[] {
+ *  A–Z within each. Empty courses are left out; `only` narrows to one course
+ *  and `tag` to recipes carrying it (the Easy chip). */
+export function freezerShelves(
+  recipes: Recipe[], only: FreezerCourse | 'all' = 'all', tag?: string,
+): FreezerShelf[] {
+  if (tag) recipes = recipes.filter(r => r.tags.includes(tag));
   return FREEZER_COURSES
     .filter(c => only === 'all' || c.key === only)
     .map(c => ({

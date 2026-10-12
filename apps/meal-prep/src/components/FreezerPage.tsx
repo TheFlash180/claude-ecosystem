@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, PackagePlus, Snowflake } from 'lucide-react';
-import { FREEZER_COURSES, K, type FreezerCourse, type Recipe } from '../lib/config';
+import { EASY_TAG, FREEZER_COURSES, K, type FreezerCourse, type Recipe } from '../lib/config';
 import { FREEZER_GUIDE, freezerShelves, suppliesToAdd } from '../lib/freezer';
 import { RecipeGrid } from './RecipeGrid';
 
@@ -17,7 +17,11 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
 }) {
   const [course, setCourse] = useState<FreezerCourse | 'all'>('all');
   const [guideOpen, setGuideOpen] = useState(false);
-  const shelves = useMemo(() => freezerShelves(recipes, course), [recipes, course]);
+  const [easy, setEasy] = useState(false);
+  const shelves = useMemo(
+    () => freezerShelves(recipes, course, easy ? EASY_TAG : undefined),
+    [recipes, course, easy],
+  );
   const total = useMemo(() => freezerShelves(recipes).reduce((n, s) => n + s.recipes.length, 0), [recipes]);
   const missing = suppliesToAdd(extras);
 
@@ -81,6 +85,20 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
       </section>
 
       <div className="chips" style={{ marginBottom: 14 }}>
+        <button
+          onClick={() => setEasy(e => !e)}
+          aria-pressed={easy}
+          style={{
+            background: easy ? K.terra : K.surface,
+            color: easy ? '#fff' : K.sub,
+            border: `1px solid ${easy ? K.terra : K.border}`,
+            borderRadius: 999, padding: '9px 15px', cursor: 'pointer', flexShrink: 0,
+            fontSize: 14, fontWeight: 600, fontFamily: K.body,
+          }}
+        >
+          Easy
+        </button>
+        <span aria-hidden="true" style={{ width: 1, background: K.border, flexShrink: 0, margin: '6px 2px' }} />
         {[{ key: 'all' as const, label: `All ${total}` }, ...FREEZER_COURSES].map(c => {
           const on = course === c.key;
           return (
@@ -113,8 +131,8 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
         </section>
       ))}
       {shelves.length === 0 && (
-        <p style={{ margin: '28px 4px', fontSize: 14, color: K.muted, textAlign: 'center' }}>
-          No freezer recipes here yet.
+        <p style={{ margin: '28px 4px', fontSize: 15, color: K.muted, textAlign: 'center' }}>
+          {easy ? 'No easy ones here — tap Easy to see them all.' : 'No freezer recipes here yet.'}
         </p>
       )}
     </>

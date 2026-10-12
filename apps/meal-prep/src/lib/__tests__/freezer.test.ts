@@ -44,6 +44,12 @@ describe('freezerShelves', () => {
     expect(shelves[1].recipes.map(r => r.id)).toEqual(['bol', 'pie']);
   });
 
+  it('narrows to a tag, the Easy chip', () => {
+    const tagged = book.map(r => (r.id === 'bol' ? { ...r, tags: ['easy'] } : r));
+    expect(freezerShelves(tagged, 'all', 'easy').map(s => s.recipes.map(r => r.id))).toEqual([['bol']]);
+    expect(freezerShelves(tagged, 'breakfast', 'easy')).toEqual([]);
+  });
+
   it('narrows to one course', () => {
     expect(freezerShelves(book, 'breakfast').map(s => s.recipes.length)).toEqual([1]);
     expect(freezerShelves(book, 'snack')).toEqual([]);
