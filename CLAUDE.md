@@ -178,6 +178,16 @@ Most are what they sound like. Two are not:
   freezing steps; they are changed in `seed.sql` and applied by hand. The
   shared rules — cool within 2 hours, thaw in the fridge, load-shedding — are
   said once, in `lib/freezer.ts`, rather than in every method.
+
+  **It is built for a phone in one hand**, and four details carry that. Keep
+  them when touching it:
+  - **Android's back button closes the recipe sheet.** The sheet is a
+    history entry. Without that, back leaves the app.
+  - **The shopping list re-reads every 15s** while it is open, and whenever
+    you come back to the app, because two people shop off one list. A tap
+    bumps a write counter, so a refresh that started before it is thrown away.
+  - **The screen stays awake** while a recipe is open (Wake Lock).
+  - **Text inputs are 16px**: iOS zooms the whole page into anything smaller.
 - **Workout Plan** is a *guide*, not a training log. Per-set logging was used
   for one week and is gone with its tables. Routines are workout types you
   browse, not weekdays. It records only whole-session results — bodyweight,

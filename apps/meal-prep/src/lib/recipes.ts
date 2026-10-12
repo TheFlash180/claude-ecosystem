@@ -5,7 +5,7 @@ import {
   type Category, type CookEntry, type Ingredient, type MealType, type Recipe,
   type ShoppingRow,
 } from './config';
-import { scaleRecipe } from './scale';
+import { formatQty, scaleRecipe } from './scale';
 
 // ---- browsing ----
 
@@ -83,7 +83,11 @@ export function pickOfTheDay(recipes: Recipe[], seed: string): Recipe | null {
 
 export interface ShoppingItem {
   key: string;        // norm(name)|unit, or the x-... key for extras
-  label: string;      // "Beef mince · 1 kg"
+  label: string;      // "Beef mince · 1 kg" — what tick rows store
+  /** The row as the list draws it: name on the left, amount on the right.
+   *  qty is '' for extras and for amounts that are not numbers. */
+  name: string;
+  qty: string;        // "1 kg", "1¼ cups", "3"
   checked: boolean;
   custom: boolean;
   category: Category;
@@ -101,6 +105,16 @@ function norm(s: string): string {
 
 export function itemKeyOf(ing: Ingredient): string {
   return `${norm(ing.n)}|${(ing.u ?? '').trim().toLowerCase()}`;
+}
+
+/** The amount as it reads on the list: kilos and litres past 1000, quarters
+ *  as fractions, and a bare count with no unit at all — "3", not "×3", next
+ *  to "Carrots" reads as three carrots. */
+export function qtyText(q: number, u: string): string {
+  if (u === 'g' && q >= 1000) return `${formatQty(+(q / 1000).toFixed(2))} kg`;
+  if (u === 'ml' && q >= 1000) return `${formatQty(+(q / 1000).toFixed(2))} l`;
+  const n = formatQty(+q.toFixed(2));
+  return u ? `${n} ${u}` : n;
 }
 
 function fmtQty(q: number, u: string): string {
@@ -154,14 +168,20 @@ export function buildShoppingList(
       : a.name;
     const cat: Category = CATEGORY_META.some(c => c.key === a.category) ? a.category : 'other';
     const list = bySection.get(cat) ?? [];
-    list.push({ key, label, checked: ticked.get(key) ?? false, custom: false, category: cat });
+    list.push({
+      key, label, name: a.name, qty: a.countable && a.qty > 0 ? qtyText(a.qty, a.unit) : '',
+      checked: ticked.get(key) ?? false, custom: false, category: cat,
+    });
     bySection.set(cat, list);
   }
 
   for (const row of state) {
     if (!row.custom) continue;
     const list = bySection.get('other') ?? [];
-    list.push({ key: row.itemKey, label: row.label, checked: row.checked, custom: true, category: 'other' });
+    list.push({
+      key: row.itemKey, label: row.label, name: row.label, qty: '',
+      checked: row.checked, custom: true, category: 'other',
+    });
     bySection.set('other', list);
   }
 
@@ -173,6 +193,20 @@ export function buildShoppingList(
     sections.push({ category: meta.key, label: meta.label, items });
   }
   return sections;
+}
+
+/** What is still to buy, by aisle, and what is already in the trolley. In the
+ *  shop the question is only ever "what is left", so ticked items leave their
+ *  aisle instead of sitting greyed out between the ones still needed. */
+export function splitTrolley(sections: ShoppingSection[]): {
+  toBuy: ShoppingSection[];
+  inTrolley: ShoppingItem[];
+} {
+  const toBuy = sections
+    .map(s => ({ ...s, items: s.items.filter(i => !i.checked) }))
+    .filter(s => s.items.length > 0);
+  const inTrolley = sections.flatMap(s => s.items.filter(i => i.checked));
+  return { toBuy, inTrolley };
 }
 
 export function shoppingProgress(sections: ShoppingSection[]): { done: number; total: number } {

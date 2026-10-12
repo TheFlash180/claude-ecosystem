@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildShoppingList, filterRecipes, itemKeyOf, pickOfTheDay,
-  shoppingProgress, timeLabel, EMPTY_FILTER,
+  buildShoppingList, filterRecipes, itemKeyOf, pickOfTheDay, qtyText,
+  shoppingProgress, splitTrolley, timeLabel, EMPTY_FILTER,
   toggleTag,
 } from '../recipes';
 import type { CookEntry, Recipe, ShoppingRow } from '../config';
@@ -246,5 +246,33 @@ describe('tag chips', () => {
     expect(toggleTag([], 'high-protein')).toEqual(['high-protein']);
     expect(toggleTag(['high-protein'], 'high-protein')).toEqual([]);
     expect(toggleTag(['a'], 'b')).toEqual(['a', 'b']);
+  });
+});
+
+describe('shopping rows', () => {
+  it('reads amounts the way a person would', () => {
+    expect(qtyText(3, '')).toBe('3');
+    expect(qtyText(1.25, 'cups')).toBe('1¼ cups');
+    expect(qtyText(2.5, 'tbsp')).toBe('2½ tbsp');
+    expect(qtyText(940, 'g')).toBe('940 g');
+    expect(qtyText(1450, 'g')).toBe('1.45 kg');
+    expect(qtyText(1500, 'ml')).toBe('1½ l');
+  });
+
+  it('splits the name from the amount, and leaves uncountable ones without one', () => {
+    const s = buildShoppingList([cook('bolo')], new Map([['bolo', BOLO]]), []);
+    const meat = s.find(x => x.category === 'meat')!.items[0];
+    expect([meat.name, meat.qty]).toEqual(['Beef mince', '500 g']);
+    const parsley = s.find(x => x.category === 'veg')!.items.find(i => i.name === 'Parsley')!;
+    expect(parsley.qty).toBe('');
+  });
+
+  it('moves ticked items out of their aisle into the trolley, dropping emptied aisles', () => {
+    const ticks: ShoppingRow[] = [
+      { itemKey: itemKeyOf({ n: 'Beef mince', q: 0, u: 'g', c: 'meat' }), label: '', checked: true, custom: false },
+    ];
+    const { toBuy, inTrolley } = splitTrolley(buildShoppingList([cook('bolo')], new Map([['bolo', BOLO]]), ticks));
+    expect(toBuy.map(t => t.category)).not.toContain('meat');
+    expect(inTrolley.map(i => i.name)).toEqual(['Beef mince']);
   });
 });

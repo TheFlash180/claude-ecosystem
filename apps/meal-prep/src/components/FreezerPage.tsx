@@ -27,17 +27,13 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
         background: `${K.sage}10`, border: `1px solid ${K.sage}44`,
         borderRadius: 16, padding: '14px 14px 12px', marginBottom: 12,
       }}>
-        <h2 style={{
-          margin: 0, display: 'flex', alignItems: 'center', gap: 8,
-          fontFamily: K.display, fontSize: 18, fontWeight: 600, color: K.text,
-        }}>
-          <Snowflake size={18} color={K.sage} /> Freezer meals for after the baby
-        </h2>
-        <p style={{ margin: '6px 0 10px', fontSize: 13.5, color: K.sub, lineHeight: 1.5 }}>
-          Cook now, freeze in meal-sized portions, and eat them in the weeks after
-          the birth. Open a recipe to choose how many portions to make — every one
-          has the method, how to freeze it and how to reheat it — then add it to
-          the shopping list.
+        <p style={{ margin: '0 0 12px', fontSize: 14.5, color: K.sub, lineHeight: 1.55, display: 'flex', gap: 10 }}>
+          <Snowflake size={20} color={K.sage} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            Open a recipe, choose how many portions, and tap <strong>We're making this</strong> —
+            the ingredients go on the shopping list. Every recipe says how to freeze it
+            and how to reheat it.
+          </span>
         </p>
 
         <button
@@ -45,9 +41,9 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
           aria-expanded={guideOpen}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: K.surface, border: `1px solid ${K.border}`, borderRadius: 10,
-            padding: '9px 12px', cursor: 'pointer', fontFamily: K.body,
-            fontSize: 13, fontWeight: 600, color: K.text,
+            background: K.surface, border: `1px solid ${K.border}`, borderRadius: 12,
+            padding: '0 12px', minHeight: 46, cursor: 'pointer', fontFamily: K.body,
+            fontSize: 14, fontWeight: 600, color: K.text,
           }}
         >
           How to freeze well · {FREEZER_GUIDE.length} rules
@@ -59,8 +55,8 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
           <dl style={{ margin: '10px 2px 2px' }}>
             {FREEZER_GUIDE.map(g => (
               <div key={g.title} style={{ marginBottom: 10 }}>
-                <dt style={{ fontSize: 13, fontWeight: 700, color: K.text }}>{g.title}</dt>
-                <dd style={{ margin: '2px 0 0', fontSize: 13, color: K.sub, lineHeight: 1.5 }}>{g.body}</dd>
+                <dt style={{ fontSize: 14, fontWeight: 700, color: K.text }}>{g.title}</dt>
+                <dd style={{ margin: '2px 0 0', fontSize: 14, color: K.sub, lineHeight: 1.55 }}>{g.body}</dd>
               </div>
             ))}
           </dl>
@@ -70,11 +66,11 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
           onClick={() => onAddSupplies(missing)}
           disabled={missing.length === 0}
           style={{
-            width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8,
+            width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', gap: 9,
             background: 'transparent', border: `1px dashed ${missing.length ? K.sage : K.border}`,
-            borderRadius: 10, padding: '9px 12px', textAlign: 'left',
+            borderRadius: 12, padding: '10px 12px', minHeight: 46, textAlign: 'left',
             cursor: missing.length ? 'pointer' : 'default',
-            fontFamily: K.body, fontSize: 13, color: missing.length ? K.sage : K.muted, fontWeight: 600,
+            fontFamily: K.body, fontSize: 14, color: missing.length ? K.sage : K.muted, fontWeight: 600,
           }}
         >
           <PackagePlus size={16} style={{ flexShrink: 0 }} />
@@ -84,7 +80,7 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
         </button>
       </section>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div className="chips" style={{ marginBottom: 14 }}>
         {[{ key: 'all' as const, label: `All ${total}` }, ...FREEZER_COURSES].map(c => {
           const on = course === c.key;
           return (
@@ -95,8 +91,8 @@ export function FreezerPage({ recipes, cookIds, extras, onOpen, onAddSupplies }:
                 background: on ? `${K.sage}1c` : K.surface,
                 color: on ? K.sage : K.sub,
                 border: `1px solid ${on ? K.sage : K.border}`,
-                borderRadius: 999, padding: '7px 13px', cursor: 'pointer',
-                fontSize: 12.5, fontWeight: 600, fontFamily: K.body,
+                borderRadius: 999, padding: '9px 15px', cursor: 'pointer', flexShrink: 0,
+                fontSize: 14, fontWeight: 600, fontFamily: K.body,
               }}
             >
               {c.label}
