@@ -368,23 +368,24 @@ export default function App() {
               ))}
             </div>
 
-            {/* Quick and high-protein narrow whatever meal is chosen above, and
-                tap off again — no "Any time" chip to find first. */}
+            {/* Easy, high-protein and quick narrow whatever meal is chosen
+                above, and tap off again — no "Any time" chip to find first.
+                Easy leads, because it is the one reached for when tired. */}
             <div className="chips" style={{ marginBottom: 14 }}>
-              {TIME_FILTERS.filter(t => t.key !== null).map(t => (
-                <Chip
-                  key={String(t.key)}
-                  on={filter.maxMinutes === t.key}
-                  onClick={() => setFilter({ ...filter, maxMinutes: filter.maxMinutes === t.key ? null : t.key })}
-                >
-                  {t.label}
-                </Chip>
-              ))}
               {TAG_META.map(t => (
                 <Chip
                   key={t.tag}
                   on={filter.tags.includes(t.tag)}
                   onClick={() => setFilter({ ...filter, tags: toggleTag(filter.tags, t.tag) })}
+                >
+                  {t.label}
+                </Chip>
+              ))}
+              {TIME_FILTERS.filter(t => t.key !== null).map(t => (
+                <Chip
+                  key={String(t.key)}
+                  on={filter.maxMinutes === t.key}
+                  onClick={() => setFilter({ ...filter, maxMinutes: filter.maxMinutes === t.key ? null : t.key })}
                 >
                   {t.label}
                 </Chip>

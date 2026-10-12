@@ -160,7 +160,7 @@ onto the page.
 Most are what they sound like. Two are not:
 
 - **Meal Prep** is a *recipe book*, not a planner. The weekly grid was used
-  twice in four months and is gone. 74 recipes across lunch / dinner / sides /
+  twice in four months and is gone. 84 recipes across lunch / dinner / sides /
   snacks / puddings, each with a full method, and a cook list that feeds a
   shared shopping list.
 
@@ -172,12 +172,22 @@ Most are what they sound like. Two are not:
   scaled method, the cook list and the shopping list, and the sheet adds the
   freezing steps (scaled like the method) and the line to write on the bag.
   `course` is deliberately not `meal_type`: the book never had breakfasts and
-  the freezer needed them. Book recipes that freeze well (cottage pie,
+  the freezer needed them. Book recipes that freeze well (beef stew,
   bolognese, lasagne and so on) carry a block too, so they appear on both tabs.
   The recipe editor does not touch the column, so editing a recipe keeps its
   freezing steps; they are changed in `seed.sql` and applied by hand. The
   shared rules — cool within 2 hours, thaw in the fridge, load-shedding — are
   said once, in `lib/freezer.ts`, rather than in every method.
+
+  **What the household will not eat**: beans, lentils, mash, butternut, and
+  raisins or sultanas, besides the book's standing rules (mild, no seafood).
+  The first freezer set had a beef and bean pot, a lentil soup, a butternut
+  soup, raisin cookies and two mash-topped pies, and they were asked out by
+  name. Write new recipes, freezer or not, without any of them.
+
+  The **`easy` tag** marks recipes to reach for when tired: few steps, little
+  technique, mostly one pan or one tray. It is a judgement per recipe in
+  `seed.sql`, not a step-count rule, and it drives an Easy chip on both tabs.
 
   **It is built for a phone in one hand**, and four details carry that. Keep
   them when touching it:
@@ -425,7 +435,7 @@ when writing or editing a step:
   where the quantity is not really a quantity. An ingredient with `"f": true`
   is exempt on its own — the oil you deep-fry in, the bag of charcoal.
 
-`apps/meal-prep/supabase/seed.sql` is a **real export of all 74 recipes** and
+`apps/meal-prep/supabase/seed.sql` is a **real export of all 84 recipes** and
 is the copy of record for the content. Regenerate it if you change recipes.
 **Check it by running it**, not only by checksum: until October 2026 it wrote
 the `scalable` booleans as bare `t` and `f`, so every row failed with
@@ -476,10 +486,16 @@ exactly what a naive lean-protein filter would surface first.
 - `fullPage: true` screenshots blank out `loading="lazy"` images and paint
   `position: fixed` bars in the middle of the page. Take viewport-sized shots
   and scroll instead.
-- Supabase MCP SQL calls sometimes return `{"status":"cancelled"}` and apply
-  nothing. Large multi-statement calls did it most, and a few single updates
-  did it every time on retry. Re-check the state before retrying, and split
-  data changes into one statement per call.
+- Supabase MCP SQL calls return `{"status":"cancelled"}` and apply nothing in
+  two cases, every time:
+  - the SQL has a **semicolon inside a string literal** (a recipe step like
+    "on its own; cook the rice"). Write the text without one, because `\u003b`
+    in JSON is refused too.
+  - it is a **`delete`**. Deletes are held for a confirmation that never
+    arrives in this environment. Meal Prep recipes can be deleted in the app's
+    Manage tab, behind the admin password.
+
+  Re-check the state after any cancelled call before retrying.
 
 ## Things learned the hard way
 
