@@ -15,29 +15,29 @@ tooling/         build-all.mjs (CI build) and new-app.mjs (scaffold)
 
 ## The app family and the shared Supabase project
 
-Two apps deliberately live in their own repos —
-[fintrack-pro](https://github.com/TheFlash180/fintrack-pro) and
+One app deliberately lives in its own repo —
 [baby-registry-pwa](https://github.com/TheFlash180/baby-registry-pwa) — but
-they are part of the same family: the dashboard hub links to them as external
-tiles, and **all apps (in-repo and external) share ONE Supabase project**.
+it is part of the same family: the dashboard hub links to it as an external
+tile, and **all apps (in-repo and external) share ONE Supabase project**.
+(FinTrack Pro was retired in October 2026; its repo and tables are gone.)
 
 That shared project is a real coupling to be aware of:
 
-- **fintrack-pro owns the auth boundary.** Its `fintrack_allowlist` table and
-  the trigger on `auth.users` are what stop strangers from signing up. Every
-  app here that uses "any authenticated user" RLS policies (baby-logger's
-  tables, for example) is only safe because that trigger exists. Don't drop or
-  weaken it without checking every app.
-- **fintrack-pro also owns the shared `profiles` table** (`id` uuid PK →
-  `auth.users`); baby-logger reuses it.
+- **baby-logger owns the auth boundary.** Its `household_allowlist` table and
+  the `on_auth_household_user_created` trigger on `auth.users` are what stop
+  strangers from signing up. Every app here that uses "any authenticated user"
+  RLS policies (baby-logger's tables) is only safe because that trigger
+  exists. Don't drop or weaken it without checking every app.
+- **baby-logger also owns the `profiles` table** (`id` uuid PK → `auth.users`,
+  display name and owner key), filled by that same trigger.
 - **baby-registry-pwa owns** `categories`/`items`/`retailers`/`claims`/
   `registry_settings` and their security-definer RPCs.
 - The `ping` table only exists for the keep-alive cron.
 
 What each one is:
 
-- **dashboard** — the hub at the site root; a tile per app, including the two
-  external ones.
+- **dashboard** — the hub at the site root; a tile per app, including the external
+  one.
 - **sport-watch** — F1 and rugby fixtures with push reminders and a calendar feed.
 - **marvel-watch** — Marvel release dates from TMDB, with reminders.
 - **meal-prep** — a recipe book: 61 recipes across lunch, dinner, sides, snacks
@@ -70,7 +70,7 @@ separately, so editing one does not change the running system:
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
 | price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 
-The apps that predate accounts (everything except baby-logger and fintrack-pro)
+The apps that predate accounts (everything except baby-logger)
 are **device-scoped, not user-scoped**: RLS is enabled with no policies at all,
 and every write goes through a `security definer` RPC that checks a SHA-256
 hash of a random token held in the device's localStorage. Shared world data
@@ -155,12 +155,12 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 ## Adding a new app
 
 ```powershell
-npm run new-app -- fintrack "FinTrack" "Personal finance dashboard"
+npm run new-app -- chores "Chores" "Who does what this week"
 npm install
-npm run dev -w apps/fintrack
+npm run dev -w apps/chores
 ```
 
-The next push deploys it automatically at `/claude-ecosystem/fintrack/` and it shows up on the launcher page.
+The next push deploys it automatically at `/claude-ecosystem/chores/` and it shows up on the launcher page.
 
 ## Rules learned the hard way (carried over from the script ecosystem)
 

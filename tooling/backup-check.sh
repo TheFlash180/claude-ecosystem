@@ -13,7 +13,7 @@ dump="${1:?usage: backup-check.sh dump.sql}"
 # Must be present. feed_events etc. are empty until the baby is born, so
 # presence is all that can be asked of them.
 REQUIRED=(
-  transactions budgets profiles fintrack_accounts fintrack_settings
+  profiles household_allowlist
   babies feed_events sleep_events nappy_events weight_events
   items claims categories retailers
   glovebox_vehicles glovebox_people
@@ -21,7 +21,7 @@ REQUIRED=(
   auth.users auth.identities
 )
 # Must be present *and* have rows: an empty one means the dump is wrong.
-NONEMPTY=(transactions babies items mealprep_recipes auth.users)
+NONEMPTY=(profiles household_allowlist babies items mealprep_recipes auth.users)
 
 # Rows per table: the lines between "COPY <schema>.<t> (...) FROM stdin;" and
 # "\.". Public tables are named bare, others keep their schema (auth.users).

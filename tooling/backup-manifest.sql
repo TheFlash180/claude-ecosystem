@@ -10,7 +10,7 @@
 --           reverting to anon-executable, or a definer RPC losing execute
 --  table    RLS switched off, or anon/authenticated privileges changed
 --  policy   a policy missing or reworded
---  trigger  above all on_auth_fintrack_user_created on auth.users, the
+--  trigger  above all on_auth_household_user_created on auth.users, the
 --           signup allowlist that baby-logger's policies depend on
 --  realtime a table dropped from the publication (Baby Logger's live sync)
 --  default  the grants a table or function created later will get: a new

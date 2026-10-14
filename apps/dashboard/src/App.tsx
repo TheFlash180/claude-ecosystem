@@ -19,7 +19,6 @@ function installedApps() {
 // Apps that live outside this repo but belong to the family. The slug is only
 // used to look up its colour and icon; the href is absolute.
 const EXTERNAL: { slug: string; name: string; url: string }[] = [
-  { slug: 'fintrack-pro', name: 'FinTrack Pro', url: 'https://theflash180.github.io/fintrack-pro/' },
   { slug: 'baby-registry', name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/' },
 ];
 

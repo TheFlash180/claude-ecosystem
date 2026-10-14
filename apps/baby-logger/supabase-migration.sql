@@ -6,10 +6,10 @@
 -- All authenticated users share full access to all data.
 -- ============================================================
 
--- 1. PROFILES (shared with FinTrack — uses `id` as PK, not `user_id`)
--- The profiles table already exists from FinTrack setup.
--- Baby Logger reuses it: columns id (uuid PK → auth.users), display_name.
--- If creating fresh:
+-- 1. PROFILES (uses `id` as PK, not `user_id`) and the signup gate.
+-- Live versions: migration household_auth_gate_and_profiles (2026-10-14),
+-- which created household_allowlist, profiles (id, display_name, owner_key)
+-- and the on_auth_household_user_created trigger. Historical sketch:
 -- create table if not exists profiles (
 --   id uuid primary key references auth.users(id) on delete cascade,
 --   display_name text not null

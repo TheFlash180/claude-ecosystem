@@ -11,15 +11,14 @@ retirement took its tables and functions out of the list:
 
 | Count | Lint | Why it is there |
 |---|---|---|
-| 135 | `anon_/authenticated_security_definer_function_executable` (65 + 70) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_fintrack_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
+| 135 | `anon_/authenticated_security_definer_function_executable` (65 + 70) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_household_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
 | 20 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
 
-fintrack's `using (true)` policies on `transactions`, `budgets`, `profiles`,
-`fintrack_settings` and `fintrack_accounts` are still in place and still
-deliberate (see the fintrack-pro CLAUDE.md) — Supabase simply stopped
-reporting them as `rls_policy_always_true` by September 2026, so their absence
-from the list is not a change to chase.
+The `using (true)` policy on `profiles` (any signed-in household member) is
+deliberate: only the two household emails can ever sign in. Supabase stopped
+reporting such policies as `rls_policy_always_true` by September 2026, so their
+absence from the list is not a change to chase.
 
 Security definer functions that only `service_role` may execute — the Vault
 getters (`get_*_vapid_private_key`, `get_tmdb_api_key`) and `cron_secret_ok` —
@@ -27,7 +26,7 @@ raise no lint at all, so a new one adding to the count means it is reachable
 by anon or authenticated, which for those would be a leak.
 
 Adding policies to those tables, revoking anon execute on those functions, or
-tightening the fintrack policies to per-owner isolation each break a working
+tightening the `profiles` policy to per-owner isolation each break a working
 app. If the count moves well away from those numbers, something new happened —
 that is worth a look.
 
@@ -43,8 +42,8 @@ The apps predate accounts. They are **device-scoped, not user-scoped**:
   public-read on purpose. It is not personal data and the app needs it before a
   device has any state.
 
-Two apps are the exception and use real auth: **baby-logger** and
-**fintrack-pro** (separate repo). See the ownership table below.
+One app is the exception and uses real auth: **baby-logger**. See the
+ownership table below.
 
 ## Layout
 
@@ -239,10 +238,20 @@ schema change lands in the same database as everything else.
 | marvel-watch | `marvel_*` | `sync-marvel`, `send-marvel-reminders` | `marvel-tmdb-sync`, `marvel-push-reminders`, `marvel-prune-*` |
 | meal-prep | `mealprep_*` | `send-mealprep-reminder` | `mealprep-prep-reminder` |
 | workout-plan | `workout_*` | — | — |
-| baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events` | — | — |
+| baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
 | price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
+
+**FinTrack Pro was retired in October 2026** (separate repo, deleted). Its
+tables went with it, but two things it owned were load-bearing for
+baby-logger and were re-created under baby-logger the same day:
+`household_allowlist` + the `on_auth_household_user_created` trigger on
+`auth.users` (the signup gate: only the two household emails can ever create
+an account — **baby-logger's "any authenticated user" policies are only safe
+because that trigger exists; do not weaken it**) and `profiles` (display
+names, filled by that trigger). Lesson: before dropping another app's tables,
+grep this repo for them, not just the database.
 
 **Front Row was retired in October 2026** (unused). Its folder, `frontrow_*`
 tables and functions, both cron jobs and its Vault key are gone, and its edge
@@ -250,10 +259,6 @@ functions answer 410. A mention of it elsewhere in this file is history.
 
 Owned by the external repos, but in the same database:
 
-- **fintrack-pro** owns `transactions`, `budgets`, `profiles`, `fintrack_*`.
-  Its `fintrack_allowlist` table and the trigger on `auth.users` are what stop
-  strangers signing up — **baby-logger's "any authenticated user" policies are
-  only safe because that trigger exists.** Do not weaken it.
 - **baby-registry-pwa** owns `categories`, `items`, `retailers`, `claims`,
   `registry_settings`.
 - `ping` exists only for the keep-alive cron, which is a **GitHub Actions**
@@ -502,9 +507,9 @@ exactly what a naive lean-protein filter would surface first.
 - **The API returns at most 1000 rows per request, and says so quietly.**
   `.limit(2000)` or `.range(0, 49999)` comes back as a 206 with the first 1000
   and no error. Front Row (since retired) asked for 2000 of ~2700 upcoming listings and showed
-  about a month ahead, with every undated listing gone; fintrack-pro's
-  newest-first load silently dropped its oldest 141 transactions, and would
-  have dropped another month with every import. Anything that can outgrow
+  about a month ahead, with every undated listing gone; FinTrack Pro's
+  (since retired) newest-first load silently dropped its oldest 141
+  transactions, and would have dropped another month with every import. Anything that can outgrow
   1000 rows goes through `fetchAllPages` (`packages/shared/src/paging.ts`),
   with a unique column as the last `.order` so pages cannot overlap.
 - A source that goes quiet looks identical to "nothing new". Every syncing app

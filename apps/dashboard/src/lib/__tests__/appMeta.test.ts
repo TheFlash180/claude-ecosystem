@@ -5,7 +5,7 @@ describe('metaFor', () => {
   it('gives each known app its own colour and icon', () => {
     expect(metaFor('sport-watch').color).toBe('#3AA864');
     expect(metaFor('marvel-watch').icon).toBe('film');
-    expect(metaFor('fintrack-pro').note).toBe('household finance');
+    expect(metaFor('baby-registry').note).toBeTruthy();
   });
 
   it('falls back for an unknown slug instead of returning undefined', () => {

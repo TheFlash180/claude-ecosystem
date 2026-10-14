@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Scaffolds a new app from the dashboard template.
-// Usage: npm run new-app -- fintrack "FinTrack" "Personal finance dashboard"
+// Usage: npm run new-app -- chores "Chores" "Who does what this week"
 import { cpSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -8,7 +8,7 @@ const [, , id, displayName, description = ''] = process.argv;
 
 if (!id || !displayName) {
   console.error('Usage: npm run new-app -- <app-id> "<Display Name>" "[description]"');
-  console.error('Example: npm run new-app -- fintrack "FinTrack" "Personal finance dashboard"');
+  console.error('Example: npm run new-app -- chores "Chores" "Who does what this week"');
   process.exit(1);
 }
 

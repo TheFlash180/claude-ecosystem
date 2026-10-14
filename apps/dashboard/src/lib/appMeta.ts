@@ -20,7 +20,6 @@ const META: Record<string, AppMeta> = {
   'meal-prep':    { color: '#C4572E', icon: 'chef',     note: 'plan & shopping list' },
   'sport-watch':  { color: '#3AA864', icon: 'trophy',   note: 'fixtures & reminders' },
   'workout-plan': { color: '#C6F135', icon: 'dumbbell', note: 'training & progress' },
-  'fintrack-pro': { color: '#2DD4BF', icon: 'wallet',   note: 'household finance' },
   'baby-registry':{ color: '#D9A441', icon: 'gift',     note: 'gifts & claims' },
   'glovebox':     { color: '#5B8DEF', icon: 'car',      note: 'licence, disc & services' },
   'price-watch':  { color: '#A78BFA', icon: 'tag',      note: 'price drops & history' },

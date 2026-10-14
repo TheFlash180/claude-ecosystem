@@ -13,7 +13,7 @@ type AppState = 'loading' | 'auth' | 'pre-birth' | 'post-birth';
 /** How often a queued event is retried while the phone claims to be online. */
 const RETRY_MS = 15_000;
 
-// The shared profiles table (FinTrack's) requires owner_key — map it from
+// The profiles table (see household_allowlist) requires owner_key — map it from
 // the email so the fallback insert below can never violate its NOT NULL.
 const OWNER_KEYS: Record<string, string> = {
   'rickust18@gmail.com': 'rickus',
