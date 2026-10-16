@@ -206,7 +206,7 @@ describe('lowestMarker', () => {
     expect(m?.x).toBeCloseTo(0.5, 2);
   });
 
-  it('draws nothing when the sparkline draws nothing', () => {
+  it('marks no record on a single reading, though the line is drawn', () => {
     expect(lowestMarker([pt(3, 750)], NOW)).toBeNull();
     expect(lowestMarker([], NOW)).toBeNull();
   });
@@ -228,6 +228,20 @@ describe('assess', () => {
     const a = assess([pt(3, 500), pt(1, 450)], NOW);
     expect(a.verdict).toBe('unknown');
     expect(a.label).toBe('Learning');
+  });
+
+  it('counts a price that has held since it was added as history', () => {
+    // One row, 16 days old: the price has not changed, so nothing new was
+    // written. That is 16 days of an unchanged price, not 0 days of history.
+    const a = assess([pt(16, 4999)], NOW);
+    expect(a.label).toBe('Unchanged');
+    expect(a.detail).toBe(`Has stayed at ${formatRand(4999)} for 16 days.`);
+  });
+
+  it('says how long is left when a held price is still young', () => {
+    const a = assess([pt(10, 4999)], NOW);
+    expect(a.label).toBe('Learning');
+    expect(a.detail).toContain('about 4 more days');
   });
 
   it('calls the cheapest price yet the lowest', () => {
@@ -314,8 +328,14 @@ describe('sparkline', () => {
     expect(Math.max(...pts.map(p => p.y))).toBe(1); // y=1 is the bottom
   });
 
-  it('returns nothing to draw for a single point', () => {
-    expect(sparkline([pt(5, 100)], NOW)).toEqual([]);
+  it('draws a single reading as a flat line to today', () => {
+    // The sync writes only on change, so one row is a price that has held.
+    expect(sparkline([pt(5, 100)], NOW)).toEqual([{ x: 0, y: 0.5 }, { x: 1, y: 0.5 }]);
+  });
+
+  it('returns nothing to draw for no points, or a reading taken just now', () => {
+    expect(sparkline([], NOW)).toEqual([]);
+    expect(sparkline([pt(0, 100)], NOW)).toEqual([]);
   });
 
   it('pins a flat series to the middle instead of dividing by zero', () => {

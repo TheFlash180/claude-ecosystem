@@ -137,14 +137,19 @@ export interface Assessment {
 
 /** Below this much history, we say we don't know rather than guessing. A
  *  verdict from three days of data is worse than no verdict, because it gets
- *  believed. */
+ *  believed.
+ *
+ *  History is measured in days, not rows. The sync writes a row only when the
+ *  price *changes*, so a product whose price has held since it was added has
+ *  one row however long it has been watched — and that is a real record of a
+ *  price held for weeks, not a gap. Counting rows instead left a product
+ *  "about 0 more days" from a verdict forever. */
 const MIN_DAYS = 14;
-const MIN_OBSERVATIONS = 2;
 
 export function assess(points: PricePoint[], now: Date = new Date()): Assessment {
   const st = stats(points, now);
 
-  if (st.current === null || st.observations < MIN_OBSERVATIONS || st.spanDays < MIN_DAYS) {
+  if (st.current === null || st.spanDays < MIN_DAYS) {
     const need = Math.max(0, Math.ceil(MIN_DAYS - st.spanDays));
     return {
       verdict: 'unknown',
@@ -337,7 +342,9 @@ export function sparkline(
   now: Date = new Date(),
 ): { x: number; y: number }[] {
   const s = sortPoints(points);
-  if (s.length < 2) return [];
+  // One reading is still a line: the sync writes only on change, so a single
+  // row is a price that has held from then until now.
+  if (s.length === 0) return [];
 
   const t0 = Date.parse(s[0].at);
   const t1 = now.getTime();
@@ -376,6 +383,8 @@ export function lowestMarker(
   now: Date = new Date(),
 ): { x: number; y: number } | null {
   const s = sortPoints(points);
+  // A single reading draws a flat line but no record dot: one price is not a
+  // low, it is the only number there is (same rule as the target chips).
   if (s.length < 2) return null;
 
   const t0 = Date.parse(s[0].at);
