@@ -240,7 +240,7 @@ schema change lands in the same database as everything else.
 | workout-plan | `workout_*` | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
+| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch`, `probe-retailers` (temporary, 18–21 Oct 2026) | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-probe` (temporary) |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
 
 **FinTrack Pro was retired in October 2026** (separate repo, deleted). Its
