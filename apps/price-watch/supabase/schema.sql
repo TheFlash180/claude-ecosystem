@@ -286,3 +286,43 @@ select cron.schedule('pricewatch-notify', '35 4 * * *', $$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
     body := '{}'::jsonb) AS request_id;
 $$);
+
+-- ------------------------------------------------- retailer probe (TEMPORARY)
+-- A three-day test, 18–21 October 2026, of whether Baby City, Dis-Chem,
+-- Checkers, PnP and Woolworths can be read as reliably as Takealot before any
+-- adapter is built for them (functions/probe-retailers). Its own log only:
+-- RLS on, no policies, no grants to anon or authenticated, so it adds one
+-- `rls_enabled_no_policy` advisor finding while it exists. Drop both, and the
+-- cron job, when the test is read:
+--   select cron.unschedule('pricewatch-probe');
+--   drop table pricewatch_probe;
+create table pricewatch_probe (
+  id bigserial primary key,
+  ran_at timestamptz not null default now(),
+  retailer text not null,
+  stage text not null,
+  url text not null,
+  status int,
+  ms int,
+  blocked text,
+  platform text,
+  price numeric,
+  price_sources jsonb,
+  visible_match boolean,
+  availability text,
+  gtin text,
+  name text,
+  note text
+);
+alter table pricewatch_probe enable row level security;
+revoke all on pricewatch_probe from anon, authenticated;
+revoke all on sequence pricewatch_probe_id_seq from anon, authenticated;
+
+-- Three times a day at an odd minute, so a shop that only fails at one time
+-- of day shows up.
+select cron.schedule('pricewatch-probe', '17 5,12,19 * * *', $$
+  SELECT net.http_post(
+    url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/probe-retailers',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    body := '{}'::jsonb, timeout_milliseconds := 120000) AS request_id;
+$$);
