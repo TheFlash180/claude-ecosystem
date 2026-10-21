@@ -283,6 +283,14 @@ this project and nothing else. Never swap in a classic token: one of those
 carries the whole account. A red run means deploy the repo's version, or
 commit what is live, whichever is right.
 
+**A new table needs its grants in the same migration that creates it.** From
+30 October 2026 Supabase stops granting the API roles anything on new tables
+in `public` (existing tables keep theirs), so a table created without grants
+answers "permission denied" — to the app and to an edge function's
+`service_role` alike. Grant only what the table needs: `select` to `anon` for
+public-read world data, everything to `service_role` for the function that
+writes it, nothing for device-scoped rows, which go through definer RPCs.
+
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
 

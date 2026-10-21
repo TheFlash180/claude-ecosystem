@@ -239,25 +239,44 @@ export function justUnder(price: number): number {
 }
 
 export interface TargetSuggestion {
-  /** How it relates to the low — the chip's label. */
+  /** Which row the chip sits in: off today's price, or beating the record. */
+  group: 'today' | 'low';
+  /** The chip's label. */
   label: string;
   value: number;
 }
 
-/** One-tap targets derived from the lowest price ever seen, so "alert me if it
- *  ever beats its record" does not have to be worked out by hand.
+/** Off today's price. These need no history at all, so every product gets a
+ *  one-tap target from the day it is added — including one whose price has
+ *  not moved, which has only a single recorded price and so no "low" to beat. */
+const OFF_TODAY = [10, 20, 30];
+
+/** One-tap targets, so a target does not have to be worked out by hand.
  *
- *  Empty when there is not enough history for a low to mean anything. Values
- *  that collapse onto each other are dropped: on a R40 item, 5% and 10% under
- *  round to the same rand and two identical chips are just confusing. */
+ *  Two kinds. "10% / 20% / 30% off" today's price, always. And, once a second
+ *  recorded price makes the lowest seen a real record, "Under the low" and
+ *  "5% under" it — the target that says "tell me if it ever beats its best".
+ *
+ *  Every value is strictly below the price it is computed from, and values
+ *  that collapse onto each other are dropped: on a R12 item 5% under and 10%
+ *  off round to the same rand, and two identical chips are just confusing. */
 export function targetSuggestions(st: PriceStats): TargetSuggestion[] {
-  if (st.lowest === null || st.observations < MIN_LOW_OBSERVATIONS) return [];
-  const low = st.lowest;
-  const candidates: TargetSuggestion[] = [
-    { label: 'Under the low', value: justUnder(low) },
-    { label: '5% under', value: Math.round(low * 0.95) },
-    { label: '10% under', value: Math.round(low * 0.9) },
-  ];
+  const candidates: TargetSuggestion[] = [];
+  const cur = st.current;
+  if (cur !== null && cur > 0) {
+    for (const pct of OFF_TODAY) {
+      const value = Math.round(cur * (1 - pct / 100));
+      if (value < cur) candidates.push({ group: 'today', label: `${pct}% off`, value });
+    }
+  }
+  if (st.lowest !== null && st.lowest > 0 && st.observations >= MIN_LOW_OBSERVATIONS) {
+    const low = st.lowest;
+    // justUnder floors at R1, so on a R1 low it is not under anything.
+    const under = justUnder(low);
+    if (under < low) candidates.push({ group: 'low', label: 'Under the low', value: under });
+    const five = Math.round(low * 0.95);
+    if (five < low) candidates.push({ group: 'low', label: '5% under', value: five });
+  }
 
   const seen = new Set<number>();
   const unique: TargetSuggestion[] = [];
@@ -269,20 +288,34 @@ export function targetSuggestions(st: PriceStats): TargetSuggestion[] {
   return unique;
 }
 
-/** What a target is actually asking for, said against the record.
+/** What a target is actually asking for: how far below today's price it is,
+ *  and how it sits against the record.
  *
- *  The useful case is the last one: a target *above* the lowest seen is one
- *  the product has already met, which is worth knowing before you wait for it.
- */
+ *  The useful warning is a target above the lowest seen: the product has
+ *  already been that cheap, which is worth knowing before you wait for it.
+ *  A target at or above today's price is said plainly too, because an alert
+ *  fires on a *drop* to or under the target, not on a price already there. */
 export function targetContext(target: number | null, st: PriceStats): string | null {
   if (target === null) return null;
+  const cur = st.current;
+  if (cur === null || cur <= 0) return null;
+
+  if (target >= cur) {
+    return `Today's ${formatRand(cur)} is already at or under it, so only a further drop will alert.`;
+  }
+  const below = `${Math.round((1 - target / cur) * 100)}% below today's ${formatRand(cur)}`;
+
+  // One recorded price is the only price there has been since tracking began,
+  // so a target under today's is under everything seen — said as such rather
+  // than as a "record" that one reading cannot be.
   if (st.lowest === null || st.observations < MIN_LOW_OBSERVATIONS) {
-    return 'Not enough history yet to say how that compares.';
+    return `${below}, lower than any price since tracking began.`;
   }
   const gap = st.lowest - target;
-  if (gap > 0) return `${formatRand(gap)} under the lowest seen.`;
-  if (gap === 0) return `Exactly the lowest seen (${formatRand(st.lowest)}).`;
-  return `Above the ${formatRand(st.lowest)} low — it has already been this cheap.`;
+  if (gap > 0) return `${below}, ${formatRand(gap)} under the lowest seen.`;
+  if (gap === 0) return `${below}, exactly the lowest seen.`;
+  const when = st.lowestAt ? ` on ${shortDate(st.lowestAt)}` : '';
+  return `${below}. It has already been this cheap: ${formatRand(st.lowest)}${when}.`;
 }
 
 const MONTHS = [
@@ -403,6 +436,159 @@ export function lowestMarker(
     x: Math.min(1, (Date.parse(s[lowIndex].at) - t0) / span),
     y: range === 0 ? 0.5 : 1 - (s[lowIndex].price - lo) / range,
   };
+}
+
+// ---- the full history, behind a tap on the chart ----
+
+export interface HistoryEntry {
+  at: string;
+  price: number;
+  /** Against the entry before it; null for the first, and for a stock-only
+   *  change where the price stayed put. */
+  change: Change | null;
+  /** How long this price (and stock state) held: until the next entry, or
+   *  until now for the current one. */
+  heldDays: number;
+  inStock: boolean;
+  /** Set when this entry is the moment it went out of, or came back into,
+   *  stock. */
+  stock: 'out' | 'back' | null;
+  /** The first time the lowest price was reached. Only ever set once there
+   *  are two prices to compare, for the same reason the card hides the low
+   *  row until then. */
+  isLow: boolean;
+  current: boolean;
+}
+
+/** Every change the product has been through, newest first.
+ *
+ *  The series is already sparse — a row is written only when the price or the
+ *  stock changed — but rows that changed neither (a re-import, a duplicate)
+ *  are folded into the one before, so each line here is something that
+ *  actually happened. */
+export function historyEntries(points: PricePoint[], now: Date = new Date()): HistoryEntry[] {
+  const s = sortPoints(points);
+  const kept: PricePoint[] = [];
+  for (const p of s) {
+    const prev = kept[kept.length - 1];
+    if (!prev || prev.price !== p.price || prev.inStock !== p.inStock) kept.push(p);
+  }
+  if (kept.length === 0) return [];
+
+  const distinct = new Set(kept.map(p => p.price)).size;
+  let lowIndex = 0;
+  for (let i = 1; i < kept.length; i++) if (kept[i].price < kept[lowIndex].price) lowIndex = i;
+
+  const out: HistoryEntry[] = kept.map((p, i) => {
+    const prev = i > 0 ? kept[i - 1] : null;
+    const until = i + 1 < kept.length ? Date.parse(kept[i + 1].at) : now.getTime();
+    return {
+      at: p.at,
+      price: p.price,
+      change: prev && prev.price !== p.price ? change(prev.price, p.price) : null,
+      heldDays: Math.max(0, (until - Date.parse(p.at)) / DAY),
+      inStock: p.inStock,
+      stock: !prev ? null : prev.inStock && !p.inStock ? 'out' : !prev.inStock && p.inStock ? 'back' : null,
+      isLow: distinct > 1 && i === lowIndex,
+      current: i === kept.length - 1,
+    };
+  });
+  return out.reverse();
+}
+
+export interface HistoryChart {
+  /** Step line in a 0..1 box, y inverted for SVG (0 is the top). */
+  line: { x: number; y: number }[];
+  /** The prices at the bottom and top of the box, for the axis labels. */
+  lo: number;
+  hi: number;
+  startAt: string;
+  /** The target as a y in the same box, or null when there is none. */
+  targetY: number | null;
+  /** Where the record low was first set; null until there are two prices. */
+  low: { x: number; y: number } | null;
+}
+
+/** The big chart in the history sheet. Same step form as the card's
+ *  sparkline, but the scale also takes in the target, so a line drawn at
+ *  "alert me under R3 000" sits where R3 000 really is rather than off the
+ *  bottom of the chart. Null when there is nothing to draw. */
+export function historyChart(
+  points: PricePoint[],
+  now: Date = new Date(),
+  target: number | null = null,
+): HistoryChart | null {
+  const s = sortPoints(points);
+  if (s.length === 0) return null;
+  const t0 = Date.parse(s[0].at);
+  const span = now.getTime() - t0;
+  if (span <= 0) return null;
+
+  const prices = s.map(p => p.price);
+  const withTarget = target !== null && target > 0 ? [...prices, target] : prices;
+  let lo = Math.min(...withTarget);
+  let hi = Math.max(...withTarget);
+  // A price that never moved still needs a scale to sit in: give it 10% of
+  // headroom either side, so the line rides in the middle with real labels.
+  if (hi === lo) { lo = lo * 0.9; hi = hi * 1.1; }
+  const y = (price: number) => 1 - (price - lo) / (hi - lo);
+
+  const line: { x: number; y: number }[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const x = (Date.parse(s[i].at) - t0) / span;
+    if (i > 0) line.push({ x, y: line[line.length - 1].y });
+    line.push({ x, y: y(s[i].price) });
+  }
+  line.push({ x: 1, y: line[line.length - 1].y });
+
+  let low: HistoryChart['low'] = null;
+  if (new Set(prices).size > 1) {
+    let li = 0;
+    for (let i = 1; i < s.length; i++) if (s[i].price < s[li].price) li = i;
+    low = { x: Math.min(1, (Date.parse(s[li].at) - t0) / span), y: y(s[li].price) };
+  }
+
+  return {
+    line, lo, hi, startAt: s[0].at,
+    targetY: target !== null && target > 0 ? y(target) : null,
+    low,
+  };
+}
+
+/** What the chart says under a finger at `fraction` (0 = first reading,
+ *  1 = now): the price and stock in force at that moment. Read as a step
+ *  function, like everything else here — never interpolated. */
+export function scrubAt(
+  points: PricePoint[],
+  fraction: number,
+  now: Date = new Date(),
+): { at: string; price: number; inStock: boolean } | null {
+  const s = sortPoints(points);
+  if (s.length === 0) return null;
+  const t0 = Date.parse(s[0].at);
+  const f = Math.min(1, Math.max(0, fraction));
+  const t = t0 + f * (now.getTime() - t0);
+  let found = s[0];
+  for (const p of s) {
+    if (Date.parse(p.at) <= t) found = p;
+    else break;
+  }
+  return { at: new Date(t).toISOString(), price: found.price, inStock: found.inStock };
+}
+
+/** "12 Oct", or "12 Oct 2025" once the date is in another year than `now`,
+ *  so a long history does not lose track of which October it means. */
+export function dayLabel(at: string, now: Date = new Date()): string {
+  const year = new Date(at).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }).slice(0, 4);
+  const thisYear = now.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }).slice(0, 4);
+  return year === thisYear ? shortDate(at) : `${shortDate(at)} ${year}`;
+}
+
+/** "9 days", "1 day", "less than a day". */
+export function heldLabel(days: number): string {
+  const d = Math.floor(days);
+  if (d < 1) return 'less than a day';
+  return `${d} day${d === 1 ? '' : 's'}`;
 }
 
 /** What the notifier decides on. Kept here so the app and the edge function

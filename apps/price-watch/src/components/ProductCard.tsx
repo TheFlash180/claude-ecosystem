@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
-  ArrowDownToLine, Bell, ExternalLink, Package, Trash2, TrendingDown, TrendingUp,
+  ArrowDownToLine, Bell, ChevronRight, ExternalLink, Package, Trash2, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import { P, type TrackedProduct } from '../lib/config';
 import {
   assess, formatRand, lastChange, latest, shortDate, stats, targetContext,
-  targetSuggestions,
+  targetSuggestions, type TargetSuggestion,
 } from '../lib/price';
 import { Sparkline } from './Sparkline';
 
@@ -21,9 +21,10 @@ interface Props {
   item: TrackedProduct;
   onSetTarget: (trackId: string, target: number | null) => void;
   onRemove: (trackId: string) => void;
+  onOpenHistory: (trackId: string) => void;
 }
 
-export function ProductCard({ item, onSetTarget, onRemove }: Props) {
+export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Props) {
   const { product, track, history } = item;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(track.targetPrice === null ? '' : String(track.targetPrice));
@@ -35,7 +36,12 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
   const verdictColor = VERDICT_COLOR[a.verdict] ?? P.sub;
 
   const suggestions = targetSuggestions(st);
+  const fromToday = suggestions.filter(sg => sg.group === 'today');
+  const beatLow = suggestions.filter(sg => sg.group === 'low');
   const targetNote = targetContext(track.targetPrice, st);
+  // While typing, say what the number in the box would mean before it is saved.
+  const draftValue = Number(draft.trim().replace(/[^\d.]/g, ''));
+  const draftNote = draft.trim() !== '' && draftValue > 0 ? targetContext(draftValue, st) : null;
   // One reading is not a record, so the low row stays hidden until there is
   // something to compare against — otherwise it just repeats today's price.
   const showLow = st.lowest !== null && st.observations >= 2;
@@ -151,7 +157,24 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
           </div>
         </div>
 
-        <Sparkline history={history} color={a.verdict === 'high' ? P.amber : P.violet} />
+        {/* The way into the full history: the chart itself, plus a word under
+            it, because a chart nobody knows is tappable is just a picture. */}
+        <button
+          onClick={() => onOpenHistory(track.id)}
+          aria-label={`Price history for ${product.title}`}
+          style={{
+            display: 'grid', justifyItems: 'end', gap: 3, flexShrink: 0,
+            background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+          }}
+        >
+          <Sparkline history={history} color={a.verdict === 'high' ? P.amber : P.violet} />
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 1,
+            fontSize: 11, fontWeight: 600, color: P.violet, fontFamily: P.body,
+          }}>
+            History <ChevronRight size={12} />
+          </span>
+        </button>
       </div>
 
       {/* The record, always on the card rather than only inside a verdict
@@ -197,30 +220,13 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
 
       {editing && (
         <div style={{ display: 'grid', gap: 8 }}>
-          {/* Working out "a bit under the record" by hand is the friction this
-              removes — the whole point of asking for a target below the low. */}
-          {suggestions.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: P.muted, fontFamily: P.body }}>
-                Beat the {formatRand(st.lowest)} low:
-              </span>
-              {suggestions.map(sg => (
-                <button
-                  key={sg.value}
-                  onClick={() => commit(sg.value)}
-                  title={`Alert me under ${formatRand(sg.value)}`}
-                  style={{
-                    display: 'grid', gap: 1, textAlign: 'left',
-                    background: 'transparent', color: P.text,
-                    border: `1px solid ${P.violet}55`, borderRadius: 10,
-                    padding: '5px 9px', cursor: 'pointer', fontFamily: P.body,
-                  }}
-                >
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{formatRand(sg.value)}</span>
-                  <span style={{ fontSize: 10, color: P.muted }}>{sg.label}</span>
-                </button>
-              ))}
-            </div>
+          {/* One tap instead of working out a percentage by hand. Off today's
+              price always; beating the record once there is a record to beat. */}
+          {fromToday.length > 0 && (
+            <ChipRow label="Off today's price:" chips={fromToday} onPick={commit} />
+          )}
+          {beatLow.length > 0 && (
+            <ChipRow label={`Beat the ${formatRand(st.lowest)} low:`} chips={beatLow} onPick={commit} />
           )}
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -234,7 +240,8 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
               style={{
                 flex: 1, minWidth: 0, background: P.raised, color: P.text,
                 border: `1px solid ${P.border}`, borderRadius: 10,
-                padding: '8px 10px', fontSize: 13, fontFamily: P.body,
+                // 16px: iOS zooms the whole page into any smaller input.
+                padding: '8px 10px', fontSize: 16, fontFamily: P.body,
               }}
             />
             <button onClick={saveTarget} style={btn(P.violet, true)}>Save</button>
@@ -242,6 +249,12 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
               <button onClick={() => commit(null)} style={btn(P.muted, false)}>Clear</button>
             )}
           </div>
+
+          {draftNote && (
+            <p style={{ margin: 0, fontSize: 11.5, color: P.sub, fontFamily: P.body }}>
+              {formatRand(draftValue)}: {draftNote}
+            </p>
+          )}
         </div>
       )}
 
@@ -277,6 +290,34 @@ export function ProductCard({ item, onSetTarget, onRemove }: Props) {
         </button>
       </div>
     </article>
+  );
+}
+
+function ChipRow({ label, chips, onPick }: {
+  label: string;
+  chips: TargetSuggestion[];
+  onPick: (value: number) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      <span style={{ fontSize: 11, color: P.muted, fontFamily: P.body }}>{label}</span>
+      {chips.map(sg => (
+        <button
+          key={sg.value}
+          onClick={() => onPick(sg.value)}
+          title={`Alert me under ${formatRand(sg.value)}`}
+          style={{
+            display: 'grid', gap: 1, textAlign: 'left',
+            background: 'transparent', color: P.text,
+            border: `1px solid ${P.violet}55`, borderRadius: 10,
+            padding: '5px 9px', cursor: 'pointer', fontFamily: P.body,
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700 }}>{formatRand(sg.value)}</span>
+          <span style={{ fontSize: 10, color: P.muted }}>{sg.label}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
