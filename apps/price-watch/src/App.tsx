@@ -7,6 +7,7 @@ import {
   type SearchHit,
 } from './lib/store';
 import { AddSheet } from './components/AddSheet';
+import { HistorySheet } from './components/HistorySheet';
 import { ProductCard } from './components/ProductCard';
 
 /** A source that has not reported in this long is treated as broken. Silence
@@ -30,6 +31,25 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+
+  // The history sheet is a browser history entry, so Android's back button
+  // closes it instead of leaving the app — the same rule as Meal Prep's
+  // recipe sheet.
+  useEffect(() => {
+    const onPop = () => setHistoryFor(null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  const openHistory = useCallback((trackId: string) => {
+    window.history.pushState({ pwHistory: true }, '');
+    setHistoryFor(trackId);
+  }, []);
+  const closeHistory = useCallback(() => {
+    if ((window.history.state as { pwHistory?: boolean } | null)?.pwHistory) window.history.back();
+    else setHistoryFor(null);
+  }, []);
+  const historyItem = historyFor ? items.find(i => i.track.id === historyFor) ?? null : null;
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -215,6 +235,7 @@ export default function App() {
                 item={item}
                 onSetTarget={(id, t) => void onSetTarget(id, t)}
                 onRemove={id => void onRemove(id)}
+                onOpenHistory={openHistory}
               />
             ))}
           </div>
@@ -235,6 +256,8 @@ export default function App() {
       >
         <Plus size={24} />
       </button>
+
+      {historyItem && <HistorySheet item={historyItem} onClose={closeHistory} />}
 
       <AddSheet
         open={adding}

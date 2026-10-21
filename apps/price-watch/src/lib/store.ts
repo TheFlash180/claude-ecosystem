@@ -1,6 +1,6 @@
 // Data access. The catalogue and price history are public reads; everything
 // device-scoped goes through the token-checked RPCs.
-import { deviceToken, ensurePushSubscription, getSupabase } from '@ecosystem/shared';
+import { deviceToken, ensurePushSubscription, fetchAllPages, getSupabase } from '@ecosystem/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PricePoint, Product, SourceHealth, Track, TrackedProduct } from './config';
 
@@ -127,12 +127,16 @@ export async function fetchTracked(): Promise<TrackedProduct[]> {
   if (rows.length === 0) return [];
 
   const productIds = rows.map(r => r.product_id);
-  const { data: priceData } = await client
+  // Paged: the API returns at most 1000 rows a request, silently, and the
+  // history sheet is only true if it has every row. `id` last makes the order
+  // total, so pages cannot overlap or skip.
+  const { data: priceData } = await fetchAllPages<PriceRow>((from, to) => client
     .from('pricewatch_prices')
     .select('product_id, captured_at, price, listing_price, in_stock, stock_status')
     .in('product_id', productIds)
     .order('captured_at', { ascending: true })
-    .limit(10000);
+    .order('id', { ascending: true })
+    .range(from, to));
 
   const byProduct = new Map<string, PricePoint[]>();
   for (const r of (priceData ?? []) as PriceRow[]) {

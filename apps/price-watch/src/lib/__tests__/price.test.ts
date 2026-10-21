@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   alertFor, assess, change, formatRand, justUnder, lastChange, lowestMarker,
   parseTakealotId, priceOn, shortDate, sparkline, stats, targetContext,
-  targetSuggestions,
+  targetSuggestions, historyEntries, historyChart, scrubAt, dayLabel, heldLabel,
 } from '../price';
 import type { PricePoint } from '../config';
 
@@ -145,55 +145,188 @@ describe('justUnder', () => {
 });
 
 describe('targetSuggestions', () => {
-  it('offers one-tap targets below the record', () => {
+  it('offers 10, 20 and 30% off today, and beating the record once there is one', () => {
     const s = stats([pt(60, 2249), pt(20, 2099)], NOW);
     expect(targetSuggestions(s)).toEqual([
-      { label: 'Under the low', value: 2098 },
-      { label: '5% under', value: 1994 },
-      { label: '10% under', value: 1889 },
+      { group: 'today', label: '10% off', value: 1889 },
+      { group: 'today', label: '20% off', value: 1679 },
+      { group: 'today', label: '30% off', value: 1469 },
+      { group: 'low', label: 'Under the low', value: 2098 },
+      // 5% under the 2099 low is 1994.05 → 1994.
+      { group: 'low', label: '5% under', value: 1994 },
     ]);
   });
 
-  it('offers nothing off a single reading', () => {
-    // One price is not a record, and a "beat the low" target built from it
-    // would be asking the product to beat a number it is already at.
-    expect(targetSuggestions(stats([pt(3, 750)], NOW))).toEqual([]);
+  it('offers off-today targets on a price that has never moved', () => {
+    // The case that had no chips at all: one recorded price, held for weeks.
+    // There is no low to beat, but 30% off today needs no history.
+    const s = stats([pt(21, 3799)], NOW);
+    expect(targetSuggestions(s)).toEqual([
+      { group: 'today', label: '10% off', value: 3419 },
+      { group: 'today', label: '20% off', value: 3039 },
+      { group: 'today', label: '30% off', value: 2659 },
+    ]);
+  });
+
+  it('offers nothing with no price at all', () => {
     expect(targetSuggestions(stats([], NOW))).toEqual([]);
   });
 
   it('collapses suggestions that round to the same rand', () => {
-    // On a cheap item 5% and 10% are pennies apart; two identical chips are
-    // just confusing.
+    // On a cheap item 5% under and 10% off are pennies apart; two identical
+    // chips are just confusing.
     const s = stats([pt(60, 12), pt(20, 10)], NOW);
     const values = targetSuggestions(s).map(x => x.value);
     expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('never suggests a target at or above the price it is taken from', () => {
+    // Today's price and the low are the same here, so every chip, from
+    // either row, must be strictly under it.
+    for (const price of [1, 2, 3, 7, 19, 99, 2099]) {
+      const s = stats([pt(60, price + 5), pt(20, price)], NOW);
+      for (const sg of targetSuggestions(s)) {
+        expect(sg.value).toBeLessThan(price);
+        expect(sg.value).toBeGreaterThan(0);
+      }
+    }
   });
 });
 
 describe('targetContext', () => {
   const s = stats([pt(60, 2249), pt(20, 2099)], NOW);
 
-  it('says how far under the record a target is', () => {
-    // The low itself is on the card's own row directly above this sentence,
-    // so the gap is the only part worth repeating.
-    expect(targetContext(1500, s)).toBe('R599 under the lowest seen.');
+  it('says how far below today and under the record a target is', () => {
+    expect(targetContext(1500, s)).toBe('29% below today\'s R2\u00a0099, R599 under the lowest seen.');
   });
 
   it('calls out a target the product has already beaten', () => {
     // The useful warning: you are waiting for a price it has already hit.
-    expect(targetContext(2200, s)).toContain('already been this cheap');
+    const up = stats([pt(60, 2099), pt(20, 2400)], NOW);
+    expect(targetContext(2200, up)).toBe(
+      '8% below today\'s R2\u00a0400. It has already been this cheap: R2\u00a0099 on 2 Jun.',
+    );
   });
 
   it('recognises a target sitting exactly on the record', () => {
-    expect(targetContext(2099, s)).toBe('Exactly the lowest seen (R2\u00a0099).');
+    const up = stats([pt(60, 2099), pt(20, 2400)], NOW);
+    expect(targetContext(2099, up)).toBe('13% below today\'s R2\u00a0400, exactly the lowest seen.');
+  });
+
+  it('says plainly when today is already under the target', () => {
+    // An alert fires on a drop to or under the target, not on a price that is
+    // already there, so this is worth saying rather than leaving people
+    // waiting for an alert that is not coming.
+    expect(targetContext(2500, s)).toContain('only a further drop will alert');
+  });
+
+  it('compares against today when one price is all there is', () => {
+    expect(targetContext(3000, stats([pt(21, 3799)], NOW)))
+      .toBe('21% below today\'s R3\u00a0799, lower than any price since tracking began.');
   });
 
   it('says nothing when there is no target', () => {
     expect(targetContext(null, s)).toBeNull();
   });
+});
 
-  it('declines to compare without enough history', () => {
-    expect(targetContext(500, stats([pt(3, 750)], NOW))).toContain('Not enough history');
+describe('historyEntries', () => {
+  it('lists every change newest first, with how long each price held', () => {
+    const h = historyEntries([pt(30, 2299), pt(21, 2099), pt(9, 2199)], NOW);
+    expect(h.map(e => e.price)).toEqual([2199, 2099, 2299]);
+    expect(h.map(e => Math.round(e.heldDays))).toEqual([9, 12, 9]);
+    expect(h[0].current).toBe(true);
+    expect(h[0].change?.delta).toBe(100);
+    expect(h[1].change?.delta).toBe(-200);
+    expect(h[2].change).toBeNull();
+  });
+
+  it('marks the record low once, where it was first reached', () => {
+    const h = historyEntries([pt(30, 2299), pt(21, 2099), pt(15, 2199), pt(9, 2099)], NOW);
+    expect(h.filter(e => e.isLow).map(e => Math.round((NOW.getTime() - Date.parse(e.at)) / 86400000)))
+      .toEqual([21]);
+  });
+
+  it('calls nothing a record when the price has never moved', () => {
+    const h = historyEntries([pt(21, 3799)], NOW);
+    expect(h).toHaveLength(1);
+    expect(h[0].isLow).toBe(false);
+    expect(Math.round(h[0].heldDays)).toBe(21);
+  });
+
+  it('shows going out of stock and coming back as their own lines', () => {
+    const h = historyEntries([
+      pt(30, 999), pt(20, 999, { inStock: false }), pt(10, 999, { inStock: true }),
+    ], NOW);
+    expect(h.map(e => e.stock)).toEqual(['back', 'out', null]);
+    expect(h.every(e => e.change === null)).toBe(true);
+  });
+
+  it('folds rows where nothing changed into the one before', () => {
+    const h = historyEntries([pt(30, 500), pt(20, 500), pt(10, 450)], NOW);
+    expect(h.map(e => e.price)).toEqual([450, 500]);
+    expect(Math.round(h[1].heldDays)).toBe(20);
+  });
+});
+
+describe('historyChart', () => {
+  it('scales to take in the target, so its line sits at the right height', () => {
+    const c = historyChart([pt(30, 4000), pt(10, 3800)], NOW, 3000)!;
+    expect(c.lo).toBe(3000);
+    expect(c.hi).toBe(4000);
+    expect(c.targetY).toBe(1);
+    // The line itself ends at today's price, a fifth of the way up from the
+    // target: 1 - (3800-3000)/(4000-3000) = 0.2.
+    const end = c.line[c.line.length - 1];
+    expect(end.x).toBe(1);
+    expect(end.y).toBeCloseTo(0.2, 9);
+  });
+
+  it('gives a price that never moved a scale with room around it', () => {
+    const c = historyChart([pt(21, 3799)], NOW)!;
+    expect(c.lo).toBeLessThan(3799);
+    expect(c.hi).toBeGreaterThan(3799);
+    for (const p of c.line) expect(p.y).toBeCloseTo(0.5, 9);
+    expect(c.low).toBeNull();
+  });
+
+  it('marks where the record low was first set', () => {
+    const c = historyChart([pt(40, 1000), pt(20, 800), pt(10, 900)], NOW)!;
+    expect(c.low).toEqual({ x: 0.5, y: 1 });
+  });
+
+  it('draws nothing with no history, or a reading taken just now', () => {
+    expect(historyChart([], NOW)).toBeNull();
+    expect(historyChart([pt(0, 100)], NOW)).toBeNull();
+  });
+});
+
+describe('scrubAt', () => {
+  const pts = [pt(30, 2299), pt(20, 2099, { inStock: false }), pt(10, 2199)];
+
+  it('reads the price in force at that moment, never an in-between', () => {
+    expect(scrubAt(pts, 0, NOW)?.price).toBe(2299);
+    // 15 of 30 days in: the R2 099 set 20 days ago still holds.
+    expect(scrubAt(pts, 0.5, NOW)).toMatchObject({ price: 2099, inStock: false });
+    expect(scrubAt(pts, 1, NOW)).toMatchObject({ price: 2199, inStock: true });
+  });
+
+  it('clamps a finger dragged past either end', () => {
+    expect(scrubAt(pts, -1, NOW)?.price).toBe(2299);
+    expect(scrubAt(pts, 2, NOW)?.price).toBe(2199);
+  });
+});
+
+describe('dayLabel and heldLabel', () => {
+  it('adds the year only when it is not this year', () => {
+    expect(dayLabel('2026-07-20T10:00:00Z', NOW)).toBe('20 Jul');
+    expect(dayLabel('2025-07-20T10:00:00Z', NOW)).toBe('20 Jul 2025');
+  });
+
+  it('reads whole days, and says when it was less than one', () => {
+    expect(heldLabel(0.4)).toBe('less than a day');
+    expect(heldLabel(1.7)).toBe('1 day');
+    expect(heldLabel(9.2)).toBe('9 days');
   });
 });
 
