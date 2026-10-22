@@ -22,9 +22,10 @@ set -euo pipefail
 REF="${PROJECT_REF:-objkdeagyltvgcuxsnxu}"
 CLI="${SUPABASE_CLI:-npx -y supabase@2.120.0}"
 
-# Front Row was retired in October 2026; its two functions are left deployed
-# as stubs that answer 410, so a stray call does nothing.
-RETIRED=(sync-frontrow notify-frontrow)
+# Retired, and left deployed as stubs that answer 410 so a stray call does
+# nothing: Front Row's two functions, and Price Watch's three-day retailer
+# probe (18-21 October 2026). All in October 2026.
+RETIRED=(sync-frontrow notify-frontrow probe-retailers)
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
