@@ -29,6 +29,8 @@ export interface PricePoint {
   listingPrice: number | null;
   inStock: boolean;
   stockStatus: string | null;
+  /** Set on a point of the best-price series: the shop it was at. */
+  retailer?: string;
 }
 
 export interface Track {
@@ -48,16 +50,42 @@ export interface SourceHealth {
   lastCount: number | null;
 }
 
-/** A product plus everything the UI needs to render it in one place. */
-export interface TrackedProduct {
-  track: Track;
+/** One shop's listing of a tracked product: the product itself, or another
+ *  shop's listing linked to it. Only `tracked` and `confirmed` offers are
+ *  ever compared; a `suggested` one is asked about and nothing more. */
+export interface Offer {
+  /** Null for the tracked product itself. */
+  linkId: string | null;
+  status: 'tracked' | 'confirmed' | 'suggested';
+  /** How a link was made: the same retail barcode, found by search, or a
+   *  link pasted by a person. */
+  reason: 'barcode' | 'search' | 'pasted' | null;
+  /** When a link was confirmed. Its prices count from then. */
+  decidedAt: string | null;
   product: Product;
   history: PricePoint[];
 }
 
+/** A product plus everything the UI needs to render it in one place. */
+export interface TrackedProduct {
+  track: Track;
+  product: Product;
+  /** The tracked product's own history. */
+  history: PricePoint[];
+  /** Every shop for it, the tracked product first. */
+  offers: Offer[];
+}
+
+/** Shop names as a card shows them. PnP prices online by store and its own
+ *  default store is the one read, so it says so. */
 export const RETAILERS: Record<string, string> = {
   takealot: 'Takealot',
+  babycity: 'Baby City',
+  checkers: 'Checkers',
+  pnp: 'PnP online',
 };
+
+export const shopName = (retailer: string) => RETAILERS[retailer] ?? retailer;
 
 export const P = {
   bg:      '#0C0B14',

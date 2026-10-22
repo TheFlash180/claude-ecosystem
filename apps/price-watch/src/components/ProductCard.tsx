@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
-  ArrowDownToLine, Bell, ChevronRight, ExternalLink, Package, Trash2, TrendingDown, TrendingUp,
+  ArrowDownToLine, Bell, Check, ChevronRight, ExternalLink, Link2, Package, Store, Trash2,
+  TrendingDown, TrendingUp, X,
 } from 'lucide-react';
-import { P, type TrackedProduct } from '../lib/config';
+import { P, shopName, type TrackedProduct } from '../lib/config';
+import { currentBest, others, seriesFor, unreadable } from '../lib/compare';
 import {
   assess, formatRand, lastChange, latest, shortDate, stats, targetContext,
   targetSuggestions, type TargetSuggestion,
@@ -22,12 +24,29 @@ interface Props {
   onSetTarget: (trackId: string, target: number | null) => void;
   onRemove: (trackId: string) => void;
   onOpenHistory: (trackId: string) => void;
+  /** "Same product?" answered. */
+  onDecide: (linkId: string, confirm: boolean) => void;
+  /** A product link pasted from another shop. */
+  onAddLink: (trackId: string, url: string) => Promise<boolean>;
 }
 
-export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Props) {
-  const { product, track, history } = item;
+export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory, onDecide, onAddLink }: Props) {
+  const { product, track } = item;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(track.targetPrice === null ? '' : String(track.targetPrice));
+  const [linking, setLinking] = useState(false);
+  const [linkDraft, setLinkDraft] = useState('');
+
+  // Everything below is judged on the best price across this product's shops
+  // (lib/compare.ts): only shops confirmed as the same thing, read lately.
+  const history = seriesFor(item);
+  const best = currentBest(item.offers);
+  const alsoAt = others(item.offers, best);
+  const stale = unreadable(item.offers);
+  const asking = item.offers.filter(o => o.status === 'suggested' && o.history.length > 0);
+  const waiting = item.offers.filter(o => o.status === 'confirmed' && o.history.length === 0);
+  const multiShop = item.offers.some(o => o.status === 'confirmed');
+  const buyAt = best?.offer.product ?? product;
 
   const st = stats(history);
   const a = assess(history);
@@ -59,6 +78,9 @@ export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Prop
 
   return (
     <article style={{
+      // A grid item stretches to its widest line unless told otherwise, and
+      // one long product title would push the card off a phone screen.
+      minWidth: 0,
       background: P.surface,
       border: `1px solid ${P.border}`,
       borderRadius: 16,
@@ -96,7 +118,7 @@ export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Prop
             {product.title}
           </h3>
           <div style={{ marginTop: 4, fontSize: 11, color: P.muted, fontFamily: P.body }}>
-            {product.brand ? `${product.brand} · ` : ''}Takealot
+            {product.brand ? `${product.brand} · ` : ''}{shopName(product.retailer)}
           </div>
         </div>
       </div>
@@ -116,6 +138,11 @@ export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Prop
             }}>
               {formatRand(st.current)}
             </span>
+            {multiShop && best && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: P.sub, fontFamily: P.body }}>
+                at {shopName(best.offer.product.retailer)}
+              </span>
+            )}
             {move && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -218,6 +245,112 @@ export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Prop
         )}
       </p>
 
+      {/* The other shops. What is compared is said, and so is what is not:
+          a shop that could not be read and a shop that is dearer must never
+          look the same. */}
+      {(multiShop || stale.length > 0 || waiting.length > 0) && (
+        <div style={{ display: 'grid', gap: 4, fontSize: 11.5, fontFamily: P.body, color: P.sub }}>
+          {alsoAt.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Store size={12} color={P.muted} />
+              <span style={{ color: P.muted }}>Also:</span>
+              {alsoAt.map(o => (
+                <a key={o.offer.product.id} href={o.offer.product.url ?? undefined} target="_blank" rel="noopener noreferrer"
+                   style={{ color: P.sub, textDecoration: 'none' }}>
+                  {shopName(o.offer.product.retailer)} <strong style={{ color: P.text }}>{formatRand(o.price)}</strong>
+                  {!o.inStock && <span style={{ color: P.amber }}> (out of stock)</span>}
+                </a>
+              ))}
+            </div>
+          )}
+          {stale.map(o => (
+            <div key={o.product.id} style={{ color: P.amber }}>
+              Couldn't read {shopName(o.product.retailer)} lately, so it is left out for now.
+            </div>
+          ))}
+          {waiting.map(o => (
+            <div key={o.product.id} style={{ color: P.muted }}>
+              {shopName(o.product.retailer)} added: its first price arrives within half an hour.
+            </div>
+          ))}
+          {multiShop && (
+            <div style={{ color: P.muted, fontSize: 10.5 }}>
+              Online prices. Delivery, and loyalty prices like Smart Shopper or Xtra Savings, are not included.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Found by search, and only asked about: a similar title is a reason
+          to ask, never a reason to compare. */}
+      {asking.map(o => {
+        const last = o.history[o.history.length - 1];
+        return (
+          <div key={o.product.id} style={{
+            display: 'flex', gap: 10, alignItems: 'center', minWidth: 0,
+            border: `1px dashed ${P.violet}66`, borderRadius: 12, padding: '8px 10px',
+          }}>
+            {o.product.imageUrl ? (
+              <img src={o.product.imageUrl} alt="" loading="lazy" style={{
+                width: 38, height: 38, objectFit: 'contain', borderRadius: 8, background: '#fff', flexShrink: 0,
+              }} />
+            ) : <Package size={18} color={P.muted} style={{ flexShrink: 0 }} />}
+            <div style={{ flex: 1, minWidth: 0, fontFamily: P.body }}>
+              <div style={{ fontSize: 11, color: P.violet, fontWeight: 600 }}>
+                Possible match at {shopName(o.product.retailer)} · {formatRand(last.price)}
+              </div>
+              <a href={o.product.url ?? undefined} target="_blank" rel="noopener noreferrer" style={{
+                display: 'block', fontSize: 12, color: P.text, textDecoration: 'none',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {o.product.title}
+              </a>
+              <div style={{ fontSize: 11, color: P.muted }}>Same product?</div>
+            </div>
+            <button onClick={() => o.linkId && onDecide(o.linkId, true)} aria-label={`Yes, the same product at ${shopName(o.product.retailer)}`}
+                    style={{ ...btn(P.green, false), padding: '7px 9px' }}>
+              <Check size={14} /> Yes
+            </button>
+            <button onClick={() => o.linkId && onDecide(o.linkId, false)} aria-label={`No, not the same product`}
+                    style={{ ...btn(P.muted, false), padding: '7px 9px' }}>
+              <X size={14} />
+            </button>
+          </div>
+        );
+      })}
+
+      {linking && (
+        <form
+          onSubmit={async e => {
+            e.preventDefault();
+            if (await onAddLink(track.id, linkDraft)) { setLinkDraft(''); setLinking(false); }
+          }}
+          style={{ display: 'grid', gap: 6 }}
+        >
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              autoFocus
+              value={linkDraft}
+              onChange={e => setLinkDraft(e.target.value)}
+              placeholder="Paste the other shop’s link"
+              inputMode="url"
+              style={{
+                flex: 1, minWidth: 0, background: P.raised, color: P.text,
+                border: `1px solid ${P.border}`, borderRadius: 10,
+                // 16px: iOS zooms the whole page into any smaller input.
+                padding: '8px 10px', fontSize: 16, fontFamily: P.body,
+              }}
+            />
+            <button type="submit" disabled={!linkDraft.trim()} style={btn(P.violet, true)}>Add</button>
+          </div>
+          <p style={{ margin: 0, fontSize: 11, color: P.muted, fontFamily: P.body, lineHeight: 1.45 }}>
+            Baby City, Checkers or PnP: open the same product there, copy its link and
+            paste it here. Adding it says it is the same thing, so its price is compared
+            from now on, the first one within half an hour.
+          </p>
+        </form>
+      )}
+
       {editing && (
         <div style={{ display: 'grid', gap: 8 }}>
           {/* One tap instead of working out a percentage by hand. Off today's
@@ -274,11 +407,18 @@ export function ProductCard({ item, onSetTarget, onRemove, onOpenHistory }: Prop
           </button>
         )}
 
-        {product.url && (
-          <a href={product.url} target="_blank" rel="noopener noreferrer" style={{ ...btn(P.sub, false), textDecoration: 'none' }}>
+        {buyAt.url && (
+          <a href={buyAt.url} target="_blank" rel="noopener noreferrer" style={{ ...btn(P.sub, false), textDecoration: 'none' }}>
             <ExternalLink size={13} />
-            Open
+            {multiShop ? `Open ${shopName(buyAt.retailer)}` : 'Open'}
           </a>
+        )}
+
+        {!linking && (
+          <button onClick={() => setLinking(true)} style={btn(P.sub, false)} aria-label="Add this product at another shop">
+            <Link2 size={13} />
+            Shop
+          </button>
         )}
 
         <button

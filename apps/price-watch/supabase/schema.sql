@@ -287,6 +287,16 @@ select cron.schedule('pricewatch-notify', '35 4 * * *', $$
     body := '{}'::jsonb) AS request_id;
 $$);
 
+-- Twice an hour: give newly added products and pasted links their first
+-- price, then look for a few tracks at the other shops (see sync-pricewatch,
+-- mode "match"). Small batches, so each run stays well inside the timeout.
+select cron.schedule('pricewatch-match', '7,37 * * * *', $$
+  SELECT net.http_post(
+    url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/sync-pricewatch',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    body := '{"mode":"match"}'::jsonb, timeout_milliseconds := 120000) AS request_id;
+$$);
+
 -- ------------------------------------------------- retailer probe (retired)
 -- A three-day test, 18-21 October 2026, of whether other shops can be read
 -- as reliably as Takealot: probe-retailers re-read one product page per shop
@@ -295,3 +305,161 @@ $$);
 -- Baby City price change; Dis-Chem answered every request with a Cloudflare
 -- 403 and Woolworths exposed no readable product page. The cron job is
 -- unscheduled, the function is a 410 stub, and pricewatch_probe is dropped.
+
+-- ------------------------------------------------- other shops (October 2026)
+-- Baby City, Checkers and PnP alongside Takealot, after a three-day probe
+-- showed each could be read correctly on every run. A tracked product keeps
+-- its own product row, the same thing at another shop is a second product
+-- row, linked to the track. Its history is that shop’s own, and the card
+-- shows the cheapest of them — but only across links that are confirmed: by
+-- an identical retail barcode, or by a person.
+alter table pricewatch_products
+  -- A retail barcode, normalised to 14 digits, where the shop publishes one.
+  -- In-store codes and marketplace sellers’ internal codes are never stored.
+  add column if not exists gtin text,
+  -- A move of more than 50% read off a shop’s page waits here until a later
+  -- run reads the same price again (shops.ts, needsConfirming).
+  add column if not exists pending_price numeric(10,2),
+  add column if not exists pending_seen_at timestamptz,
+  -- Tracked by someone, or confirmed as the same thing as a tracked product.
+  -- Kept by the sync. The hub’s Today card reads only these, so a
+  -- suggestion nobody has confirmed never shows there as if it were tracked.
+  add column if not exists watched boolean not null default false;
+
+update pricewatch_products p
+   set watched = exists (select 1 from pricewatch_tracks t where t.product_id = p.id and t.enabled);
+
+-- When the match job last searched the other shops for this track.
+alter table pricewatch_tracks add column if not exists matched_at timestamptz;
+
+create table if not exists pricewatch_links (
+  id uuid primary key default gen_random_uuid(),
+  track_id uuid not null references pricewatch_tracks(id) on delete cascade,
+  product_id uuid not null references pricewatch_products(id) on delete cascade,
+  -- suggested: found by search, shown as "same product?", counts for nothing.
+  -- confirmed: same barcode, or a person said yes (or pasted the link).
+  -- rejected: a person said no, kept so it is never suggested again.
+  status text not null check (status in ('suggested', 'confirmed', 'rejected')),
+  reason text not null check (reason in ('barcode', 'search', 'pasted')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  unique (track_id, product_id)
+);
+create index if not exists pricewatch_links_product_idx on pricewatch_links (product_id);
+
+-- Device-scoped like the tracks: RLS on, no policies, read and written only
+-- through the definer RPCs below. Grants are explicit (CLAUDE.md: from
+-- 30 October 2026 new tables get none by default).
+alter table pricewatch_links enable row level security;
+revoke all on pricewatch_links from anon, authenticated;
+grant select, insert, update, delete on pricewatch_links to service_role;
+
+insert into pricewatch_sources (key, label) values
+  ('babycity', 'Baby City'), ('checkers', 'Checkers'), ('pnp', 'PnP')
+  on conflict (key) do nothing;
+
+-- The newest p_n points per product. For the sync and the notifier, which
+-- each used to read every price in one request, the API cuts that at 1000
+-- rows without an error, after which an old price looks current.
+create or replace function pricewatch_recent_prices(p_ids uuid[], p_n int)
+returns table (id bigint, product_id uuid, captured_at timestamptz, price numeric, in_stock boolean)
+language sql stable
+set search_path = 'public'
+as $$
+  select x.id, x.product_id, x.captured_at, x.price, x.in_stock
+    from (
+      select pp.id, pp.product_id, pp.captured_at, pp.price, pp.in_stock,
+             row_number() over (partition by pp.product_id order by pp.captured_at desc, pp.id desc) as rn
+        from pricewatch_prices pp
+       where pp.product_id = any(p_ids)
+    ) x
+   where x.rn <= greatest(p_n, 1)
+$$;
+revoke execute on function pricewatch_recent_prices(uuid[], int) from public, anon, authenticated;
+grant execute on function pricewatch_recent_prices(uuid[], int) to service_role;
+
+-- This device’s links, with the linked product. Rejected ones are left out.
+create or replace function pricewatch_list_links(p_token text)
+returns table (
+  id uuid, track_id uuid, product_id uuid, status text, reason text,
+  created_at timestamptz, decided_at timestamptz,
+  retailer text, external_id text, title text, image_url text, url text,
+  gtin text, last_checked_at timestamptz, delisted_at timestamptz
+)
+language sql stable security definer
+set search_path = 'public'
+as $$
+  select l.id, l.track_id, l.product_id, l.status, l.reason, l.created_at, l.decided_at,
+         p.retailer, p.external_id, p.title, p.image_url, p.url,
+         p.gtin, p.last_checked_at, p.delisted_at
+    from pricewatch_links l
+    join pricewatch_tracks t on t.id = l.track_id
+    join pricewatch_products p on p.id = l.product_id
+   where t.device_token_hash = _pricewatch_hash_token(p_token)
+     and l.status <> 'rejected'
+   order by l.created_at
+$$;
+
+-- "Same product?" answered.
+create or replace function pricewatch_decide_link(p_token text, p_id uuid, p_confirm boolean)
+returns boolean
+language plpgsql security definer
+set search_path = 'public'
+as $$
+declare v_rows int;
+begin
+  if length(coalesce(p_token, '')) < 8 then return false; end if;
+  update pricewatch_links l
+     set status = case when p_confirm then 'confirmed' else 'rejected' end,
+         decided_at = now()
+    from pricewatch_tracks t
+   where l.id = p_id
+     and t.id = l.track_id
+     and t.device_token_hash = _pricewatch_hash_token(p_token);
+  get diagnostics v_rows = row_count;
+  return v_rows > 0;
+end $$;
+
+-- A product link pasted from another shop: the person has said it is the
+-- same thing, so it is confirmed. The URL must be on that shop’s own site,
+-- the sync reads its price on the next run.
+create or replace function pricewatch_add_link(
+  p_token text, p_track uuid, p_retailer text, p_external_id text, p_url text, p_title text
+) returns uuid
+language plpgsql security definer
+set search_path = 'public'
+as $$
+declare v_product uuid; v_link uuid; v_primary uuid;
+begin
+  if length(coalesce(p_token, '')) < 8 then return null; end if;
+  if coalesce(p_external_id, '') = '' or coalesce(p_url, '') = '' then return null; end if;
+  if p_url !~* (case p_retailer
+      when 'babycity' then '^https://www\.babycity\.co\.za/[a-z0-9-]+$'
+      when 'checkers' then '^https://www\.checkers\.co\.za/product/[a-z0-9-]+$'
+      when 'pnp'      then '^https://www\.pnp\.co\.za/.*/p/[A-Za-z0-9_]+$'
+      when 'takealot' then '^https://www\.takealot\.com/.*PLID[0-9]+'
+      else '^$' end) then return null; end if;
+
+  select product_id into v_primary
+    from pricewatch_tracks
+   where id = p_track and device_token_hash = _pricewatch_hash_token(p_token);
+  if v_primary is null then return null; end if;
+
+  insert into pricewatch_products (retailer, external_id, title, url)
+  values (p_retailer, p_external_id, left(coalesce(nullif(p_title, ''), p_external_id), 300), p_url)
+  on conflict (retailer, external_id) do update
+    set url = coalesce(pricewatch_products.url, excluded.url)
+  returning id into v_product;
+  if v_product = v_primary then return null; end if;
+
+  insert into pricewatch_links (track_id, product_id, status, reason, decided_at)
+  values (p_track, v_product, 'confirmed', 'pasted', now())
+  on conflict (track_id, product_id) do update
+    set status = 'confirmed', decided_at = now()
+  returning id into v_link;
+  return v_link;
+end $$;
+
+grant execute on function pricewatch_list_links(text) to anon, authenticated;
+grant execute on function pricewatch_decide_link(text, uuid, boolean) to anon, authenticated;
+grant execute on function pricewatch_add_link(text, uuid, text, text, text, text) to anon, authenticated;

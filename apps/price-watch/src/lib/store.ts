@@ -2,7 +2,8 @@
 // device-scoped goes through the token-checked RPCs.
 import { deviceToken, ensurePushSubscription, fetchAllPages, getSupabase } from '@ecosystem/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PricePoint, Product, SourceHealth, Track, TrackedProduct } from './config';
+import type { Offer, PricePoint, Product, SourceHealth, Track, TrackedProduct } from './config';
+import { shopLink, titleFromSlug } from '../../supabase/functions/sync-pricewatch/shops';
 
 const VAPID_PUBLIC = 'BF_60p2HomjlU_xRcc8PvJv2_OetD7RRwNGUotulZ3iHQDKOTSIerxPr1viFH50s715Jco3mb6v-VXrzqNJntIw';
 const TOKEN_KEY = 'price-watch:device-token';
@@ -115,18 +116,43 @@ function toPoint(r: PriceRow): PricePoint {
   };
 }
 
-/** One round trip for the tracks, one for all their history. Fetching history
- *  per card would be a request per product on every open. */
+interface LinkRow {
+  id: string; track_id: string; product_id: string;
+  status: 'confirmed' | 'suggested'; reason: 'barcode' | 'search' | 'pasted';
+  created_at: string; decided_at: string | null;
+  retailer: string; external_id: string; title: string; image_url: string | null;
+  url: string | null; gtin: string | null;
+  last_checked_at: string | null; delisted_at: string | null;
+}
+
+function linkProduct(r: LinkRow): Product {
+  return {
+    id: r.product_id, retailer: r.retailer, externalId: r.external_id, title: r.title,
+    brand: null, imageUrl: r.image_url, url: r.url,
+    lastCheckedAt: r.last_checked_at, delistedAt: r.delisted_at, hasVariants: false,
+  };
+}
+
+/** One round trip for the tracks, one for their links to other shops, and
+ *  one (paged) for every product's history. Fetching per card would be a
+ *  request per product on every open. */
 export async function fetchTracked(): Promise<TrackedProduct[]> {
   const client = sb();
   if (!client) return [];
 
-  const { data, error } = await client.rpc('pricewatch_list_tracks', { p_token: getDeviceToken() });
-  if (error || !data) return [];
-  const rows = data as TrackRow[];
+  const token = getDeviceToken();
+  const [trackRes, linkRes] = await Promise.all([
+    client.rpc('pricewatch_list_tracks', { p_token: token }),
+    client.rpc('pricewatch_list_links', { p_token: token }),
+  ]);
+  if (trackRes.error || !trackRes.data) return [];
+  const rows = trackRes.data as TrackRow[];
   if (rows.length === 0) return [];
+  // A failed links read leaves each card with its own shop only, which is
+  // what it showed before there were other shops: never a wrong comparison.
+  const links = (linkRes.error ? [] : (linkRes.data ?? [])) as LinkRow[];
 
-  const productIds = rows.map(r => r.product_id);
+  const productIds = [...new Set([...rows.map(r => r.product_id), ...links.map(l => l.product_id)])];
   // Paged: the API returns at most 1000 rows a request, silently, and the
   // history sheet is only true if it has every row. `id` last makes the order
   // total, so pages cannot overlap or skip.
@@ -145,11 +171,62 @@ export async function fetchTracked(): Promise<TrackedProduct[]> {
     byProduct.set(r.product_id, list);
   }
 
-  return rows.map(r => ({
-    track: toTrack(r),
-    product: toProduct(r),
-    history: byProduct.get(r.product_id) ?? [],
-  }));
+  return rows.map(r => {
+    const product = toProduct(r);
+    const history = byProduct.get(r.product_id) ?? [];
+    const offers: Offer[] = [
+      { linkId: null, status: 'tracked', reason: null, decidedAt: null, product, history },
+      ...links.filter(l => l.track_id === r.id).map(l => ({
+        linkId: l.id,
+        status: l.status,
+        reason: l.reason,
+        decidedAt: l.decided_at,
+        product: linkProduct(l),
+        history: byProduct.get(l.product_id) ?? [],
+      })),
+    ];
+    return { track: toTrack(r), product, history, offers };
+  });
+}
+
+/** "Same product?" answered. */
+export async function decideLink(linkId: string, confirm: boolean): Promise<boolean> {
+  const client = sb();
+  if (!client) return false;
+  const { data, error } = await client.rpc('pricewatch_decide_link', {
+    p_token: getDeviceToken(), p_id: linkId, p_confirm: confirm,
+  });
+  return !error && data === true;
+}
+
+/** A product link pasted from Baby City, Checkers or PnP, for an existing
+ *  track. 'bad-link' when it is not a product page at one of those shops. */
+export async function addShopLink(trackId: string, url: string): Promise<'ok' | 'bad-link' | 'failed'> {
+  const link = shopLink(url);
+  if (!link) return 'bad-link';
+  const client = sb();
+  if (!client) return 'failed';
+  const { data, error } = await client.rpc('pricewatch_add_link', {
+    p_token: getDeviceToken(),
+    p_track: trackId,
+    p_retailer: link.retailer,
+    p_external_id: link.externalId,
+    p_url: link.url,
+    p_title: titleFromSlug(link.externalId),
+  });
+  return !error && data ? 'ok' : 'failed';
+}
+
+/** A product page at Baby City, Checkers or PnP, to track on its own. Its
+ *  first price arrives within half an hour, from the match job. */
+export function hitFromShopLink(url: string): SearchHit | null {
+  const link = shopLink(url);
+  if (!link) return null;
+  return {
+    retailer: link.retailer, externalId: link.externalId, title: titleFromSlug(link.externalId),
+    brand: null, imageUrl: null, url: link.url, price: null, listingPrice: null,
+    inStock: true, stockStatus: null, hasVariants: false,
+  };
 }
 
 export async function fetchSources(): Promise<SourceHealth[]> {

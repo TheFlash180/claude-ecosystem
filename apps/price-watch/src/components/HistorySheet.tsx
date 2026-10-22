@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { ArrowDownToLine, PackageCheck, PackageX, TrendingDown, TrendingUp, X } from 'lucide-react';
-import { P, type TrackedProduct } from '../lib/config';
+import { P, shopName, type TrackedProduct } from '../lib/config';
+import { seriesFor } from '../lib/compare';
 import {
   dayLabel, formatRand, heldLabel, historyChart, historyEntries, scrubAt, stats,
 } from '../lib/price';
@@ -22,7 +23,11 @@ const PH = H - PAD.top - PAD.bottom;
  *  card's chart: the whole history drawn large, a finger to read any day off
  *  it, and every change as a line you can read. */
 export function HistorySheet({ item, onClose }: Props) {
-  const { product, track, history } = item;
+  const { product, track } = item;
+  // The best price across the product's shops, each point carrying its shop:
+  // the same series the card's verdicts are judged on.
+  const history = useMemo(() => seriesFor(item), [item]);
+  const shops = item.offers.filter(o => o.status !== 'suggested').length > 1;
   // One clock for the whole sheet, so the chart, the scrub and the "held for"
   // figures all agree about when "now" is.
   const now = useMemo(() => new Date(), []);
@@ -243,6 +248,7 @@ export function HistorySheet({ item, onClose }: Props) {
                   )}
                 </span>
                 <span style={{ display: 'block', fontSize: 11.5, color: P.muted, marginTop: 2 }}>
+                  {shops && e.retailer ? `${shopName(e.retailer)} · ` : ''}
                   {e.stock === 'out' ? 'Went out of stock · '
                     : e.stock === 'back' ? 'Back in stock · '
                     : !e.change ? 'First price recorded · ' : ''}
