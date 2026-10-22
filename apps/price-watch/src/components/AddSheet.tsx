@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Package, Search, X } from 'lucide-react';
 import { P } from '../lib/config';
 import { formatRand } from '../lib/price';
-import { searchProducts, type SearchHit } from '../lib/store';
+import { hitFromShopLink, searchProducts, type SearchHit } from '../lib/store';
 
 interface Props {
   open: boolean;
@@ -31,6 +31,12 @@ export function AddSheet({ open, onClose, onAdd, tracked }: Props) {
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) { setHits([]); setSearched(false); setError(null); return; }
+
+    // A product link from Baby City, Checkers or PnP is tracked as it is:
+    // there is nothing to search, and the match job gives it its first price
+    // within half an hour.
+    const pasted = hitFromShopLink(q);
+    if (pasted) { setHits([pasted]); setError(null); setSearched(true); setBusy(false); return; }
 
     const run = ++runRef.current;
     setBusy(true);
@@ -94,7 +100,7 @@ export function AddSheet({ open, onClose, onAdd, tracked }: Props) {
               autoFocus
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search Takealot, or paste a product link"
+              placeholder="Search Takealot, or paste a link"
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: P.raised, color: P.text,
@@ -110,7 +116,8 @@ export function AddSheet({ open, onClose, onAdd, tracked }: Props) {
             )}
           </div>
           <p style={{ margin: '8px 2px 0', fontSize: 11, color: P.muted, fontFamily: P.body }}>
-            Pasting a link is the reliable way to get one exact product.
+            Pasting a link is the reliable way to get one exact product. Takealot,
+            Baby City, Checkers and PnP links all work.
           </p>
         </div>
 
@@ -171,7 +178,9 @@ export function AddSheet({ open, onClose, onAdd, tracked }: Props) {
                     display: 'block', marginTop: 3, fontSize: 12,
                     color: P.violet, fontWeight: 600, fontFamily: P.body,
                   }}>
-                    {hit.hasVariants ? 'from ' : ''}{formatRand(hit.price)}
+                    {hit.price === null
+                      ? <span style={{ color: P.sub, fontWeight: 400 }}>Price arrives within half an hour</span>
+                      : <>{hit.hasVariants ? 'from ' : ''}{formatRand(hit.price)}</>}
                     {already && <span style={{ color: P.muted, fontWeight: 400 }}> · already tracked</span>}
                     {!already && !hit.inStock && (
                       <span style={{ color: P.amber, fontWeight: 400 }}> · out of stock</span>

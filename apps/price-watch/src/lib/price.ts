@@ -458,6 +458,8 @@ export interface HistoryEntry {
    *  row until then. */
   isLow: boolean;
   current: boolean;
+  /** The shop, on the best-price series; null on a single shop's history. */
+  retailer: string | null;
 }
 
 /** Every change the product has been through, newest first.
@@ -471,7 +473,9 @@ export function historyEntries(points: PricePoint[], now: Date = new Date()): Hi
   const kept: PricePoint[] = [];
   for (const p of s) {
     const prev = kept[kept.length - 1];
-    if (!prev || prev.price !== p.price || prev.inStock !== p.inStock) kept.push(p);
+    // A move to another shop at the same price is still a line: where you
+    // would buy it changed.
+    if (!prev || prev.price !== p.price || prev.inStock !== p.inStock || prev.retailer !== p.retailer) kept.push(p);
   }
   if (kept.length === 0) return [];
 
@@ -491,6 +495,7 @@ export function historyEntries(points: PricePoint[], now: Date = new Date()): Hi
       stock: !prev ? null : prev.inStock && !p.inStock ? 'out' : !prev.inStock && p.inStock ? 'back' : null,
       isLow: distinct > 1 && i === lowIndex,
       current: i === kept.length - 1,
+      retailer: p.retailer ?? null,
     };
   });
   return out.reverse();

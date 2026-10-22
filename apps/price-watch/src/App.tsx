@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { AlertTriangle, Bell, BellOff, Plus, Tag } from 'lucide-react';
 import { P, type SourceHealth, type TrackedProduct } from './lib/config';
 import { assess, formatRand, stats } from './lib/price';
+import { seriesFor } from './lib/compare';
 import {
-  fetchSources, fetchTracked, registerPush, setTarget, trackProduct, untrack,
+  addShopLink, decideLink, fetchSources, fetchTracked, registerPush, setTarget, trackProduct, untrack,
   type SearchHit,
 } from './lib/store';
 import { AddSheet } from './components/AddSheet';
@@ -15,13 +16,16 @@ import { ProductCard } from './components/ProductCard';
  *  app is that something is watching on your behalf. */
 const STALE_HOURS = 30;
 
-function isStale(sources: SourceHealth[]): boolean {
-  if (sources.length === 0) return false;
-  return sources.some(s =>
-    s.enabled && (
-      s.lastOkAt === null ||
-      Date.now() - Date.parse(s.lastOkAt) > STALE_HOURS * 3600000
-    ));
+/** The shops that have not reported in time, by name: with four shops,
+ *  "prices may be out of date" is not enough to act on. */
+function staleShops(sources: SourceHealth[]): string[] {
+  return sources
+    .filter(s =>
+      s.enabled && (
+        s.lastOkAt === null ||
+        Date.now() - Date.parse(s.lastOkAt) > STALE_HOURS * 3600000
+      ))
+    .map(s => s.label);
 }
 
 export default function App() {
@@ -80,9 +84,9 @@ export default function App() {
   // the moment the app exists to catch.
   const ordered = useMemo(() => {
     const rank = (i: TrackedProduct) => {
-      const cur = stats(i.history).current;
+      const cur = stats(seriesFor(i)).current;
       if (i.track.targetPrice !== null && cur !== null && cur <= i.track.targetPrice) return 0;
-      const v = assess(i.history).verdict;
+      const v = assess(seriesFor(i)).verdict;
       if (v === 'lowest') return 1;
       if (v === 'good') return 2;
       return 3;
@@ -95,8 +99,9 @@ export default function App() {
     // products with enough history to have a real "typical" are counted.
     let total = 0;
     for (const i of items) {
-      const st = stats(i.history);
-      if (assess(i.history).verdict === 'unknown') continue;
+      const series = seriesFor(i);
+      const st = stats(series);
+      if (assess(series).verdict === 'unknown') continue;
       if (st.current !== null && st.typical !== null && st.typical > st.current) {
         total += st.typical - st.current;
       }
@@ -116,6 +121,22 @@ export default function App() {
     if (!ok) { say('Could not save that target'); return; }
     say(target === null ? 'Target cleared' : `Alerting under ${formatRand(target)}`);
     await load();
+  };
+
+  const onDecide = async (linkId: string, confirm: boolean) => {
+    const ok = await decideLink(linkId, confirm);
+    if (!ok) { say('Could not save that'); return; }
+    say(confirm ? 'Added to the comparison' : 'Will not suggest that again');
+    await load();
+  };
+
+  const onAddLink = async (trackId: string, url: string): Promise<boolean> => {
+    const res = await addShopLink(trackId, url);
+    if (res === 'bad-link') { say('That is not a Baby City, Checkers or PnP product link'); return false; }
+    if (res === 'failed') { say('Could not add that link'); return false; }
+    say('Added: its price arrives within half an hour');
+    await load();
+    return true;
   };
 
   const onRemove = async (trackId: string) => {
@@ -196,7 +217,7 @@ export default function App() {
       </header>
 
       <main style={{ padding: '0 14px 100px' }}>
-        {isStale(sources) && (
+        {staleShops(sources).length > 0 && (
           <div style={{
             display: 'flex', gap: 9, alignItems: 'flex-start',
             background: `${P.amber}14`, border: `1px solid ${P.amber}40`,
@@ -204,7 +225,11 @@ export default function App() {
           }}>
             <AlertTriangle size={15} color={P.amber} style={{ flexShrink: 0, marginTop: 1 }} />
             <p style={{ margin: 0, fontSize: 12, color: P.sub, lineHeight: 1.45 }}>
-              Prices have not refreshed in over a day, so what you see below may be out of date.
+              {(() => {
+                const names = staleShops(sources);
+                const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+                return `${list} ${names.length === 1 ? 'has' : 'have'} not refreshed in over a day, so ${names.length === 1 ? 'its' : 'their'} prices below may be out of date.`;
+              })()}
             </p>
           </div>
         )}
@@ -223,7 +248,7 @@ export default function App() {
               Watch a price
             </h2>
             <p style={{ margin: 0, fontSize: 13, color: P.sub, lineHeight: 1.5 }}>
-              Add something from Takealot and Price Watch records what it really costs,
+              Add something from Takealot, Baby City, Checkers or PnP and Price Watch records what it really costs,
               day by day — so when a sale turns up you can tell whether it is one.
             </p>
           </div>
@@ -236,6 +261,8 @@ export default function App() {
                 onSetTarget={(id, t) => void onSetTarget(id, t)}
                 onRemove={id => void onRemove(id)}
                 onOpenHistory={openHistory}
+                onDecide={(id, c) => void onDecide(id, c)}
+                onAddLink={onAddLink}
               />
             ))}
           </div>

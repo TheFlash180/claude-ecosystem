@@ -5,14 +5,16 @@ is free-tier: GitHub Pages for hosting, one shared Supabase project for data.
 
 ## Read this first: things that look like bugs and are not
 
-**Supabase's advisors report ~156 findings and essentially all of them are the
-design. Do not "fix" them.** As of October 2026, recounted after Front Row's
-retirement took its tables and functions out of the list:
+**Supabase's advisors report ~172 findings and essentially all of them are the
+design. Do not "fix" them.** As of 22 October 2026, recounted after Price
+Watch's multi-shop comparison added `pricewatch_links` and three definer RPCs.
+The `arcade_*` tables and RPCs in the list (4 RPCs, 3 no-policy tables) are
+not from this repo — they arrived in the shared database from elsewhere:
 
 | Count | Lint | Why it is there |
 |---|---|---|
-| 135 | `anon_/authenticated_security_definer_function_executable` (65 + 70) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_household_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
-| 20 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
+| 147 | `anon_/authenticated_security_definer_function_executable` (71 + 76) | The definer RPCs **are** the write path. Revoking execute breaks every app. The list also names trigger functions (`handle_new_household_user`, `_sport_events_audit`, `sport_reminders_follow_event`) and Supabase's own `rls_auto_enable` event trigger — none of those can be called over REST. |
+| 24 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
 
 The `using (true)` policy on `profiles` (any signed-in household member) is
@@ -133,6 +135,42 @@ A failed `listWatched()` returns null, not an empty set, and the app keeps the
 set it already had — otherwise one flaky read flashes every hidden title back
 onto the page.
 
+**Price Watch compares one product across four shops** (October 2026):
+Takealot, Baby City, Checkers and PnP. You track a product at one; the
+`pricewatch-match` cron (twice an hour, small batches) searches the others and
+records what it finds in `pricewatch_links`, and the daily sync reads every
+counted shop. The rules that make it trustworthy, all deliberate:
+
+- **Only an identical retail barcode links automatically** (`reason =
+  'barcode'`). Anything else found by search is a *suggestion*: the card asks
+  "same product?" and it counts for nothing until someone taps yes. A pasted
+  link from the card is confirmed by the person pasting it. `titleScore` in
+  `sync-pricewatch/shops.ts` only decides what is worth asking about — brand
+  must match, every number (size, capacity, model) must match both ways, and
+  most of the name must be there. The first live run suggested a Chelino
+  *Zippy* stroller for the *Polo* travel system; the name-coverage rule and
+  its test exist because of it.
+- **Barcodes are checked before they are trusted** (`gtin()`): check digit,
+  no in-store `2xxxx` codes, no Takealot marketplace codes like `MPTALX…`.
+- **A shop not read in 48 hours drops out of the comparison** and the card
+  says so (`lib/compare.ts`). A stale price must not win "cheapest".
+- **A move of more than half needs a second reading 6+ hours later** at the
+  scraped shops (`HOLD_OVER`, `pending_price`). Takealot is an API and is not
+  held.
+- **A confirmed link counts from when it was confirmed**, so confirming a
+  cheaper shop does not rewrite the history as a sudden drop. Alerts fire on
+  the cheapest counted shop and name it.
+- **Delivery and loyalty (Xtra Savings, Smart Shopper) prices are not
+  compared**, and the card says so. PnP prices are read for store `WC21` and
+  labelled "PnP online": its store finder returns nothing, so a specific
+  branch cannot be chosen. Checkers renders search in the browser, so it
+  never produces suggestions; a pasted Checkers link still works.
+- Links are device-scoped through the track (`pricewatch_list_links`,
+  `pricewatch_decide_link`, `pricewatch_add_link`); the table itself has no
+  policy and is granted to `service_role` only. `pricewatch_products.watched`
+  is what the hub's Today card reads, so a product only matched at another
+  shop is not shown as if someone tracked it.
+
 **Baby Logger is built for 3am, and three things in it are load-bearing:**
 
 - **Live sync.** `babies` and the four `*_events` tables are in the
@@ -240,7 +278,7 @@ schema change lands in the same database as everything else.
 | workout-plan | `workout_*` | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
+| price-watch | `pricewatch_*` | `sync-pricewatch` (daily sync, and `{"mode":"match"}`), `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-match` |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
 
 **FinTrack Pro was retired in October 2026** (separate repo, deleted). Its

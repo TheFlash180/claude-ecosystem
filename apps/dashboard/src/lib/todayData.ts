@@ -109,9 +109,13 @@ async function fetchMarvel(sb: ReturnType<typeof getSupabase>): Promise<MarvelRo
  *  points; it grows with the daily sync, and if the handful of tracked
  *  products ever becomes hundreds this is the query to revisit. */
 async function fetchPrices(sb: ReturnType<typeof getSupabase>): Promise<PriceRow[]> {
+  // `watched`: tracked, or confirmed as the same thing at another shop. Price
+  // Watch also stores other shops' listings it has only *suggested* as
+  // matches, and those must not show here as if someone tracked them.
   const { data: products } = await sb
     .from('pricewatch_products')
     .select('id, title')
+    .eq('watched', true)
     .is('delisted_at', null);
   if (!products || products.length === 0) return [];
 
