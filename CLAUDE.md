@@ -240,7 +240,7 @@ schema change lands in the same database as everything else.
 | workout-plan | `workout_*` | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch`, `probe-retailers` (temporary, 18–21 Oct 2026) | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-probe` (temporary) |
+| price-watch | `pricewatch_*` | `sync-pricewatch`, `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify` |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
 
 **FinTrack Pro was retired in October 2026** (separate repo, deleted). Its
@@ -504,8 +504,9 @@ exactly what a naive lean-protein filter would surface first.
   - the SQL has a **semicolon inside a string literal** (a recipe step like
     "on its own; cook the rice"). Write the text without one, because `\u003b`
     in JSON is refused too.
-  - it is a **`delete`**. Deletes are held for a confirmation that never
-    arrives in this environment. Meal Prep recipes can be deleted in the app's
+  - it is a **`delete`**, or a **`drop table`** (which times out instead).
+    Both are held for a confirmation that never arrives in this environment;
+    ask the user to run a drop in the dashboard's SQL editor. Meal Prep recipes can be deleted in the app's
     Manage tab, behind the admin password.
 
   Re-check the state after any cancelled call before retrying.
