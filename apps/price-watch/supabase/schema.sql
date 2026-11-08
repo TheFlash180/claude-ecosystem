@@ -463,3 +463,45 @@ end $$;
 grant execute on function pricewatch_list_links(text) to anon, authenticated;
 grant execute on function pricewatch_decide_link(text, uuid, boolean) to anon, authenticated;
 grant execute on function pricewatch_add_link(text, uuid, text, text, text, text) to anon, authenticated;
+
+-- ------------------------------------------------- Amazon probe (TEMPORARY)
+-- A three-day test, 8-11 November 2026, of whether Amazon.co.za can be read
+-- as reliably as the shops already compared (functions/probe-amazon): five
+-- fixed product pages and one search, three times a day. Its own log only:
+-- RLS on, no policies, service_role only, so it adds one
+-- `rls_enabled_no_policy` advisor finding while it exists. When the test is
+-- read: select cron.unschedule('pricewatch-probe-amazon'), retire the
+-- function, and drop the table from the dashboard SQL editor.
+create table pricewatch_probe (
+  id bigserial primary key,
+  ran_at timestamptz not null default now(),
+  retailer text not null,
+  stage text not null,
+  url text not null,
+  status int,
+  ms int,
+  blocked text,
+  price numeric,
+  price_sources jsonb,
+  visible_match boolean,
+  availability text,
+  name text,
+  note text,
+  seller text,
+  ships_from text,
+  merchant_id text,
+  delivery text,
+  results int
+);
+alter table pricewatch_probe enable row level security;
+revoke all on pricewatch_probe from anon, authenticated;
+grant all on pricewatch_probe to service_role;
+grant usage, select on sequence pricewatch_probe_id_seq to service_role;
+
+-- Scheduled separately from applying this file.
+select cron.schedule('pricewatch-probe-amazon', '20 4,11,18 * * *', $$
+  SELECT net.http_post(
+    url := 'https://objkdeagyltvgcuxsnxu.supabase.co/functions/v1/probe-amazon',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')),
+    body := '{}'::jsonb, timeout_milliseconds := 120000) AS request_id;
+$$);
