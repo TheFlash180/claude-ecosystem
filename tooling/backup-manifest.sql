@@ -58,5 +58,11 @@ select line from (
   select format('realtime %s.%s', pt.schemaname, pt.tablename)
     from pg_catalog.pg_publication_tables pt
    where pt.pubname = 'supabase_realtime' and pt.schemaname = 'public'
+  union all
+  -- data: every ordinary table in public at backup time; backup-check.sh
+  -- requires a COPY section for each (completeness against the live schema).
+  select format('data %s', c.oid::regclass)
+    from pg_catalog.pg_class c
+   where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
 ) facts
 order by line collate "C";
