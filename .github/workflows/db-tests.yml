@@ -1,4 +1,4 @@
-# Access-rule test for the household tables (tooling/test-household-access.sh) on every pull request and push
+# Access-rule tests (tooling/test-household-access.sh, tooling/test-api-write-grants.sh) on every pull request and push
 # to main, against a throwaway Postgres 17 on the runner with made-up data. Nothing here touches Supabase.
 name: Database tests
 
@@ -28,3 +28,6 @@ jobs:
 
       - name: Household access test
         run: docker run --rm --network host -v "$PWD:/w" -w /w -e PGURL=postgres://postgres@127.0.0.1:5432/postgres postgres:17 bash tooling/test-household-access.sh
+
+      - name: API write grants test
+        run: docker run --rm --network host -v "$PWD:/w" -w /w -e PGURL=postgres://postgres@127.0.0.1:5432/postgres postgres:17 bash tooling/test-api-write-grants.sh
