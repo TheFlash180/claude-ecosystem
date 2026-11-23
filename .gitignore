@@ -5,3 +5,7 @@ dist-tsc/
 .env.local
 .env*.local
 dev-dist/
+# Secrets never go in Git, and this repository is public (foundation audit EC-05).
+.env
+.env.*
+!.env.example

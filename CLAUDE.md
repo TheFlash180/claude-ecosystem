@@ -344,6 +344,19 @@ answers "permission denied" — to the app and to an edge function's
 public-read world data, everything to `service_role` for the function that
 writes it, nothing for device-scoped rows, which go through definer RPCs.
 
+**The API roles read; they never write directly** (23 November 2026,
+foundation audit EC-06). The 35 older tables used to give `anon` and
+`authenticated` every privilege, held back only by the missing write
+policies, and row-level security does not cover `TRUNCATE` at all. They now
+keep `select` and nothing else: `packages/shared/supabase/api_write_grants.sql`,
+tested by `tooling/test-api-write-grants.sh` on every pull request, which also
+calls each app's write RPCs as a visitor to prove the real write paths still
+work. Baby Logger's tables are the only direct writes, and
+`household_access.sql` covers them. Check a new table's grants after creating
+it, rather than trusting the note above: on 23 November 2026 the project's
+default privileges for tables `postgres` creates in `public` still listed
+every privilege for `anon` and `authenticated`.
+
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
 
