@@ -127,6 +127,29 @@ export async function fetchBenchmarks(): Promise<Benchmark[]> {
   }));
 }
 
+// ---- sign-in ----
+// Your profile, weigh-ins, runs and scores are household data: the database only shows them to a signed-in
+// household member (packages/shared/supabase/household_access.sql). All apps share one origin and one
+// client, so a phone signed in to Baby Logger is already signed in here.
+
+/** Whether this device has a session; calls back on every change (sign-in, sign-out, refresh). */
+export function watchSignedIn(onChange: (signedIn: boolean) => void): () => void {
+  const client = sb();
+  if (!client) { onChange(false); return () => {}; }
+  void client.auth.getSession().then(({ data }) => onChange(!!data.session));
+  const { data } = client.auth.onAuthStateChange((_event, session) => onChange(!!session));
+  return () => data.subscription.unsubscribe();
+}
+
+/** Signs in with the household account. Returns null on success, else a message to show. */
+export async function signIn(email: string, password: string): Promise<string | null> {
+  const client = sb();
+  if (!client) return 'Not connected right now. Try again in a moment.';
+  const { error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+  if (!error) return null;
+  return navigator.onLine ? "That email and password didn't work." : "You're offline. Try again when you're connected.";
+}
+
 // ---- writes ----
 
 async function rpc(fn: string, args: Record<string, unknown>): Promise<boolean> {

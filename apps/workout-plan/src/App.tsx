@@ -6,7 +6,7 @@ import {
 } from './lib/config';
 import {
   deleteRun, fetchBenchmarks, fetchBodyweights, fetchExercises, fetchProfile, fetchPrograms,
-  fetchRoutines, fetchRuns, logBenchmark, logBodyweight, logRun, saveProfile, setProgram,
+  fetchRoutines, fetchRuns, logBenchmark, logBodyweight, logRun, saveProfile, setProgram, signIn, watchSignedIn,
 } from './lib/data';
 import { nutritionTargets, runStats, sastDay, weightTrend } from './lib/fitness';
 import { filterRoutines, EMPTY_EXERCISE_FILTER, type ExerciseFilter } from './lib/library';
@@ -19,7 +19,7 @@ import { EatCard } from './components/EatCard';
 import { Progress } from './components/Progress';
 import { WorkoutCard } from './components/WorkoutCard';
 import { WorkoutView } from './components/WorkoutView';
-import { BenchmarkSheet, BodyweightSheet, ProfileSheet, RunSheet } from './components/Sheets';
+import { BenchmarkSheet, BodyweightSheet, ProfileSheet, RunSheet, SignInForm, SignInSheet } from './components/Sheets';
 
 type Tab = 'workouts' | 'plan' | 'exercises' | 'progress';
 const MEAL_PREP_URL = '../meal-prep/';
@@ -45,7 +45,9 @@ export default function App() {
   const [exFilter, setExFilter] = useState<ExerciseFilter>(EMPTY_EXERCISE_FILTER);
 
   const [detail, setDetail] = useState<Exercise | null>(null);
-  const [sheet, setSheet] = useState<'profile' | 'weight' | 'run' | null>(null);
+  const [sheet, setSheet] = useState<'profile' | 'weight' | 'run' | 'signin' | null>(null);
+  // null until known. Personal data needs a signed-in household member (lib/data.ts, "sign-in").
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,7 +63,12 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => watchSignedIn(setSignedIn), []);
+  // Load once the sign-in state is known, and again when it changes, so signing in shows the data at once.
+  useEffect(() => { if (signedIn !== null) void load(); }, [signedIn, load]);
+
+  /** Personal actions ask a signed-out device to sign in first. */
+  const personal = (open: () => void) => () => { if (signedIn) open(); else setSheet('signin'); };
 
   const currentWeight = weightTrend(weights, null).current;
   const targets = useMemo(
@@ -173,6 +180,7 @@ export default function App() {
       )}
 
       {detail && <ExerciseDetail exercise={detail} onClose={() => setDetail(null)} />}
+      {sheet === 'signin' && <SignInSheet onSignIn={signIn} onClose={() => setSheet(null)} />}
       {sheet === 'profile' && profile && <ProfileSheet profile={profile} onSave={onSaveProfile} onClose={() => setSheet(null)} />}
       {sheet === 'weight' && <BodyweightSheet current={currentWeight} onSave={onSaveWeight} onClose={() => setSheet(null)} />}
       {sheet === 'run' && <RunSheet runs={runs} onSave={onSaveRun} onClose={() => setSheet(null)} />}
@@ -193,7 +201,7 @@ export default function App() {
             </div>
             <div style={{ fontSize: 11.5, color: W.sub, marginTop: 4 }}>{headerLine}</div>
           </div>
-          <button onClick={() => setSheet('profile')} aria-label="Profile" style={{ background: 'transparent', border: `1px solid ${W.border}`, borderRadius: 20, padding: '7px 11px', cursor: 'pointer', color: W.muted, display: 'inline-flex' }}>
+          <button onClick={personal(() => setSheet('profile'))} aria-label="Profile" style={{ background: 'transparent', border: `1px solid ${W.border}`, borderRadius: 20, padding: '7px 11px', cursor: 'pointer', color: W.muted, display: 'inline-flex' }}>
             <Settings size={16} />
           </button>
         </div>
@@ -209,7 +217,7 @@ export default function App() {
               routine={openRoutine} exercises={exercises}
               onBack={() => setOpenRoutineId(null)}
               onOpenExercise={setDetail}
-              onLogRun={() => setSheet('run')}
+              onLogRun={personal(() => setSheet('run'))}
             />
           ) : (
             <>
@@ -245,7 +253,7 @@ export default function App() {
               routine={openRoutine} exercises={exercises}
               onBack={() => setOpenRoutineId(null)}
               onOpenExercise={setDetail}
-              onLogRun={() => setSheet('run')}
+              onLogRun={personal(() => setSheet('run'))}
             />
           ) : activeProgram ? (
             <ProgramView
@@ -253,15 +261,15 @@ export default function App() {
               programs={programs}
               onPickProgram={setViewProgramId}
               benchmarks={benchmarks}
-              onLogScore={setScoring}
+              onLogScore={id => personal(() => setScoring(id))()}
               startedOn={profile?.programId === activeProgram.id ? profile.programStartedOn : null}
               routines={planRoutines}
               exercises={exercises}
               where={where}
               onWhere={setWhere}
               onOpenRoutine={setOpenRoutineId}
-              onStart={() => void onStartProgram()}
-              onStop={() => void onStopProgram()}
+              onStart={personal(() => void onStartProgram())}
+              onStop={personal(() => void onStopProgram())}
               today={today}
             />
           ) : (
@@ -272,12 +280,16 @@ export default function App() {
         ) : tab === 'exercises' ? (
           <ExerciseLibrary exercises={exerciseList} filter={exFilter} onFilter={setExFilter} onOpen={setDetail} />
         ) : (
-          <>
+          signedIn === false ? (
+            <div style={{ background: W.surface, border: `1px solid ${W.border}`, borderRadius: 14, padding: 16 }}>
+              <SignInForm onSignIn={signIn} />
+            </div>
+          ) : <>
             <Progress
               weights={weights} runs={runs}
               targetWeight={profile?.targetWeightKg ?? null}
               onLogWeight={() => setSheet('weight')}
-              onLogRun={() => setSheet('run')}
+              onLogRun={personal(() => setSheet('run'))}
               onDeleteRun={onDeleteRun}
             />
             <EatCard targets={targets} goal={profile?.goal ?? 'recomp'} mealPrepUrl={MEAL_PREP_URL} />

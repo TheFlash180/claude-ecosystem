@@ -40,6 +40,44 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** The household sign-in (the same account as Baby Logger). 16px inputs: iOS zooms into anything smaller. */
+export function SignInForm({ onSignIn, onDone }: {
+  onSignIn: (email: string, password: string) => Promise<string | null>; onDone?: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const big = { ...field, fontSize: 16 };
+  return (
+    <form onSubmit={async e => {
+      e.preventDefault();
+      setBusy(true); setError(null);
+      const problem = await onSignIn(email, password);
+      setBusy(false);
+      if (problem) setError(problem); else onDone?.();
+    }}>
+      <div style={{ fontSize: 13, color: W.sub, marginBottom: 12, lineHeight: 1.45 }}>
+        Your profile, weigh-ins, runs and scores are private. Sign in with the household account you use for Baby Logger.
+      </div>
+      <Row label="Email"><input type="email" autoComplete="email" required style={big} value={email} onChange={e => setEmail(e.target.value)} /></Row>
+      <Row label="Password"><input type="password" autoComplete="current-password" required style={big} value={password} onChange={e => setPassword(e.target.value)} /></Row>
+      {error && <div role="alert" style={{ color: '#ff6b7a', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      <button type="submit" disabled={busy} style={{ ...primary, fontSize: 16 }}>{busy ? 'Signing in…' : 'Sign in'}</button>
+    </form>
+  );
+}
+
+export function SignInSheet({ onSignIn, onClose }: {
+  onSignIn: (email: string, password: string) => Promise<string | null>; onClose: () => void;
+}) {
+  return (
+    <Sheet title="Sign in" onClose={onClose}>
+      <SignInForm onSignIn={onSignIn} onDone={onClose} />
+    </Sheet>
+  );
+}
+
 const ACTIVITY = [
   { v: 1.375, label: 'Light (1–2 days)' },
   { v: 1.5, label: 'Moderate (3–5 days)' },

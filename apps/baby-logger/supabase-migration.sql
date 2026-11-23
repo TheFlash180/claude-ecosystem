@@ -3,7 +3,9 @@
 -- ============================================================
 -- Run this in the Supabase SQL Editor ONCE before first deploy.
 -- This is a private 2-user app — no household/invite code system.
--- All authenticated users share full access to all data.
+-- The two household members share full access to all data. Since 2026-11-23 that is checked with
+-- public.is_household_member() (packages/shared/supabase/household_access.sql), not "any signed-in user":
+-- the shared sign-up gate also admits Cre-Grow's logins.
 -- ============================================================
 
 -- 1. PROFILES (uses `id` as PK, not `user_id`) and the signup gate.
@@ -31,8 +33,8 @@ create table if not exists babies (
   created_at timestamptz default now()
 );
 alter table babies enable row level security;
-create policy "Authenticated users full access" on babies
-  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
+create policy "household members" on babies for all to authenticated
+  using ((select public.is_household_member())) with check ((select public.is_household_member()));
 
 -- 3. FEED EVENTS
 create table if not exists feed_events (
@@ -47,8 +49,8 @@ create table if not exists feed_events (
   created_at timestamptz default now()
 );
 alter table feed_events enable row level security;
-create policy "Authenticated users full access" on feed_events
-  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
+create policy "household members" on feed_events for all to authenticated
+  using ((select public.is_household_member())) with check ((select public.is_household_member()));
 
 -- 4. SLEEP EVENTS
 create table if not exists sleep_events (
@@ -61,8 +63,8 @@ create table if not exists sleep_events (
   created_at timestamptz default now()
 );
 alter table sleep_events enable row level security;
-create policy "Authenticated users full access" on sleep_events
-  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
+create policy "household members" on sleep_events for all to authenticated
+  using ((select public.is_household_member())) with check ((select public.is_household_member()));
 
 -- 5. NAPPY EVENTS
 create table if not exists nappy_events (
@@ -75,8 +77,8 @@ create table if not exists nappy_events (
   created_at timestamptz default now()
 );
 alter table nappy_events enable row level security;
-create policy "Authenticated users full access" on nappy_events
-  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
+create policy "household members" on nappy_events for all to authenticated
+  using ((select public.is_household_member())) with check ((select public.is_household_member()));
 
 -- 6. WEIGHT EVENTS
 create table if not exists weight_events (
@@ -89,8 +91,8 @@ create table if not exists weight_events (
   created_at timestamptz default now()
 );
 alter table weight_events enable row level security;
-create policy "Authenticated users full access" on weight_events
-  for all using ((select auth.uid()) is not null) with check ((select auth.uid()) is not null);
+create policy "household members" on weight_events for all to authenticated
+  using ((select public.is_household_member())) with check ((select public.is_household_member()));
 
 -- ============================================================
 -- INDEXES
