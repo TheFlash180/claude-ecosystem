@@ -17,10 +17,17 @@ not from this repo — they arrived in the shared database from elsewhere:
 | 24 | `rls_enabled_no_policy` | Device-scoped tables: no policy means no direct writes, which is the point. |
 | 1 | `auth_leaked_password_protection` | Supabase **Pro** feature. Not available on this plan; nothing to do. |
 
-The `using (true)` policy on `profiles` (any signed-in household member) is
-deliberate: only the two household emails can ever sign in. Supabase stopped
-reporting such policies as `rls_policy_always_true` by September 2026, so their
-absence from the list is not a change to chase.
+**"Signed in" no longer means "the household".** The shared sign-up gate also
+admits Cre-Grow's logins (`lesson_print.allowed_users`, another app in this
+project), so since 23 November 2026 the household's own data is guarded by
+`public.is_household_member()` (signed in **and** on `household_allowlist`),
+never by `auth.uid() is not null` or `using (true)`:
+`packages/shared/supabase/household_access.sql`, tested by
+`tooling/test-household-access.sh` on every pull request. Any new
+household-only table or RPC uses that helper. Applying it moved the advisor
+counts above a little (seven Workout Plan RPCs are no longer anon-executable;
+the helper itself is authenticated-executable by design): recount after the
+next schema change rather than chasing the difference.
 
 Security definer functions that only `service_role` may execute — the Vault
 getters (`get_*_vapid_private_key`, `get_tmdb_api_key`) and `cron_secret_ok` —
@@ -254,6 +261,14 @@ Most are what they sound like. Two are not:
   AMRAPs). A programme where no day differs by setting renders no home/gym
   toggle at all.
 
+  **Its personal data is private** (23 November 2026): `workout_profile`,
+  `workout_bodyweight`, `workout_runs` and `workout_benchmarks` are readable,
+  and the seven write RPCs callable, only by a signed-in household member.
+  The library (programmes, routines, exercises) stays public. A phone signed in
+  to Baby Logger is already signed in here (one origin, one client); otherwise
+  Progress shows a sign-in card and personal actions open a sign-in sheet. The
+  hub's programme card follows the same session.
+
   **`workout_benchmarks` is the one piece of session logging, and it is
   deliberate.** An AMRAP with nowhere to record the round count is pointless.
   The distinction that matters is friction, not principle: `workout_sessions`
@@ -275,7 +290,7 @@ schema change lands in the same database as everything else.
 | sport-watch | `sport_*` | `sync-f1`, `sync-rugby`, `send-sport-reminders`, `sport-calendar` | `sport-f1-sync`, `sport-rugby-sync`, `sport-push-reminders`, `sport-prune-reminders` |
 | marvel-watch | `marvel_*` | `sync-marvel`, `send-marvel-reminders` | `marvel-tmdb-sync`, `marvel-push-reminders`, `marvel-prune-*` |
 | meal-prep | `mealprep_*` | `send-mealprep-reminder` | `mealprep-prep-reminder` |
-| workout-plan | `workout_*` | — | — |
+| workout-plan | `workout_*` (personal tables household-only: `household_access.sql`) | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
 | price-watch | `pricewatch_*` | `sync-pricewatch` (daily sync, and `{"mode":"match"}`), `notify-pricewatch`, `search-pricewatch`, `probe-amazon` (temporary, 8-11 Nov 2026) | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-match`, `pricewatch-probe-amazon` (temporary) |
@@ -285,10 +300,10 @@ schema change lands in the same database as everything else.
 tables went with it, but two things it owned were load-bearing for
 baby-logger and were re-created under baby-logger the same day:
 `household_allowlist` + the `on_auth_household_user_created` trigger on
-`auth.users` (the signup gate: only the two household emails can ever create
-an account — **baby-logger's "any authenticated user" policies are only safe
-because that trigger exists; do not weaken it**) and `profiles` (display
-names, filled by that trigger). Lesson: before dropping another app's tables,
+`auth.users` (the signup gate: it was built to admit only the two household
+emails; since October 2026 it also admits Cre-Grow's logins, which is why
+baby-logger's policies now check `is_household_member()` rather than "any
+authenticated user") and `profiles` (display names, filled by that trigger). Lesson: before dropping another app's tables,
 grep this repo for them, not just the database.
 
 **Front Row was retired in October 2026** (unused). Its folder, `frontrow_*`

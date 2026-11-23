@@ -172,13 +172,17 @@ alter table workout_settings enable row level security;
 create policy "public read" on workout_programs for select to anon, authenticated using (true);
 create policy "public read" on workout_program_days for select to anon, authenticated using (true);
 create policy "public read" on workout_program_phases for select to anon, authenticated using (true);
-create policy "public read" on workout_profile for select to anon, authenticated using (true);
+-- Personal data: household members only (packages/shared/supabase/household_access.sql, 2026-11-23).
+create policy "household read" on workout_profile for select to authenticated using ((select public.is_household_member()));
 create policy "public read" on workout_exercises for select to anon, authenticated using (true);
 create policy "public read" on workout_routines for select to anon, authenticated using (true);
 create policy "public read" on workout_routine_exercises for select to anon, authenticated using (true);
-create policy "public read" on workout_bodyweight for select to anon, authenticated using (true);
-create policy "public read" on workout_benchmarks for select to anon, authenticated using (true);
-create policy "public read" on workout_runs for select to anon, authenticated using (true);
+-- Personal data: household members only (packages/shared/supabase/household_access.sql, 2026-11-23).
+create policy "household read" on workout_bodyweight for select to authenticated using ((select public.is_household_member()));
+-- Personal data: household members only (packages/shared/supabase/household_access.sql, 2026-11-23).
+create policy "household read" on workout_benchmarks for select to authenticated using ((select public.is_household_member()));
+-- Personal data: household members only (packages/shared/supabase/household_access.sql, 2026-11-23).
+create policy "household read" on workout_runs for select to authenticated using ((select public.is_household_member()));
 -- workout_settings: no read policy (admin password stays server-side)
 
 -- >>> set the real password when applying; never commit it <<<
@@ -205,6 +209,7 @@ create or replace function workout_save_profile(
   p_target numeric, p_activity numeric)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   if p_sex not in ('male','female') or p_goal not in ('recomp','cut','build') then return false; end if;
   insert into workout_profile (id, dob, height_cm, sex, goal, target_weight_kg, activity_factor, updated_at)
   values (1, p_dob, p_height, p_sex, p_goal, p_target, coalesce(p_activity, 1.5), now())
@@ -218,6 +223,7 @@ end $$;
 create or replace function workout_log_bodyweight(p_date date, p_weight numeric)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   if p_weight is null or p_weight <= 0 then return false; end if;
   insert into workout_bodyweight (log_date, weight_kg) values (p_date, p_weight)
   on conflict (log_date) do update set weight_kg = excluded.weight_kg;
@@ -227,6 +233,7 @@ end $$;
 create or replace function workout_log_run(p_date date, p_seconds int, p_location text, p_note text)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   if p_seconds is null or p_seconds <= 0 then return false; end if;
   insert into workout_runs (run_date, seconds, location, note)
   values (p_date, p_seconds, coalesce(nullif(trim(p_location),''),'parkrun'), coalesce(p_note,''))
@@ -242,6 +249,7 @@ end $$;
 create or replace function workout_set_program(p_program_id text, p_started_on date)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   if p_program_id is not null
      and not exists (select 1 from workout_programs where id = p_program_id) then
     return false;
@@ -264,6 +272,7 @@ create or replace function workout_log_benchmark(
   p_routine_id text, p_date date, p_rounds int, p_reps int, p_note text)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   if p_rounds is null or p_rounds < 0 then return false; end if;
   if not exists (select 1 from workout_routines where id = p_routine_id) then return false; end if;
   insert into workout_benchmarks (routine_id, log_date, rounds, extra_reps, note)
@@ -276,6 +285,7 @@ end $$;
 create or replace function workout_delete_benchmark(p_routine_id text, p_date date)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   delete from workout_benchmarks where routine_id = p_routine_id and log_date = p_date;
   return found;
 end $$;
@@ -283,11 +293,13 @@ end $$;
 create or replace function workout_delete_run(p_date date)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
+  if not public.is_household_member() then return false; end if;
   delete from workout_runs where run_date = p_date;
   return found;
 end $$;
 
 -- ------------------------------------------------------------------ grants
+-- The write RPCs need a signed-in household member (household_access.sql); only the admin check stays anon.
 revoke all on function workout_admin_check(text) from public, anon;
 revoke all on function workout_save_profile(date,numeric,text,text,numeric,numeric) from public, anon;
 revoke all on function workout_log_bodyweight(date,numeric) from public, anon;
@@ -298,10 +310,10 @@ revoke all on function workout_log_benchmark(text,date,int,int,text) from public
 revoke all on function workout_delete_benchmark(text,date) from public, anon;
 
 grant execute on function workout_admin_check(text) to anon;
-grant execute on function workout_save_profile(date,numeric,text,text,numeric,numeric) to anon;
-grant execute on function workout_log_bodyweight(date,numeric) to anon;
-grant execute on function workout_log_run(date,int,text,text) to anon;
-grant execute on function workout_delete_run(date) to anon;
-grant execute on function workout_set_program(text,date) to anon;
-grant execute on function workout_log_benchmark(text,date,int,int,text) to anon;
-grant execute on function workout_delete_benchmark(text,date) to anon;
+grant execute on function workout_save_profile(date,numeric,text,text,numeric,numeric) to authenticated;
+grant execute on function workout_log_bodyweight(date,numeric) to authenticated;
+grant execute on function workout_log_run(date,int,text,text) to authenticated;
+grant execute on function workout_delete_run(date) to authenticated;
+grant execute on function workout_set_program(text,date) to authenticated;
+grant execute on function workout_log_benchmark(text,date,int,int,text) to authenticated;
+grant execute on function workout_delete_benchmark(text,date) to authenticated;

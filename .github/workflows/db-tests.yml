@@ -1,0 +1,30 @@
+# Access-rule test for the household tables (tooling/test-household-access.sh) on every pull request and push
+# to main, against a throwaway Postgres 17 on the runner with made-up data. Nothing here touches Supabase.
+name: Database tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  household-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start a throwaway Postgres 17
+        run: |
+          docker run -d --name pg -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:5432:5432 postgres:17 >/dev/null
+          # The image first runs a socket-only init server, then restarts: wait for the real one over TCP.
+          for i in $(seq 1 60); do docker exec pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 && break; sleep 1; done
+          docker exec pg pg_isready -h 127.0.0.1 -U postgres
+
+      - name: Household access test
+        run: docker run --rm --network host -v "$PWD:/w" -w /w -e PGURL=postgres://postgres@127.0.0.1:5432/postgres postgres:17 bash tooling/test-household-access.sh
