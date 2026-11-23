@@ -532,6 +532,11 @@ exactly what a naive lean-protein filter would surface first.
   `deploy` job is skipped on a PR, so a pull request gets the checks and never
   the live site. A broken build is caught before merge, not after.
 - PRs are **squash-merged**, so the PR body becomes the commit message.
+- **Every GitHub Action is pinned to a full commit SHA**, with its version in a
+  comment (`uses: actions/checkout@<sha> # v7.0.1`). This repository is public
+  and its workflows hold the backup secrets and the Pages deploy token, and a
+  tag can be moved to other code. `.github/dependabot.yml` proposes updates
+  monthly; never replace a SHA with a tag.
 - The site is `https://theflash180.github.io/claude-ecosystem/`.
 
 ### Environment notes for agents

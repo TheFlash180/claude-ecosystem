@@ -1,0 +1,26 @@
+# Dependabot keeps this repository's GitHub Actions up to date (foundation audit
+# of 2026-11-23, finding EC-04).
+#
+# - Every action is pinned to a full commit SHA with its version in a comment.
+#   A tag can be moved to other code; a commit can't. Dependabot reads the
+#   comment and proposes the new SHA and version together.
+# - Updates arrive as pull requests and run the normal checks. Nothing here
+#   merges anything: a person reviews and merges each one.
+# - Minor and patch updates are grouped into one monthly PR. A major update is
+#   not in the group, so it arrives as its own PR.
+# - npm is deliberately not watched here yet: one monthly PR for actions is
+#   the low-noise start.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
