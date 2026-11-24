@@ -5,7 +5,7 @@
 # The apps without accounts keep each phone's rows behind a hashed device token: RLS with no policies on the
 # tables, and security definer RPCs that only touch rows whose device_token_hash matches the caller's token
 # (CLAUDE.md, "device-scoped, not user-scoped"). Nothing tested that until now. This builds every app's tables
-# and RPCs from the copies of record, with the live grants (api_write_grants.sql, default_privileges.sql),
+# and RPCs from the copies of record, with the live table grants (api_write_grants.sql),
 # lets phone A create rows in each app, and checks that:
 #   - phone B's token sees none of them and can't change or remove them through any RPC;
 #   - phone A still sees and controls its own;
