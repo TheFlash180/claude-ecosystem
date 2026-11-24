@@ -1,6 +1,6 @@
 name: Database Backup
 
-# A weekly, encrypted copy of every table in the shared Supabase project's
+# A daily, encrypted copy of every table in the shared Supabase project's
 # public schema, plus the two auth tables that the rows in it point at.
 #
 # The free plan has no backups you can download and restore yourself, and
@@ -19,15 +19,16 @@ name: Database Backup
 #   BACKUP_PASSPHRASE before it touches disk as an artifact. This repo is
 #   public and so are its artifacts to any signed-in GitHub user: unencrypted,
 #   the backup would publish the household's finances.
-# - Kept as a workflow artifact for 90 days: the last ~13 weeks, each one a
-#   complete copy on its own.
+# - Daily since 24 November 2026 (docs/adr/0001-shared-supabase-project.md,
+#   foundation audit EC-08); weekly before. Kept as a workflow artifact for
+#   90 days: the last ~90 nights, each one a complete copy on its own.
 #
 # Needs two repository secrets: BACKUP_DB_PASSWORD (backup_reader's password)
 # and BACKUP_PASSPHRASE (keep a copy somewhere other than GitHub — without it
 # every backup is unreadable). Restoring: see CLAUDE.md.
 on:
   schedule:
-    - cron: '30 1 * * 0' # Sundays 01:30 UTC (03:30 SAST)
+    - cron: '30 1 * * *' # Every night 01:30 UTC (03:30 SAST)
   workflow_dispatch:
 
 permissions:

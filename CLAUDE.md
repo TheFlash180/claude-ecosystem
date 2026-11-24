@@ -314,6 +314,9 @@ Owned by the external repos, but in the same database:
 
 - **baby-registry-pwa** owns `categories`, `items`, `retailers`, `claims`,
   `registry_settings`.
+  On 24 November 2026 none of them was in the project any more, so the hub's
+  registry card (`fetchRegistry` in `apps/dashboard/src/lib/todayData.ts`)
+  has nothing to read and does not render.
 - `ping` exists only for the keep-alive cron, which is a **GitHub Actions**
   schedule (`.github/workflows/supabase-keepalive.yml`, Mon and Thu), not a
   pg_cron job — free-tier projects pause after ~7 days idle. Do not go
@@ -389,8 +392,8 @@ functions now answer 403 unless the request carries `x-cron-secret`.**
 ### Backups
 
 The free plan has no backups you can restore yourself, so
-`.github/workflows/backup.yml` takes one every Sunday 01:30 UTC (and on
-demand): `tooling/backup-dump.sh` — `pg_dump` of the `public` schema plus
+`.github/workflows/backup.yml` takes one every night at 01:30 UTC (and on
+demand; weekly until 24 November 2026, see `docs/adr/0001-shared-supabase-project.md`): `tooling/backup-dump.sh` — `pg_dump` of the `public` schema plus
 `auth.users` / `auth.identities` as data — checked by
 `tooling/backup-check.sh`, gzipped and
 **encrypted with `BACKUP_PASSPHRASE` before upload** — this repo is public, and
@@ -538,6 +541,12 @@ exactly what a naive lean-protein filter would surface first.
   `npm run check:functions`, a `deno check` of every edge function: their
   deploy never typechecks, so this is the only thing that does. Run it too
   when you touch `supabase/functions/**`.
+- **Every schema change ships with its rollback** (foundation audit EC-09):
+  a `.down.sql` next to the change that restores the state before it, and a
+  throwaway-Postgres test that applies the change, rolls it back and applies
+  it again. `household_access.sql` and `api_write_grants.sql` in
+  `packages/shared/supabase/`, with their tests in `tooling/`, show the shape.
+  Changes from before 23 November 2026 have none; add one if you touch them.
 - Tests are vitest, colocated in `src/lib/__tests__/`. Pure logic lives in
   `src/lib/*.ts` with no React or Supabase imports so it is directly testable.
 - `.github/workflows/deploy.yml` runs on pushes to `main` **and on pull
