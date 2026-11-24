@@ -103,24 +103,6 @@ export interface BabyRow {
   birthDate?: string | null;
   lastFeed?: LastFeedRow | null;
 }
-/** `full` is items with no spot left — the registry's own "claimed", as opposed
- *  to its "Still needed", which is every item that still has one. */
-export interface RegistryCounts { items: number; full: number }
-
-/** Items are multi-spot and one claim can take several spots, so neither claim
- *  rows nor summed quantities compare with the item count: 54 claim rows over
- *  86 items once read as "54 of 86 claimed" when only 32 were actually full.
- *  Same rule as the registry's ItemCard: full when taken >= max_claims. */
-export function registryCounts(
-  items: { id: string; max_claims: number }[],
-  claims: { item_id: string; qty: number }[],
-): RegistryCounts {
-  const taken = new Map<string, number>();
-  for (const c of claims) taken.set(c.item_id, (taken.get(c.item_id) ?? 0) + c.qty);
-  const full = items.filter(i => (taken.get(i.id) ?? 0) >= i.max_claims).length;
-  return { items: items.length, full };
-}
-
 export interface TodayInput {
   sport: SportRow[];
   training: TrainingInput | null;
@@ -128,7 +110,6 @@ export interface TodayInput {
   marvel: MarvelRow[];
   prices: PriceRow[];
   baby: BabyRow | null;
-  registry: RegistryCounts | null;
 }
 
 // ---- cards ----
@@ -140,7 +121,6 @@ const APP = {
   marvel: './marvel-watch/',
   price: './price-watch/',
   baby: './baby-logger/',
-  registry: 'https://theflash180.github.io/baby-registry-pwa/',
 };
 
 function fixtureName(e: SportRow): string {
@@ -326,19 +306,6 @@ export function babyCard(
   };
 }
 
-export function registryCard(r: RegistryCounts | null): TodayCard | null {
-  if (!r || r.items === 0) return null;
-  const needed = r.items - r.full;
-  return {
-    key: 'registry',
-    slug: 'baby-registry',
-    label: 'Registry',
-    headline: `${r.full} of ${r.items} claimed`,
-    detail: needed > 0 ? `${needed} still needed` : 'Everything claimed',
-    href: APP.registry,
-  };
-}
-
 /** The whole surface, in the order it reads. Cards with nothing to say return
  *  null and simply do not appear — a quiet day should be a short screen, not a
  *  wall of "nothing yet". */
@@ -350,6 +317,5 @@ export function buildToday(input: TodayInput, today = sastDay(), now = Date.now(
     cookCard(input.cook),
     priceCard(input.prices),
     marvelCard(input.marvel, today),
-    registryCard(input.registry),
   ].filter((c): c is TodayCard => c !== null);
 }

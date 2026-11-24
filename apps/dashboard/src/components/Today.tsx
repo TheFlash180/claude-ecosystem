@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Baby, Clapperboard, ChefHat, Dumbbell, Gift, Tag, Trophy, type LucideIcon,
+  Baby, Clapperboard, ChefHat, Dumbbell, Tag, Trophy, type LucideIcon,
 } from 'lucide-react';
 import { buildToday, type TodayCard } from '../lib/today';
 import { fetchToday } from '../lib/todayData';
@@ -16,7 +16,6 @@ const ICONS: Record<string, LucideIcon> = {
   cook: ChefHat,
   price: Tag,
   marvel: Clapperboard,
-  registry: Gift,
 };
 
 export function Today() {
