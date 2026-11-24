@@ -72,8 +72,7 @@ registry to update; adding a folder under `apps/` is enough.
 **The dashboard is a hub, not just a launcher.** Above the tiles it renders a
 **Today** section (`src/components/Today.tsx`, logic in `src/lib/today.ts`):
 the next fixture, where the running workout programme has got to, the cook
-list, a tracked product at its lowest, the next Marvel release, the registry
-count, and — only when signed in — the pregnancy countdown, which becomes
+list, a tracked product at its lowest, the next Marvel release, and — only when signed in — the pregnancy countdown, which becomes
 "Fed 2h 10m ago · Left side · right next" once `babies.birth_date` is set.
 Cards with nothing to say return null and do not render, so a quiet day is a
 short screen.
@@ -314,9 +313,9 @@ Owned by the external repos, but in the same database:
 
 - **baby-registry-pwa** owns `categories`, `items`, `retailers`, `claims`,
   `registry_settings`.
-  On 24 November 2026 none of them was in the project any more, so the hub's
-  registry card (`fetchRegistry` in `apps/dashboard/src/lib/todayData.ts`)
-  has nothing to read and does not render.
+  On 24 November 2026 none of them was in the project any more, and the hub's
+  registry card that read them was removed. The hub's tile still links to
+  the registry app.
 - `ping` exists only for the keep-alive cron, which is a **GitHub Actions**
   schedule (`.github/workflows/supabase-keepalive.yml`, Mon and Thu), not a
   pg_cron job — free-tier projects pause after ~7 days idle. Do not go

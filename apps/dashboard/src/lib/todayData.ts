@@ -1,25 +1,27 @@
 // Fetching for the today surface.
 //
 // Everything here is world data the apps already expose public-read — fixtures,
-// programme structure, the cook list, releases, prices, the registry — so the
+// programme structure, the cook list, releases, prices — so the
 // hub reads it with the anon key exactly like each app does. There is no new
 // RPC and no new policy.
 //
 // The baby row is the exception and is deliberately different: `babies` is
-// "authenticated users full access", and every app is served from the same
-// origin, so the Supabase client picks up the session baby-logger already
-// stored. Signed in, the card appears; signed out — or for anyone else who
-// loads the public site — the query returns nothing and it does not. RLS is
-// the gate, so no household detail is published by adding this screen.
+// readable only by a signed-in household member (`is_household_member()`,
+// packages/shared/supabase/household_access.sql), and every app is served from
+// the same origin, so the Supabase client picks up the session baby-logger
+// already stored. Signed in as a household member, the card appears; signed
+// out, signed in as anyone else, or for anyone who loads the public site, the
+// query returns nothing and it does not. RLS is the gate, so no household
+// detail is published by adding this screen.
 import { getSupabase, supabaseConfigured } from '@ecosystem/shared';
-import { registryCounts, sastDay } from './today';
+import { sastDay } from './today';
 import type {
-  BabyRow, CookRow, MarvelRow, PriceRow, RegistryCounts, SportRow, TodayInput,
+  BabyRow, CookRow, MarvelRow, PriceRow, SportRow, TodayInput,
   TrainingInput,
 } from './today';
 
 const EMPTY: TodayInput = {
-  sport: [], training: null, cook: [], marvel: [], prices: [], baby: null, registry: null,
+  sport: [], training: null, cook: [], marvel: [], prices: [], baby: null,
 };
 
 /** One failing source must not blank the whole screen — a card with no data
@@ -174,33 +176,20 @@ async function fetchBaby(sb: ReturnType<typeof getSupabase>): Promise<BabyRow | 
   return baby;
 }
 
-/** Capacity and quantities, not row counts — see `registryCounts`. Both
- *  tables are well under the API's 1000-row cap. A failed claims read hides
- *  the card rather than reporting every item as still needed. */
-async function fetchRegistry(sb: ReturnType<typeof getSupabase>): Promise<RegistryCounts | null> {
-  const [items, claims] = await Promise.all([
-    sb.from('items').select('id, max_claims'),
-    sb.from('claims').select('item_id, qty'),
-  ]);
-  if (!items.data || !claims.data) return null;
-  return registryCounts(items.data, claims.data);
-}
-
 export async function fetchToday(): Promise<TodayInput> {
   // getSupabase throws when the env vars are missing, which is the normal
   // state of a local build without .env.local — the tiles still work.
   if (!supabaseConfigured()) return EMPTY;
   const sb = getSupabase();
 
-  const [sport, training, cook, marvel, prices, baby, registry] = await Promise.all([
+  const [sport, training, cook, marvel, prices, baby] = await Promise.all([
     safe(() => fetchSport(sb), []),
     safe(() => fetchTraining(sb), null),
     safe(() => fetchCook(sb), []),
     safe(() => fetchMarvel(sb), []),
     safe(() => fetchPrices(sb), []),
     safe(() => fetchBaby(sb), null),
-    safe(() => fetchRegistry(sb), null),
   ]);
 
-  return { sport, training, cook, marvel, prices, baby, registry };
+  return { sport, training, cook, marvel, prices, baby };
 }
