@@ -470,6 +470,5 @@ grant execute on function pricewatch_add_link(text, uuid, text, text, text, text
 -- search, three times a day, logged to pricewatch_probe. Retired on
 -- 24 November 2026 (foundation audit EC-10): the cron job
 -- pricewatch-probe-amazon was already unscheduled, and the function is now a
--- 410 stub listed in tooling/functions-drift.sh. pricewatch_probe (service_role
--- only, no personal data) stays until it is dropped from the dashboard's SQL
--- editor: drop table public.pricewatch_probe
+-- 410 stub listed in tooling/functions-drift.sh. pricewatch_probe was dropped
+-- from the dashboard's SQL editor the same day.
