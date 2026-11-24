@@ -293,7 +293,7 @@ schema change lands in the same database as everything else.
 | workout-plan | `workout_*` (personal tables household-only: `household_access.sql`) | — | — |
 | baby-logger | `babies`, `feed_events`, `sleep_events`, `nappy_events`, `weight_events`, `profiles`, `household_allowlist` (+ signup trigger on `auth.users`) | — | — |
 | glovebox | `glovebox_*` | `send-glovebox-reminders` | `glovebox-reminders` |
-| price-watch | `pricewatch_*` | `sync-pricewatch` (daily sync, and `{"mode":"match"}`), `notify-pricewatch`, `search-pricewatch`, `probe-amazon` (temporary, 8-11 Nov 2026) | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-match`, `pricewatch-probe-amazon` (temporary) |
+| price-watch | `pricewatch_*` | `sync-pricewatch` (daily sync, and `{"mode":"match"}`), `notify-pricewatch`, `search-pricewatch` | `pricewatch-sync`, `pricewatch-notify`, `pricewatch-match` |
 | dashboard (hub) | `dashboard_push_subs` | `send-morning-digest` | `dashboard-morning-digest` |
 
 **FinTrack Pro was retired in October 2026** (separate repo, deleted). Its
@@ -339,13 +339,16 @@ this project and nothing else. Never swap in a classic token: one of those
 carries the whole account. A red run means deploy the repo's version, or
 commit what is live, whichever is right.
 
-**A new table needs its grants in the same migration that creates it.** From
-30 October 2026 Supabase stops granting the API roles anything on new tables
-in `public` (existing tables keep theirs), so a table created without grants
-answers "permission denied" — to the app and to an edge function's
-`service_role` alike. Grant only what the table needs: `select` to `anon` for
-public-read world data, everything to `service_role` for the function that
-writes it, nothing for device-scoped rows, which go through definer RPCs.
+**A new table needs its grants in the same migration that creates it.**
+Since 24 November 2026 (`packages/shared/supabase/default_privileges.sql`,
+tested by `tooling/test-default-privileges.sh`) a table that `postgres`
+creates in `public` gets `select` for `anon` and `authenticated` and every
+privilege for `service_role`, and nothing more. Grant only what the table
+needs on top: nothing for device-scoped rows, which go through definer RPCs;
+an explicit `insert`/`update` only for a table an app writes directly, which
+then needs its policies. A table with personal rows also needs RLS and a read
+policy that is not `using (true)`, because the default `select` lets the API
+see every row RLS allows.
 
 **The API roles read; they never write directly** (23 November 2026,
 foundation audit EC-06). The 35 older tables used to give `anon` and
@@ -355,10 +358,10 @@ keep `select` and nothing else: `packages/shared/supabase/api_write_grants.sql`,
 tested by `tooling/test-api-write-grants.sh` on every pull request, which also
 calls each app's write RPCs as a visitor to prove the real write paths still
 work. Baby Logger's tables are the only direct writes, and
-`household_access.sql` covers them. Check a new table's grants after creating
-it, rather than trusting the note above: on 23 November 2026 the project's
-default privileges for tables `postgres` creates in `public` still listed
-every privilege for `anon` and `authenticated`.
+`household_access.sql` covers them. Until 24 November 2026 the project's
+default privileges still gave `anon` and `authenticated` every privilege on
+each new table; `default_privileges.sql` (above) closed that. Tables
+`supabase_admin` creates keep Supabase's own defaults.
 
 Cron jobs in `schema.sql` are deliberately **not** applied by running the file —
 schedule them explicitly, once.
