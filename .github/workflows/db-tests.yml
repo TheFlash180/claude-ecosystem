@@ -1,5 +1,6 @@
-# Access-rule tests (tooling/test-household-access.sh, tooling/test-api-write-grants.sh) on every pull request and push
-# to main, against a throwaway Postgres 17 on the runner with made-up data. Nothing here touches Supabase.
+# Access-rule tests (tooling/test-household-access.sh, test-api-write-grants.sh, test-default-privileges.sh) on every
+# pull request and push to main, against a throwaway Postgres 17 on the runner with made-up data. Nothing here
+# touches Supabase.
 name: Database tests
 
 on:
@@ -31,3 +32,6 @@ jobs:
 
       - name: API write grants test
         run: docker run --rm --network host -v "$PWD:/w" -w /w -e PGURL=postgres://postgres@127.0.0.1:5432/postgres postgres:17 bash tooling/test-api-write-grants.sh
+
+      - name: Default privileges test
+        run: docker run --rm --network host -v "$PWD:/w" -w /w -e PGURL=postgres://postgres@127.0.0.1:5432/postgres postgres:17 bash tooling/test-default-privileges.sh
