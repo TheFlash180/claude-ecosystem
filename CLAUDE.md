@@ -47,6 +47,10 @@ The apps predate accounts. They are **device-scoped, not user-scoped**:
 - Every write goes through a `security definer` RPC that hashes the token
   (SHA-256, hex) and matches it against `device_token_hash`. Those RPCs must be
   anon-executable — that is the entire access path.
+  `tooling/test-device-scope.sh` (every pull request) holds that line: phone
+  A's rows in every app stay invisible to phone B's token and can't be changed
+  or removed by it, direct table reads return no rows, and short tokens are
+  refused. A new device-scoped RPC gets its own allowed and denied cases there.
 - Shared world data (fixtures, film titles, events, product prices) is
   public-read on purpose. It is not personal data and the app needs it before a
   device has any state.
