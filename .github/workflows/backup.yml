@@ -5,7 +5,7 @@ name: Database Backup
 #
 # The free plan has no backups you can download and restore yourself, and
 # most of this data cannot be re-synced from anywhere: the household's
-# transaction history, the baby log, the registry's claims, glovebox dates.
+# the baby log, glovebox dates, workout history.
 #
 # How it works, and why:
 # - Logs in as `backup_reader`, a read-only role (see CLAUDE.md, "Backups"),

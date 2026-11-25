@@ -5,7 +5,7 @@ describe('metaFor', () => {
   it('gives each known app its own colour and icon', () => {
     expect(metaFor('sport-watch').color).toBe('#3AA864');
     expect(metaFor('marvel-watch').icon).toBe('film');
-    expect(metaFor('baby-registry').note).toBeTruthy();
+    expect(metaFor('price-watch').note).toBeTruthy();
   });
 
   it('falls back for an unknown slug instead of returning undefined', () => {
@@ -15,7 +15,7 @@ describe('metaFor', () => {
   });
 
   it('never returns a blank colour, icon or note', () => {
-    for (const slug of ['baby-logger', 'meal-prep', 'workout-plan', 'baby-registry', 'nope']) {
+    for (const slug of ['baby-logger', 'meal-prep', 'workout-plan', 'price-watch', 'nope']) {
       const m = metaFor(slug);
       expect(m.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
       expect(m.icon).toBeTruthy();

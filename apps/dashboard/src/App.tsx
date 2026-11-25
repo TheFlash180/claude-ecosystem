@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AppShell, supabaseConfigured, getSupabase } from '@ecosystem/shared';
 import {
-  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Gift, Car, Tag, Ticket,
-  LayoutGrid, ArrowUpRight, type LucideIcon,
+  Baby, Clapperboard, ChefHat, Trophy, Dumbbell, Wallet, Car, Tag, Ticket,
+  LayoutGrid, type LucideIcon,
 } from 'lucide-react';
 import { parseApps } from './lib/apps';
 import { Today, TODAY_CSS } from './components/Today';
@@ -16,12 +16,6 @@ function installedApps() {
   return parseApps(import.meta.env.VITE_APPS as string | undefined);
 }
 
-// Apps that live outside this repo but belong to the family. The slug is only
-// used to look up its colour and icon; the href is absolute.
-const EXTERNAL: { slug: string; name: string; url: string }[] = [
-  { slug: 'baby-registry', name: 'Baby Registry', url: 'https://theflash180.github.io/baby-registry-pwa/' },
-];
-
 const ICONS: Record<IconKey, LucideIcon> = {
   baby: Baby,
   film: Clapperboard,
@@ -29,7 +23,6 @@ const ICONS: Record<IconKey, LucideIcon> = {
   trophy: Trophy,
   dumbbell: Dumbbell,
   wallet: Wallet,
-  gift: Gift,
   car: Car,
   tag: Tag,
   ticket: Ticket,
@@ -83,13 +76,6 @@ export default function App() {
         </>
       )}
 
-      <h3 className="section-label">Elsewhere</h3>
-      <div className="grid">
-        {EXTERNAL.map((a) => (
-          <Tile key={a.slug} slug={a.slug} name={a.name} href={a.url} external />
-        ))}
-      </div>
-
       {COMING_SOON.length > 0 && (
         <>
           <h3 className="section-label">Coming soon</h3>
@@ -111,9 +97,9 @@ export default function App() {
 }
 
 function Tile({
-  slug, name, href, external, soon,
+  slug, name, href, soon,
 }: {
-  slug: string; name: string; href?: string; external?: boolean; soon?: boolean;
+  slug: string; name: string; href?: string; soon?: boolean;
 }) {
   const meta = metaFor(slug);
   const Icon = ICONS[meta.icon];
@@ -127,7 +113,6 @@ function Tile({
       <span className="tile-body">
         <span className="tile-name">
           {name}
-          {external && <ArrowUpRight className="tile-out" size={13} strokeWidth={2.5} />}
           {soon && <span className="tile-soon">Soon</span>}
         </span>
         <span className="tile-note">{meta.note}</span>
@@ -144,7 +129,7 @@ function Tile({
   }
 
   return (
-    <a className="tile" href={href} style={style} {...(external ? { rel: 'noreferrer' } : {})}>
+    <a className="tile" href={href} style={style}>
       {body}
     </a>
   );
@@ -224,7 +209,6 @@ ${MORNING_CSS}
   font-weight: 600; font-size: 0.93rem; display: flex; align-items: center; gap: 4px;
   white-space: nowrap; overflow: hidden;
 }
-.tile-out { color: var(--text-dim); flex-shrink: 0; }
 
 /* Planned apps read as deliberate-but-inactive: dimmed, no lift, no pointer. */
 .tile--soon { opacity: 0.6; cursor: default; }

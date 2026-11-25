@@ -15,11 +15,9 @@ tooling/         build-all.mjs (CI build) and new-app.mjs (scaffold)
 
 ## The app family and the shared Supabase project
 
-One app deliberately lives in its own repo —
-[baby-registry-pwa](https://github.com/TheFlash180/baby-registry-pwa) — but
-it is part of the same family: the dashboard hub links to it as an external
-tile, and **all apps (in-repo and external) share ONE Supabase project**.
-(FinTrack Pro was retired in October 2026; its repo and tables are gone.)
+**All apps share ONE Supabase project.** Two apps that once lived in their
+own repos are retired, with their repos and tables gone: FinTrack Pro
+(October 2026) and Baby Registry (November 2026).
 
 That shared project is a real coupling to be aware of:
 
@@ -30,8 +28,6 @@ That shared project is a real coupling to be aware of:
   exists. Don't drop or weaken it without checking every app.
 - **baby-logger also owns the `profiles` table** (`id` uuid PK → `auth.users`,
   display name and owner key), filled by that same trigger.
-- **baby-registry-pwa owns** `categories`/`items`/`retailers`/`claims`/
-  `registry_settings` and their security-definer RPCs.
 - The `ping` table only exists for the keep-alive cron.
 
 What each one is:
