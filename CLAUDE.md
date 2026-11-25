@@ -285,7 +285,7 @@ Most are what they sound like. Two are not:
 
 Project ref: `objkdeagyltvgcuxsnxu` (region eu-central-1).
 
-**Every app in this repo and both external repos share this one project.** A
+**Every app in this repo shares this one project**, along with a few things from elsewhere (below). A
 schema change lands in the same database as everything else.
 
 | App | Tables | Edge functions | pg_cron |
@@ -309,17 +309,17 @@ baby-logger's policies now check `is_household_member()` rather than "any
 authenticated user") and `profiles` (display names, filled by that trigger). Lesson: before dropping another app's tables,
 grep this repo for them, not just the database.
 
+**Baby Registry was retired in November 2026** (separate repo, deleted). Its
+tables (`categories`, `items`, `retailers`, `claims`, `registry_settings`) and
+RPCs were already gone from the project on 24 November, the hub's Today card
+for it went in #74, and its "Elsewhere" tile on the hub after that.
+
 **Front Row was retired in October 2026** (unused). Its folder, `frontrow_*`
 tables and functions, both cron jobs and its Vault key are gone, and its edge
 functions answer 410. A mention of it elsewhere in this file is history.
 
-Owned by the external repos, but in the same database:
+Also in the same database:
 
-- **baby-registry-pwa** owns `categories`, `items`, `retailers`, `claims`,
-  `registry_settings`.
-  On 24 November 2026 none of them was in the project any more, and the hub's
-  registry card that read them was removed. The hub's tile still links to
-  the registry app.
 - `ping` exists only for the keep-alive cron, which is a **GitHub Actions**
   schedule (`.github/workflows/supabase-keepalive.yml`, Mon and Thu), not a
   pg_cron job — free-tier projects pause after ~7 days idle. Do not go

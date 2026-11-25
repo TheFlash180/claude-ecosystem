@@ -6,7 +6,7 @@
  *  and can be unit-tested; App.tsx maps the key to a lucide icon. */
 export type IconKey =
   | 'baby' | 'film' | 'chef' | 'trophy' | 'dumbbell'
-  | 'wallet' | 'gift' | 'car' | 'tag' | 'ticket' | 'app';
+  | 'wallet' | 'car' | 'tag' | 'ticket' | 'app';
 
 export interface AppMeta {
   color: string;
@@ -20,7 +20,6 @@ const META: Record<string, AppMeta> = {
   'meal-prep':    { color: '#C4572E', icon: 'chef',     note: 'plan & shopping list' },
   'sport-watch':  { color: '#3AA864', icon: 'trophy',   note: 'fixtures & reminders' },
   'workout-plan': { color: '#C6F135', icon: 'dumbbell', note: 'training & progress' },
-  'baby-registry':{ color: '#D9A441', icon: 'gift',     note: 'gifts & claims' },
   'glovebox':     { color: '#5B8DEF', icon: 'car',      note: 'licence, disc & services' },
   'price-watch':  { color: '#A78BFA', icon: 'tag',      note: 'price drops & history' },
 };
